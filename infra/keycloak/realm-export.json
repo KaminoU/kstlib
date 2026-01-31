@@ -1,0 +1,111 @@
+{
+  "realm": "kstlib-test",
+  "enabled": true,
+  "displayName": "KSTLib Test Realm",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "refreshTokenMaxReuse": 0,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "clients": [
+    {
+      "clientId": "kstlib-test-public",
+      "name": "KSTLib Test Client (Public)",
+      "description": "Public client for PKCE flow testing",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://127.0.0.1:8400/*",
+        "http://localhost:8400/*"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:8400",
+        "http://localhost:8400"
+      ],
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "kstlib-test-confidential",
+      "name": "KSTLib Test Client (Confidential)",
+      "description": "Confidential client for OAuth2 flow testing",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "kstlib-test-secret",
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://127.0.0.1:8400/*",
+        "http://localhost:8400/*"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:8400",
+        "http://localhost:8400"
+      ],
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "testuser",
+      "email": "testuser@example.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "testpass123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-kstlib-test"
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "default-roles-kstlib-test",
+        "description": "Default roles for kstlib-test realm",
+        "composite": false
+      }
+    ]
+  }
+}

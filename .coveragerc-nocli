@@ -1,0 +1,28 @@
+# Coverage config for main tox runs (excludes CLI and integration-only modules)
+# CLI coverage is tracked separately via: tox -e cli
+# Integration coverage is tracked separately via: tox -e integration
+
+[run]
+source = src
+omit =
+    examples/*
+    */examples/*
+    # CLI - tested via tox -e cli
+    src/kstlib/cli/*
+    # Integration-only code - requires real infrastructure (testnets, OAuth providers, etc.)
+    # These modules have lower unit test coverage by design, tested via tox -e integration
+    src/kstlib/websocket/manager.py
+    src/kstlib/rapi/credentials.py
+    src/kstlib/rapi/client.py
+    src/kstlib/alerts/manager.py
+    src/kstlib/db/aiosqlcipher.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod

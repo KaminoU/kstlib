@@ -1,0 +1,39 @@
+# OIDC Hybrid Mode - Discovery + Endpoint Override
+# Demonstrates: issuer for auto-discovery + explicit endpoint overrides
+#
+# Use case: IDP with buggy discovery document or custom logout endpoint
+#
+# How it works:
+#   1. Discovery fetches all endpoints from {issuer}/.well-known/openid-configuration
+#   2. Explicit endpoints (like end_session_endpoint) OVERRIDE discovered values
+#   3. Best of both worlds: less config + custom overrides where needed
+#
+# VALIDATION: This example uses a FAKE revoke endpoint to prove override works.
+#   - Run: `kstlib auth logout oidc-hybrid-keycloak --revoke`
+#   - If error (404/fail) → override is working (fake URL used)
+#   - If revoke succeeds → override failed (discovery URL used instead)
+
+auth:
+  providers:
+    oidc-hybrid-keycloak:
+      type: "oidc"
+      issuer: "http://localhost:8080/realms/kstlib-test"
+      client_id: "kstlib-test-public"
+
+      # FAKE endpoint to validate override mechanism
+      # Discovery would return: .../protocol/openid-connect/revoke
+      # We override with a non-existent path → expect error on `logout --revoke`
+      revoke_url: "http://localhost:8080/realms/kstlib-test/fake-revoke-to-test-override"
+
+      scopes:
+        - "openid"
+        - "profile"
+        - "email"
+      pkce: true
+      # Provider-specific storage (not overwritten by other includes)
+      token_storage: "file"
+
+  # File storage settings (shared config for any provider using file)
+  storage:
+    file:
+      directory: "~/.kstlib/auth/tokens"

@@ -1,0 +1,120 @@
+# =============================================================================
+# .gitattributes - kstlib
+# =============================================================================
+
+# Auto detect text files and normalize line endings to LF in repository
+* text=auto
+
+# --- Source code ---
+*.py text diff=python
+*.pyi text diff=python
+
+# --- Configuration files ---
+*.toml text
+*.yml text
+*.yaml text
+*.json text
+*.ini text
+*.cfg text
+*.conf text
+
+# --- Documentation ---
+*.md text diff=markdown
+*.rst text
+*.txt text
+LICENSE text
+LICENSE.md text
+CHANGELOG text
+CHANGELOG.md text
+README text
+README.md text
+
+# --- Scripts ---
+*.sh text eol=lf
+*.bash text eol=lf
+
+# --- Windows specific ---
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# --- Binary files ---
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+
+# --- Python compiled ---
+*.pyc binary
+*.pyo binary
+*.pyd binary
+*.so binary
+*.dll binary
+*.dylib binary
+
+# --- Archives ---
+*.zip binary
+*.tar binary
+*.gz binary
+*.tgz binary
+*.egg binary
+*.whl binary
+
+# --- Linguist overrides (for GitHub language detection) ---
+# Mark documentation as documentation (not counted in language stats)
+*.md linguist-documentation
+*.rst linguist-documentation
+docs/* linguist-documentation
+examples/* linguist-documentation
+tests/* linguist-documentation
+.claude/* linguist-documentation
+
+# Mark config files as detectable
+*.toml linguist-detectable=true
+
+# =============================================================================
+# Git diff settings
+# =============================================================================
+
+# Python functions in diffs
+*.py diff=python
+
+# JSON formatting in diffs
+*.json diff=json
+
+# TOML formatting in diffs
+*.toml diff=toml
+
+# =============================================================================
+# Export ignore (excluded from git archive / sdist)
+# =============================================================================
+
+# --- CI/CD and GitHub ---
+.github/ export-ignore
+
+# --- Development tools ---
+.claude/ export-ignore
+.vscode/ export-ignore
+.idea/ export-ignore
+
+# --- Infrastructure ---
+infra/ export-ignore
+
+# --- Development files ---
+.gitattributes export-ignore
+.gitignore export-ignore
+.pre-commit-config.yaml export-ignore
+.editorconfig export-ignore
+tox.ini export-ignore
+Makefile export-ignore
+
+# --- Documentation source (built docs distributed separately) ---
+docs/ export-ignore
+
+# --- Examples (optional - uncomment to exclude) ---
+# examples/ export-ignore
+
+# --- Tests (optional - uncomment to exclude) ---
+# tests/ export-ignore

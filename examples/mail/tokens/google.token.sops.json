@@ -1,0 +1,24 @@
+{
+	"access_token": "ENC[AES256_GCM,data:L0HKDwiwDIscoOcr8L8nupzOrPgT28ttm4UwWaQfM7GztrU+BpmTXqEoqkVfLTKuO/wQ4lHvEp2UZDxIX4lbmr4RAHZXSYoT+bQMloDmOY/ZfP6f3wpubpomqqkDKSDTk1qZGCyakstxQab5QFMBIa//zkDZHmBCTaS39Pid6niCaWmIHKmIo8fbgAQIWpGDHKcEwKLf3C+ttkRZGdDyvJJt5qOgRpZvND+HvCQaGaEYSw76lN3KEdHDW6xhcy1br+hga8oWDty60zeM6ldOJYvuDgFcjMgxBetnIadd6/UrCU9PiHblAI1us1lBxbMaFAEyOUWb9/FjA8OOrA==,iv:6Tc3PzE8dZ0vpAgPppugj+M6LL34ITND/9JFeNflWzQ=,tag:zl9EUxxa4kI+ez4k45gkzQ==,type:str]",
+	"token_type": "ENC[AES256_GCM,data:JSSEz6ju,iv:2pGz7/WXQgF8P1gFWG4+jtnQOQG6M3GWGlCrrgCH0dg=,tag:/ppNR4rD5YnZB2pmURaI/Q==,type:str]",
+	"expires_at": "2026-01-19T21:06:08.450472+00:00",
+	"refresh_token": "ENC[AES256_GCM,data:7EBqE9autvDH239giwySmiG0/AD3vaVdEANoAxnVtYN1/OOpyIpxNZRPYy4wdKHoAlg2VDGRXReNv+mMUR8JWEy7IuQbVCXxkt8d/qIpKxjYpjaByFgG8gXyaMqyxxYnfbmArwxHHg==,iv:Muaqmi/AUpLDb4ssaP1zh0veyQ7Iz3Vxu8SY2Ur9phE=,tag:YpS129n/zv3dWMIB7omDUQ==,type:str]",
+	"scope": [
+		"https://www.googleapis.com/auth/gmail.send"
+	],
+	"id_token": null,
+	"issued_at": "2026-01-19T20:06:09.450472+00:00",
+	"metadata": {},
+	"sops": {
+		"age": [
+			{
+				"recipient": "age1cskfyccxlavuth2k3sxzx0vrpn22qzactayrgsv0t3mws74pp3vq3ps462",
+				"enc": "-----BEGIN AGE ENCRYPTED FILE-----\nYWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBuWmx4VFlacjFFTEI2dE1E\nU0ZlM0NpN0VCWEhmZnRvbFpKNjdma0M2cDNVCi82Qm9FK3YwMTVTditKQ0QwWHFL\nMk9XM1d1T3l3TExWZ1hVcDFGUFU0WTAKLS0tIC9tYmdNYnE2ekJUeDI2L1JiT3RQ\nakVnTGRmUkJtNWErTitsTGpQMUJLQVUKU/BdP+/FL4khRvR+BRfX7umJEP+71ExK\nceSQPo6/kpjwLJ96xPePRaoD7sAT4fAAL02KaQb81S2OVVndlf8/7g==\n-----END AGE ENCRYPTED FILE-----\n"
+			}
+		],
+		"lastmodified": "2026-01-19T20:06:09Z",
+		"mac": "ENC[AES256_GCM,data:uetxDBDM7zGW7DVdXxETIjboceiuvdijjtH4vGYwof0kRJaYUfWM2BGGSCCv559LirWLRJal9SB2QtVyRbcYY9Aae8K6/WFmsfz/ShkCbuADQaF/z91PwQhWS1C47GQRyQRq2g4Lg6xQNRK6bhej/0gdYn6BpSfxfiSwIWW52Zs=,iv:t1Mf7K87rR6nCvmL5sn7hw9aurLnV8t11jBkzG2XvCc=,tag:r9o1RuduZgqzthRWhRJtZw==,type:str]",
+		"encrypted_regex": ".*(?:sops|key|password|secret|token|credentials?).*",
+		"version": "3.11.0"
+	}
+}

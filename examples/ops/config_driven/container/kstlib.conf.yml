@@ -1,0 +1,25 @@
+# kstlib.conf.yml - Config-driven container session example
+#
+# Run from this directory:
+#   cd examples/ops/config_driven/container
+#   python run.py
+#
+# Pre-requisite: build the image first
+#   cd examples/ops
+#   podman build -t astro-bot .
+
+ops:
+  default_backend: container
+  container_runtime: null  # auto-detect (podman first, then docker)
+
+  sessions:
+    astro-prod:
+      backend: container
+      image: "astro-bot"
+      env:
+        BOT_MODE: "prod"
+        LOG_LEVEL: "INFO"
+      # volumes:
+      #   - "./data:/app/data:rw"
+      # ports:
+      #   - "8080:8080/tcp"

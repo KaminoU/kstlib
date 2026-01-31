@@ -1,0 +1,132 @@
+# =============================================================================
+# .gitignore - kstlib
+# =============================================================================
+
+# --- Root dotfiles (ignore all except git-related and CI) ---
+/.*
+!/.gitignore
+!/.gitattributes
+!/.github/
+.github/.tox-passed
+!/.editorconfig
+!/.coveragerc
+!/.coveragerc-nocli
+!/.readthedocs.yaml
+!/.pre-commit-config.yaml
+!/.markdownlint.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.dll
+*.dylib
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.whl
+MANIFEST
+
+# --- Virtual environments ---
+venv/
+venv_*/
+ENV/
+env/
+.venv
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.cover
+.hypothesis/
+
+# --- Type checking & linting ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.sublime-project
+*.sublime-workspace
+
+# --- OS specific ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# --- Logs & temporary files ---
+log/
+logs/
+*.log
+out*
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Documentation builds ---
+docs/build/
+docs/_build/
+docs/.doctrees/
+
+# --- Local dev files (root only) ---
+/dev_*.py
+/t_*.py
+/test_*.py.bak
+
+# --- Project specific ---
+# Temporary files
+/tmp/
+
+# Auth tokens (plaintext only - SOPS encrypted tokens are safe to commit)
+*.token.json
+
+# Lock file check artifacts
+pylock.check.toml
+pylock.body*.tmp
+
+# Local infrastructure config
+infra/.env
+
+# Old config/doc files (cleaned up)
+/.*.md
+/.*.log
+
+# Coverage reports
+coverage.xml
+
+# Build artifacts
+nosetests.xml
+
+# =============================================================================

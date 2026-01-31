@@ -1,0 +1,36 @@
+mail:
+    resend:
+        api_key: ENC[AES256_GCM,data:lbZxnbsvkjJguxua2P48gtcDPGq8NUYXpinM3B06L+ewlbdd,iv:plOIzYHsRqS69jLin/9KgM1xjX0Ry7Bc6eIu9PMzGe4=,tag:0dCo54fYWRCy/XWvccfLag==,type:str]
+        api_send_ep: https://api.resend.com/emails
+        email_from: noreply@resend.dev
+        email_from_name: kstlib
+auth:
+    token_storage: ENC[AES256_GCM,data:vOc0Sw==,iv:BkJ6+lntjkDZmuyxLYizY6zDu34VelPrSWZC/svbLd8=,tag:TD+LIQ6bvPxoDw9XeCcOkA==,type:str]
+    storage:
+        sops:
+            directory: ENC[AES256_GCM,data:Srcx8ylM7bM=,iv:EneXhwzvyE/Of0PpW6a8XBKPAM3dgO3PpE6V0HANq4I=,tag:jZDDkqbHFQuOJBm1wNHtnA==,type:str]
+    providers:
+        google:
+            type: oauth2
+            client_id: 293967265121-bq1va5po70cvi60bhtu8uaa5odph9bra.apps.googleusercontent.com
+            client_secret: ENC[AES256_GCM,data:9tbp+FmFlceBjp9UDa6ug4Hlvzaw+e5++fahbm7bbNazK0w=,iv:R3QOtZnL04p+mrMwa2d2FzeGcwZzNu7XZkB7djAwPaA=,tag:kJw8InOo/+4t9U1GjP7riA==,type:str]
+            authorize_url: https://accounts.google.com/o/oauth2/auth
+            token_url: ENC[AES256_GCM,data:mOypGYGstQaKXrtMof+FJMvivVbAz7jQsGYyjvqSBhxc9VI=,iv:iBke4tDZ9XWOn+zCCrNb96+X08zxxRpeShnq6Ysfa9I=,tag:DL3ej8MPtYBhkwfFpmLv+A==,type:str]
+            scopes:
+                - https://www.googleapis.com/auth/gmail.send
+            redirect_uri: http://localhost:8400/callback
+sops:
+    age:
+        - recipient: age1cskfyccxlavuth2k3sxzx0vrpn22qzactayrgsv0t3mws74pp3vq3ps462
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBZcE1sNDVOOWlKMjRzZnZJ
+            UE1neEdtK0VkSXZJdWRHc1htMFN1TDBEOXc4CnY5SkVjV0Jvb3VIWWQ0aDdPNHRm
+            Y0R6QzRlTHM4MWZkYk9zNVdaNjRkY2MKLS0tIFZob3lzU0dYOHdNVXRXUmFRa0pT
+            VmdwUDkzR29uWHI5bE5BNXAraWZ6dVUKZPVvbppaMoRm95juUPTGpjoh0SIn6Hz1
+            DyIuyk21eObsvl2xn0LqNKnliMzJ/7cUTo6OSUkCZNPu7kC6jSMLOQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-19T20:05:56Z"
+    mac: ENC[AES256_GCM,data:zQvEGnwgzvdd6qdYtERMGdyuIHE02wsX5IeYwfodAQ73j5DBYX64PEVbehOU7mW3WFp7r0nQg3lygK1RmfwRijaCdP7uR0IGHA3bK2998GCeNjXCkbohZRW4wbQYdOKDcpU3nj/Xz67IqQ+BWxdossoRDaenO9XdtJo+llLT5G0=,iv:BdDeet8+AR0/SxIIyYpCcNweuKU7mZOPAqlBlU6GeHw=,tag:fLaO6DflXxGLc8Cu/ZtqKw==,type:str]
+    encrypted_regex: .*(?:sops|key|password|secret|token|credentials?).*
+    version: 3.11.0

@@ -1,0 +1,47 @@
+# kstlib configuration for Binance Testnet Resilience Example
+#
+# This example demonstrates WebSocket + Heartbeat + Watchdog resilience
+# using Binance testnet streams.
+
+# Include external config files
+include:
+  - config/binance.yml
+  - config/slack.sops.yml
+
+# Resilience settings (production-ready)
+#
+# Timing relationship:
+#   heartbeat.interval (5s) < watchdog.max_heartbeat_age (30s) < watchdog.cycle_interval can be <= max_age
+#   This means: 6 missed heartbeats triggers alert, checked every 10s
+#
+resilience:
+  heartbeat:
+    interval: 5.0  # seconds between heartbeats
+    state_file: state/heartbeat.state.json
+
+  watchdog:
+    state_file: state/heartbeat.state.json  # Same as heartbeat (explicit for clarity)
+    cycle_interval: 10  # Check every 10 seconds (prod: frequent monitoring)
+    max_heartbeat_age: 30  # Alert if no heartbeat for 30s (6 missed heartbeats)
+
+# WebSocket settings (override defaults for faster response in testing)
+websocket:
+  ping:
+    interval: 15
+    timeout: 10
+  connection:
+    timeout: 30
+  reconnect:
+    delay: 0.5          # Fast reconnect for testing
+    max_delay: 30.0
+    max_attempts: 20
+  proactive:
+    disconnect_check_interval: 1.0   # Check every second (fast for testing)
+    reconnect_check_interval: 1.0    # Fast reconnect check
+
+# Logging - use kstlib logger with trace preset for file + console
+logger:
+  preset: trace
+  # Disable emoji icons for Windows cp1252 compatibility
+  icons:
+    show: false

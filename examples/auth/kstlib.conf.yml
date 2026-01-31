@@ -1,0 +1,34 @@
+# kstlib Auth Module - Multi-Provider Example
+# Demonstrates OIDC vs OAuth2 with different token storage strategies
+#
+# Usage:
+#   cd examples/auth
+#   kstlib auth login oidc-keycloak-dev      # OIDC auto-discovery + SOPS
+#   kstlib auth login oidc-hybrid-keycloak   # OIDC hybrid mode + file
+#   kstlib auth login oauth2-keycloak-dev    # OAuth2 manual + file
+#   kstlib auth login corp-oidc              # OIDC with custom headers + file
+
+# Include provider configurations (deep merged)
+include:
+  - "providers/oidc-keycloak-dev.yml"
+  - "providers/oidc-hybrid-keycloak.yml"
+  - "providers/oauth2-keycloak-dev.yml"
+  - "providers/oidc-corporate-headers.yml"
+  # Google OAuth2 credentials (from mail example, auto-decrypted via SOPS)
+  - "../mail/mail.conf.sops.yml"
+
+# Shared callback server configuration
+auth:
+  default_provider: "oidc-keycloak-dev"
+
+  callback_server:
+    host: "127.0.0.1"
+    port: 8400
+    timeout: 120
+
+logger:
+  presets:
+    my_trace:
+      output: console
+      console:
+        level: TRACE

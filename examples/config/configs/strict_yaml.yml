@@ -1,0 +1,10 @@
+include:
+  - "strict_extended.yml"
+
+base:
+  value: "from base config"
+  priority: 1
+
+app:
+  name: "Strict YAML App"
+  strict_mode: true

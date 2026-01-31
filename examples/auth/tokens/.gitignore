@@ -1,0 +1,5 @@
+# Ignore plaintext tokens (security)
+*.token.json
+
+# Keep SOPS-encrypted tokens (safe to commit)
+!*.sops.json

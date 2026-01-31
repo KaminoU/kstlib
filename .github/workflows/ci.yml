@@ -1,0 +1,269 @@
+name: CI
+
+on:
+  push:
+    branches: [main, RC]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+
+jobs:
+  lock-check:
+    name: Lock Files Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Check uv.lock is up to date
+        run: uv lock --check
+
+      - name: Check pylock.toml is up to date
+        run: |
+          uv export --format pylock.toml --all-extras -o pylock.check.toml > /dev/null 2>&1
+          # Compare ignoring first 2 lines (comment with output filename differs)
+          tail -n +3 pylock.toml > pylock.body1.tmp
+          tail -n +3 pylock.check.toml > pylock.body2.tmp
+          if ! diff -q pylock.body1.tmp pylock.body2.tmp > /dev/null 2>&1; then
+            echo "::error::pylock.toml is out of sync with uv.lock"
+            echo "Run: uv export --format pylock.toml --all-extras -o pylock.toml"
+            diff pylock.body1.tmp pylock.body2.tmp | head -50 || true
+            rm -f pylock.check.toml pylock.body1.tmp pylock.body2.tmp
+            exit 1
+          fi
+          rm -f pylock.check.toml pylock.body1.tmp pylock.body2.tmp
+          echo "pylock.toml is in sync ✓"
+
+  lint:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    needs: [lock-check]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Install lint dependencies
+        run: uv sync --all-extras
+
+      - name: Run Ruff linter
+        run: uv run ruff check src/ --output-format=github
+
+      - name: Run Ruff formatter check
+        run: uv run ruff format --check src/
+
+  typecheck:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    needs: [lock-check]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run mypy
+        run: uv run mypy src/ --strict --warn-unreachable --warn-redundant-casts --config-file pyproject.toml
+
+  test:
+    name: Test (Python ${{ matrix.python-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [lock-check]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run tests with coverage
+        run: uv run pytest tests/ -m "not cli and not integration" -v --cov=src --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+        continue-on-error: true
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  test-examples:
+    name: Test Examples
+    runs-on: ubuntu-latest
+    needs: [lock-check]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run all examples
+        run: uv run python examples/config/run_all_examples.py
+
+  # ===========================================================================
+  # Documentation Build - Validates Sphinx builds without errors
+  # ===========================================================================
+  docs:
+    name: Build Docs (Sphinx)
+    runs-on: ubuntu-latest
+    needs: [lock-check]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Install documentation dependencies
+        run: uv sync --extra docs
+
+      - name: Build Sphinx documentation
+        run: uv run sphinx-build -b html docs/source docs/build/html -W --keep-going
+        continue-on-error: true
+
+      - name: Check for critical errors
+        run: |
+          # Build again without -W to get full output, check exit code
+          uv run sphinx-build -b html docs/source docs/build/html -n 2>&1 | tee sphinx-output.txt
+          if grep -q "CRITICAL\|ERROR" sphinx-output.txt; then
+            echo "::error::Sphinx build has critical errors"
+            grep "CRITICAL\|ERROR" sphinx-output.txt
+            exit 1
+          fi
+          echo "Documentation build passed"
+
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Install build dependencies
+        run: uv sync --all-extras
+
+      - name: Build package
+        run: uv run python -m build
+
+      - name: Check package metadata
+        run: uv run twine check dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+
+  # ===========================================================================
+  # Version Check - Validates tag matches __version__ (only on tags)
+  # ===========================================================================
+  version-check:
+    name: Version Check
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Validate tag matches __version__
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(uv run python -c "from kstlib.meta import __version__; print(__version__)")
+          echo "Tag version: $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match __version__ ($PKG_VERSION)"
+            exit 1
+          fi
+          echo "Version check passed ✓"
+
+  # ===========================================================================
+  # Publish to PyPI - Only on version tags after all checks pass
+  # ===========================================================================
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, build, version-check]
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: pypi
+      url: https://pypi.org/project/kstlib/
+    permissions:
+      id-token: write  # Required for trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true

@@ -1,0 +1,890 @@
+# Default configuration for kstlib
+# This file is used to set default values for the kstlib library.
+
+###########################################################################################
+## Datetime formatting (global settings for timestamp display)
+###########################################################################################
+datetime:
+  # Format string for timestamps (pendulum format tokens)
+  # See: https://pendulum.eustace.io/docs/#tokens
+  # Common formats:
+  #   - "YYYY-MM-DD HH:mm:ss" (ISO-like, default)
+  #   - "DD/MM/YYYY HH:mm:ss" (European)
+  #   - "MM/DD/YYYY hh:mm:ss A" (US with AM/PM)
+  #   - "ddd D MMM YYYY HH:mm" (Human: "Mon 29 Jan 2026 15:30")
+  # Hard limit: max 64 chars, alphanumeric + common punctuation only
+  format: "YYYY-MM-DD HH:mm:ss"
+
+  # Timezone for display: "local" (system timezone) or IANA timezone name
+  # Examples: "local", "UTC", "Europe/Paris", "America/New_York"
+  # Hard limit: max 64 chars, validated against pendulum timezones
+  timezone: "local"
+
+###########################################################################################
+## Cache configuration
+###########################################################################################
+cache:
+  # Default caching strategy (ttl | lru | memoize | file)
+  default_strategy: ttl
+
+  # TTL (Time-To-Live) cache settings
+  ttl:
+    default_seconds: 300 # 5 minutes
+    max_entries: 1000 # Maximum number of cached entries
+    cleanup_interval: 60 # Cleanup expired entries every 60s
+
+  # LRU (Least Recently Used) cache settings
+  lru:
+    maxsize: 128 # Maximum cache size
+    typed: false # Separate cache for different argument types
+
+  # File-based cache settings
+  file:
+    enabled: true
+    cache_dir: ".cache" # Directory for cache files
+    check_mtime: true # Invalidate cache on file modification
+    serializer: json # json (default) | pickle | auto
+    # Maximum cache file size (prevents OOM on corrupted files)
+    # Accepts: bytes (int) or human-readable string ("100M", "50 MiB")
+    # Hard limit enforced in code: 100 MiB
+    max_file_size: "50M"
+
+  # Async cache support
+  async_support:
+    enabled: true
+    executor_workers: 4 # ThreadPoolExecutor workers for sync functions
+
+  # Metrics and monitoring
+  metrics:
+    enabled: false # Track cache hits/misses (opt-in)
+    log_stats: false # Log statistics periodically
+    stats_interval: 300 # Log stats every 5 minutes
+
+###########################################################################################
+## Logging configuration
+###########################################################################################
+logger:
+  defaults:
+    output: console # console | file | both
+
+    # Color theme for Rich console output
+    theme:
+      trace: "medium_purple4 on dark_olive_green1"
+      debug: "black on deep_sky_blue1"
+      info: "sky_blue1"
+      success: "black on sea_green3"
+      warning: "bold white on salmon1"
+      error: "bold white on deep_pink2"
+      critical: "blink bold white on red3"
+
+    # Icons for each log level
+    icons:
+      show: true
+      trace: "🔬"
+      debug: "🔎"
+      info: "📄"
+      success: "✅"
+      warning: "🚨"
+      error: "❌"
+      critical: "💀"
+
+    # Console handler settings
+    console:
+      level: WARNING  # Log level: TRACE | DEBUG | INFO | SUCCESS | WARNING | ERROR | CRITICAL
+      datefmt: "%Y-%m-%d %H:%M:%S"
+      format: "::: PID %(process)d / TID %(thread)d ::: %(message)s"
+      show_path: true
+      tracebacks_show_locals: true
+
+    # File handler settings
+    # Two configuration styles are supported:
+    #   - New style (recommended): file_path: ./logs/kstlib.log
+    #   - Legacy style: log_path + log_dir + log_name (for backward compatibility)
+    # The new style takes priority if file_path is defined.
+    file:
+      level: WARNING  # Log level: TRACE | DEBUG | INFO | SUCCESS | WARNING | ERROR | CRITICAL
+      datefmt: "%Y-%m-%d %H:%M:%S"
+      format: "[%(asctime)s | %(levelname)-8s] ::: PID %(process)d / TID %(thread)d ::: %(message)s"
+      # file_path: ./logs/kstlib.log  # New style (recommended)
+      # auto_create_dir: true          # New style auto-create
+      log_path: "./"                   # Legacy style (kept for backward compatibility)
+      log_dir: "logs"
+      log_name: "kstlib.log"
+      log_dir_auto_create: true
+
+    # File rotation settings
+    rotation:
+      when: midnight # midnight | S | M | H | D | W0-W6
+      interval: 1
+      backup_count: 7
+
+  presets:
+    dev:
+      output: console
+      console:
+        level: DEBUG
+        show_path: true
+        tracebacks_show_locals: true
+      icons:
+        show: true
+
+    prod:
+      output: file
+      file:
+        level: INFO
+      icons:
+        show: false
+
+    debug:
+      output: console
+      console:
+        level: DEBUG
+        show_path: true
+        tracebacks_show_locals: true
+      icons:
+        show: true
+
+    trace:
+      output: both
+      console:
+        level: TRACE
+        show_path: true
+        tracebacks_show_locals: true
+      file:
+        level: TRACE
+      icons:
+        show: true
+
+    # Mail trace preset - verbose SMTP/SSL debugging to dedicated file
+    # Usage: LogManager(preset="trace_mail") or logger.preset: trace_mail
+    trace_mail:
+      output: both
+      console:
+        level: WARNING  # Keep console quiet
+      file:
+        level: TRACE
+        file_path: ./logs/mail-trace.log
+        auto_create_dir: true
+      icons:
+        show: true
+
+###########################################################################################
+## UI helpers configuration
+###########################################################################################
+ui:
+  panels:
+    defaults:
+      panel:
+        # border_style supports any Rich color/style (e.g. "blue", "bold green")
+        border_style: "bright_blue"
+        title_align: "left"
+        subtitle_align: "left"
+        padding: [1, 2]
+        expand: true
+        highlight: false
+        # https://rich.readthedocs.io/en/stable/appendix/box.html#appendix-box
+        box: "ROUNDED"
+      content:
+        box: "SIMPLE"
+        expand: true
+        show_header: false
+        key_label: "Key"
+        value_label: "Value"
+        key_style: "bold white"
+        value_style: null
+        header_style: "bold"
+        pad_edge: false
+        sort_keys: false
+        use_markup: true
+        use_pretty: true
+        pretty_indent: 2
+    presets:
+      info:
+        panel:
+          border_style: "cyan"
+          title: "Information"
+          icon: "📘"
+      success:
+        panel:
+          border_style: "sea_green3"
+          title: "Success"
+          icon: "✅"
+      warning:
+        panel:
+          border_style: "orange3"
+          title: "Warning"
+          icon: "🔔"
+      error:
+        panel:
+          border_style: "red3"
+          title: "Error"
+          icon: "❌"
+      summary:
+        panel:
+          border_style: "light_steel_blue1"
+          title: "Execution Summary"
+          icon: "📝"
+        content:
+          sort_keys: true
+          key_style: "bold orchid2"
+          value_style: "dim white"
+  tables:
+    defaults:
+      table:
+        title: null
+        caption: null
+        box: "SIMPLE"
+        show_header: true
+        header_style: "bold cyan"
+        show_lines: false
+        row_styles: null
+        expand: true
+        pad_edge: false
+        highlight: false
+      columns:
+        - header: "Key"
+          key: "key"
+          justify: "left"
+          style: "bold white"
+          overflow: "fold"
+          no_wrap: false
+        - header: "Value"
+          key: "value"
+          justify: "left"
+          style: null
+          overflow: "fold"
+          no_wrap: false
+    presets:
+      inventory:
+        table:
+          title: "Inventory"
+          box: "SIMPLE_HEAVY"
+          show_lines: true
+          header_style: "bold yellow"
+        columns:
+          - header: "Component"
+            key: "component"
+            style: "bold"
+            width: 18
+          - header: "Version"
+            key: "version"
+            style: "cyan"
+            width: 12
+          - header: "Status"
+            key: "status"
+            justify: "center"
+            style: "bold"
+            width: 10
+      metrics:
+        table:
+          title: "Metrics"
+          box: "SIMPLE_HEAD"
+          header_style: "bold green"
+        columns:
+          - header: "Metric"
+            key: "metric"
+            style: "bold"
+          - header: "Value"
+            key: "value"
+            justify: "right"
+  spinners:
+    defaults:
+      # Spinner character style: BRAILLE | DOTS | LINE | ARROW | BLOCKS | CIRCLE | SQUARE | MOON | CLOCK
+      style: "BRAILLE"
+      # Position relative to message: before | after
+      position: "before"
+      # Animation type: spin | bounce | color_wave
+      animation_type: "spin"
+      # Seconds between animation frames
+      interval: 0.08
+      # Rich style for spinner character
+      spinner_style: "cyan"
+      # Rich style for message text (null = default)
+      text_style: null
+      # Character shown on success
+      done_character: "✓"
+      done_style: "green"
+      # Character shown on failure
+      fail_character: "✗"
+      fail_style: "red"
+    presets:
+      minimal:
+        style: "LINE"
+        spinner_style: "dim white"
+        interval: 0.1
+      fancy:
+        style: "BRAILLE"
+        spinner_style: "bold cyan"
+        interval: 0.06
+      blocks:
+        style: "BLOCKS"
+        spinner_style: "blue"
+        interval: 0.05
+      bounce:
+        animation_type: "bounce"
+        spinner_style: "yellow"
+        interval: 0.08
+      color_wave:
+        animation_type: "color_wave"
+        interval: 0.1
+
+###########################################################################################
+## Mail configuration
+###########################################################################################
+mail:
+  # Attachment and message limits
+  limits:
+    # Maximum size for a single attachment
+    # Accepts: bytes (int) or human-readable string ("25M", "10 MiB")
+    # Hard limit enforced in code: 25 MiB
+    max_attachment_size: "25M"
+    # Maximum number of attachments per message
+    # Hard limit enforced in code: 50
+    max_attachments: 20
+
+  filesystem:
+    attachments_root: "~/.cache/kstlib/mail/attachments"
+    inline_root: "~/.cache/kstlib/mail/inline"
+    templates_root: "~/.cache/kstlib/mail/templates"
+    allow_external_attachments: false
+    allow_external_templates: false
+    auto_create_roots: true
+    enforce_permissions: true
+    max_permission_octal: 448 # 0o700
+
+###########################################################################################
+## Secrets configuration
+###########################################################################################
+secrets:
+  name: "default"
+  providers:
+    - name: environment
+      settings:
+        prefix: "KSTLIB"
+        delimiter: "__"
+    - name: keyring
+      settings:
+        service: "kstlib"
+  sops:
+    # Path to the encrypted secrets file (set to null to disable by default)
+    path: null
+    # Override the sops executable if it is not on PATH
+    binary: "sops"
+    # autodetect | json | yaml | text
+    format: "auto"
+    # Maximum cached decrypted files (LRU eviction)
+    # Hard limit enforced in code: 256
+    max_cache_entries: 64
+
+###########################################################################################
+## Authentication configuration (OAuth2/OIDC)
+###########################################################################################
+auth:
+  # Default provider to use when none specified
+  default_provider: null
+
+  # Token storage backend: "memory" (dev/testing), "file" (persistent), or "sops" (encrypted)
+  token_storage: "memory"
+
+  # OIDC discovery document cache TTL (seconds)
+  discovery_ttl: 3600
+
+  # TRACE level HTTP logging settings
+  trace:
+    # Pretty-print JSON bodies in TRACE logs (indent with 2 spaces)
+    pretty: true
+    # Maximum body length before truncation (chars)
+    # TRACE = debug mode, show full body by default
+    # Hard limit enforced in code: 10000 (10KB)
+    max_body_length: 10000
+
+  # Local callback server for authorization code flow
+  callback_server:
+    host: "127.0.0.1"
+    port: 8400
+    # Port range to try if primary port is busy (optional)
+    port_range: null # e.g., [8400, 8410]
+    # Timeout waiting for callback (seconds)
+    # Hard limit enforced in code: 600 (10 minutes)
+    timeout: 120
+
+  # Status display settings (kstlib auth status)
+  status:
+    # Access token considered "expiring soon" when remaining time < threshold
+    # Hard limits enforced in code: min 60s, max 3600s (1 hour)
+    expiring_soon_threshold: 120  # seconds (2 minutes)
+    # Refresh token considered "expiring soon" when remaining time < threshold
+    # Hard limits enforced in code: min 60s, max 172800s (48 hours)
+    # Typically higher since refresh tokens can live days/weeks/months
+    refresh_expiring_soon_threshold: 600  # seconds (10 minutes)
+    # Timezone for displaying timestamps: "local" or "utc"
+    display_timezone: "local"
+
+  # Token storage configuration per backend
+  storage:
+    file:
+      directory: "~/.config/kstlib/auth/tokens"
+    sops:
+      directory: "~/.config/kstlib/auth/tokens"
+
+  # Named providers (empty by default, users define their own)
+  providers: {}
+  # Example provider configuration:
+  # providers:
+  #   corporate:
+  #     type: "oidc"              # oauth2 | oidc
+  #
+  #     # OIDC Discovery modes:
+  #     # - Auto: only issuer provided, endpoints auto-discovered
+  #     # - Hybrid: issuer + some explicit endpoints (explicit wins)
+  #     # - Manual: no issuer, all endpoints explicit (no discovery)
+  #     issuer: "https://idp.corp.local/realms/main"
+  #
+  #     client_id: "my-app"
+  #     # Secret can be inline or SOPS reference
+  #     client_secret: null       # or "sops://secrets/auth.yaml#corporate.client_secret"
+  #     scopes:
+  #       - openid
+  #       - profile
+  #       - email
+  #
+  #     # PKCE enabled by default (recommended for all clients)
+  #     pkce: true
+  #
+  #     # Optional endpoint overrides (auto-discovered if issuer provided)
+  #     authorization_endpoint: null
+  #     token_endpoint: null
+  #     userinfo_endpoint: null
+  #     jwks_uri: null
+  #
+  #     # Custom HTTP headers sent with all IDP requests
+  #     # Useful for load balancer validation, tenant routing, etc.
+  #     headers: {}
+  #     # Example:
+  #     # headers:
+  #     #   Host: "idp.corp.local"
+  #     #   X-Tenant-Id: "corp"
+  #
+  #     # Provider-specific token storage (overrides global)
+  #     token_storage: null       # "memory" | "file" | "sops"
+
+###########################################################################################
+## Utilities configuration
+###########################################################################################
+utilities:
+  secure_delete:
+    method: "auto"
+    passes: 3
+    zero_last_pass: true
+    chunk_size: 1048576 # 1 MiB
+
+###########################################################################################
+## Resilience configuration
+###########################################################################################
+resilience:
+  # --- Core components (used by WebSocket trading bots) ---
+
+  heartbeat:
+    # Seconds between heartbeats
+    # Hard limits enforced in code: min 1s, max 300s (5 minutes)
+    interval: 10
+
+  watchdog:
+    # Seconds of inactivity before triggering timeout callback
+    # Hard limits enforced in code: min 1s, max 3600s (1 hour)
+    timeout: 30
+
+  # --- Advanced components (for REST API calls, order placement) ---
+  # Note: WebSocket connections have built-in reconnection logic.
+  # These are useful for REST API resilience (e.g., placing orders, account queries).
+
+  shutdown:
+    # GracefulShutdown: Orderly cleanup on SIGTERM/SIGINT with prioritized callbacks.
+    # Use case: Ensure open orders are cancelled, positions closed before exit.
+    # Total timeout for all cleanup callbacks (seconds)
+    # Hard limits enforced in code: min 5s, max 300s (5 minutes)
+    timeout: 30
+    # Exit code when timeout exceeded
+    force_exit_code: 1
+
+  circuit_breaker:
+    # CircuitBreaker: Fail-fast pattern for external service calls.
+    # Use case: REST API calls (order placement, account info) - after N failures,
+    # stop calling the failing endpoint and fail immediately until recovery.
+    # Failures before opening circuit
+    # Hard limits enforced in code: min 1, max 100
+    max_failures: 5
+    # Cooldown before attempting recovery (seconds)
+    # Hard limits enforced in code: min 1s, max 3600s (1 hour)
+    reset_timeout: 60
+    # Calls allowed in half-open state for testing
+    # Hard limits enforced in code: min 1, max 10
+    half_open_max_calls: 1
+
+###########################################################################################
+## Database configuration
+###########################################################################################
+db:
+  pool:
+    # Minimum connections to maintain in pool (0 = lazy pool, on-demand)
+    # Hard limits enforced in code: min 0, max 10
+    min_size: 1
+    # Maximum connections allowed in pool
+    # Hard limits enforced in code: min 1, max 100
+    max_size: 10
+    # Timeout for acquiring a connection (seconds)
+    # Hard limits enforced in code: min 1.0, max 300.0 (5 minutes)
+    acquire_timeout: 30.0
+  retry:
+    # Retry attempts on connection failure
+    # Hard limits enforced in code: min 1, max 10
+    max_attempts: 3
+    # Delay between retries (seconds)
+    # Hard limits enforced in code: min 0.1, max 60.0
+    delay: 0.5
+
+  # SQLCipher encryption (opt-in, requires: pip install kstlib[db-crypto])
+  # System deps: libsqlcipher-dev (Debian/Ubuntu), sqlcipher (macOS/brew)
+  cipher:
+    # Enable SQLCipher encryption (default: false)
+    enabled: false
+    # Key source: env | sops | passphrase
+    # - env: Read from environment variable (key_env)
+    # - sops: Read from SOPS-encrypted file (sops_path + sops_key)
+    # - passphrase: Direct passphrase (ONLY for development/testing)
+    key_source: env
+    # Environment variable containing the encryption key
+    key_env: "KSTLIB_DB_KEY"
+    # SOPS configuration (when key_source: sops)
+    sops_path: null
+    sops_key: "db_key"
+    # Direct passphrase (NEVER use in production)
+    passphrase: null
+
+###########################################################################################
+## Credentials configuration (multi-source credential resolution)
+###########################################################################################
+credentials:
+  # Credentials are named entries that can be referenced by rapi services.
+  # Supported types: env, file, sops, provider
+  #
+  # Examples:
+  #
+  # # Type: env - from environment variable
+  # github:
+  #   type: env
+  #   var: "GITHUB_TOKEN"
+  #
+  # # Type: env - key+secret pair from environment
+  # kraken_env:
+  #   type: env
+  #   var_key: "KRAKEN_API_KEY"
+  #   var_secret: "KRAKEN_API_SECRET"
+  #
+  # # Type: file - from JSON/YAML file with jq-like path extraction
+  # azure_cli:
+  #   type: file
+  #   path: "~/.azure/msal_token_cache.json"
+  #   token_path: ".AccessToken.secret"
+  #
+  # # Type: file - key+secret from file fields
+  # api_file:
+  #   type: file
+  #   path: "~/.config/api_keys.json"
+  #   key_field: "api_key"
+  #   secret_field: "api_secret"
+  #
+  # # Type: sops - from SOPS-encrypted file
+  # kraken_prod:
+  #   type: sops
+  #   path: "secrets/kraken.sops.json"
+  #   key_field: "api_key"
+  #   secret_field: "api_secret"
+  #
+  # # Type: provider - from kstlib.auth provider (OAuth2/OIDC)
+  # corporate:
+  #   type: provider
+  #   provider: "corporate"
+
+###########################################################################################
+## REST API configuration (config-driven HTTP client)
+###########################################################################################
+rapi:
+  # Hard limits enforced in code for deep defense:
+  # - timeout: min 1s, max 300s (5 minutes)
+  # - max_response_size: max 100M
+  # - max_retries: min 0, max 10
+  # - retry_delay: min 0.1s, max 60s
+  # - retry_backoff: min 1.0, max 5.0
+  limits:
+    timeout: 30                # Request timeout in seconds
+    max_response_size: "10M"   # Maximum response body size
+    max_retries: 3             # Retry attempts on failure
+    retry_delay: 1.0           # Initial delay between retries (seconds)
+    retry_backoff: 2.0         # Exponential backoff multiplier
+
+  # Pretty-print settings for CLI output
+  # Controls formatting of JSON and XML responses in terminal
+  pretty_render:
+    # JSON indentation (spaces). Set to null or 0 to disable pretty-printing.
+    json: 2
+    # XML pretty-print. Set to true to enable formatted XML output.
+    xml: true
+
+  # API services and their endpoints
+  # Define your own APIs here or use external *.rapi.yml files
+  api: {}
+
+  # Example: Azure Resource Manager API
+    # azure:
+    #   base_url: "https://management.azure.com"
+    #   credentials: azure_cli      # Reference to credentials section
+    #   auth_type: bearer
+    #   headers:
+    #     X-Custom-Header: "service-value"
+    #   endpoints:
+    #     list_subscriptions:
+    #       path: "/subscriptions"
+    #       query:
+    #         api-version: "2020-01-01"
+    #       headers:
+    #         X-Request-ID: "{request_id}"
+
+###########################################################################################
+## Alerts configuration (multi-channel alerting)
+###########################################################################################
+alerts:
+  # Hard limits enforced in code for deep defense:
+  # - throttle.rate: min 1, max 1000 alerts per period
+  # - throttle.per: min 1.0, max 86400.0 seconds (1 day)
+  # - throttle.burst: min 1, max rate value
+
+  # Default throttle settings (anti-spam protection)
+  throttle:
+    rate: 10        # Maximum alerts per period
+    per: 60.0       # Period duration in seconds (1 minute)
+    burst: 5        # Initial burst capacity
+
+  # Default channel settings
+  channels:
+    # Timeout for sending alerts (seconds)
+    # Hard limits enforced in code: min 1.0, max 120.0
+    timeout: 30.0
+    # Retry attempts on delivery failure
+    # Hard limits enforced in code: min 0, max 5
+    max_retries: 2
+
+  presets:
+    dev:
+      throttle:
+        rate: 100     # More lenient for development
+        per: 60.0
+        burst: 20
+      channels:
+        timeout: 10.0
+        max_retries: 0
+
+    prod:
+      throttle:
+        rate: 10      # Strict rate limiting
+        per: 60.0
+        burst: 3
+      channels:
+        timeout: 30.0
+        max_retries: 3
+
+    critical_only:
+      throttle:
+        rate: 5       # Very strict for critical-only channels
+        per: 300.0    # 5 minutes
+        burst: 2
+
+###########################################################################################
+## Metrics configuration
+###########################################################################################
+metrics:
+  # Enable colored output
+  colors: true
+
+  # Output destination: stderr | stdout
+  output: stderr
+
+  # Default behavior for @metrics decorator (can be overridden per-call)
+  defaults:
+    time: true      # Track execution time
+    memory: true    # Track peak memory (tracemalloc)
+    step: false     # Enable step numbering
+
+  # Step format string
+  # Variables: {n} (step number), {title}, {function}, {module}, {file}, {line}
+  step_format: "[STEP {n}] {title}"
+
+  # Lap format string (for Stopwatch)
+  # Variables: {n} (lap number), {name}
+  lap_format: "[LAP {n}] {name}"
+
+  # Title format (auto-generated when no custom title provided)
+  # Variables: {function}, {module}, {file}, {line}
+  title_format: "{function} [dim green]({file}:{line})[/dim green]"
+
+  # Time display precision (decimal places for seconds)
+  time_precision: 3
+
+  # Thresholds for color warnings
+  thresholds:
+    time_warn: 5           # Warn color if >= 5 seconds
+    time_crit: 30          # Critical color if >= 30 seconds
+    memory_warn: 100000000 # Warn color if >= 100 MB
+    memory_crit: 500000000 # Critical color if >= 500 MB
+
+  # Icons (set to "" to disable)
+  icons:
+    time: "⏱"
+    memory: "🧠"
+    peak: "Peak:"    # Text after memory icon
+
+  # Color theme (Rich style names)
+  # See: https://rich.readthedocs.io/en/stable/appendix/colors.html
+  theme:
+    label: "bold green"
+    title: "bold white"
+    text: "white"
+    muted: "dim"
+    table_header: "bold cyan"
+    time_ok: "cyan"
+    time_warn: "orange3"
+    time_crit: "bold red"
+    memory_ok: "rosy_brown"
+    memory_warn: "orange3"
+    memory_crit: "bold red"
+    step_number: "dim"
+    separator: "dim white"
+
+  # Summary display style: table | simple
+  summary_style: table
+
+  # Show percentage of total time in summaries
+  show_percentages: true
+
+  # Print metrics to stderr by default
+  print_results: true
+
+###########################################################################################
+## WebSocket configuration (proactive connection control)
+###########################################################################################
+websocket:
+  # Ping/Pong heartbeat settings
+  ping:
+    # Seconds between ping frames
+    # Hard limits: [5, 60] - values outside bounds will be clamped
+    interval: 20
+    # Seconds to wait for pong response
+    # Hard limits: [5, 30]
+    timeout: 10
+
+  # Connection settings
+  connection:
+    # Timeout for initial connection (seconds)
+    # Hard limits: [5, 120]
+    timeout: 30
+
+  # Reconnection behavior
+  reconnect:
+    # Initial delay between reconnect attempts (seconds)
+    # Hard limits: [0, 300] - 0 = immediate reconnect allowed
+    delay: 1.0
+    # Maximum delay for exponential backoff (seconds)
+    # Hard limits: [1, 600]
+    max_delay: 60.0
+    # Maximum consecutive reconnection attempts
+    # Hard limits: [0, 100] - 0 = no retry
+    max_attempts: 10
+
+  # Message queue settings
+  queue:
+    # Maximum messages in queue (0 = unlimited)
+    # Hard limits: [0, 10000]
+    size: 1000
+
+  # Proactive control settings (KEY FEATURE)
+  proactive:
+    # Seconds between should_disconnect callback checks
+    # Hard limits: [1, 60]
+    disconnect_check_interval: 10.0
+    # Seconds between should_reconnect callback checks
+    # Hard limits: [0.5, 60]
+    reconnect_check_interval: 5.0
+    # Disconnect X seconds before 24h limit (Binance, etc.)
+    # Hard limits: [60, 3600] - at least 1min, max 1h
+    disconnect_margin: 300.0
+
+  # Presets for common use cases
+  presets:
+    trading:
+      ping: { interval: 15, timeout: 10 }
+      reconnect: { delay: 0.5, max_delay: 30.0, max_attempts: 20 }
+      proactive: { disconnect_check_interval: 5.0, reconnect_check_interval: 2.0 }
+    monitoring:
+      ping: { interval: 30, timeout: 15 }
+      reconnect: { delay: 5.0, max_delay: 120.0, max_attempts: 50 }
+      proactive: { disconnect_check_interval: 30.0, reconnect_check_interval: 10.0 }
+
+# ============================================================================
+# OPS - Session Management Configuration
+# ============================================================================
+# Config-driven session management for persistent processes (bots, services).
+# Supports tmux (local dev) and container (Podman/Docker) backends.
+#
+# Hard limits enforced:
+#   - Session name: max 64 chars, alphanumeric + underscore + hyphen
+#   - Image name: max 256 chars, valid OCI format
+#   - Volumes: max 20, no path traversal
+#   - Ports: max 50, range 1-65535
+#   - Env vars: max 100, key max 128 chars, value max 32KB
+#   - Command: max 4096 chars, dangerous patterns blocked
+# ============================================================================
+ops:
+  # Default backend when not specified (tmux | container)
+  default_backend: tmux
+
+  # Tmux binary path (default: tmux)
+  tmux_binary: tmux
+
+  # Container runtime (podman | docker | null for auto-detect)
+  container_runtime: null
+
+  # Pre-defined sessions (config-driven)
+  # Sessions can be started with: kstlib ops start <name>
+  sessions: {}
+    # Example session configuration:
+    # mybot:
+    #   backend: tmux                    # Override default_backend
+    #   command: "python -m mybot.main"  # Command to run
+    #   working_dir: "/opt/mybot"        # Working directory
+    #   env:                             # Environment variables
+    #     BOT_ENV: production
+    #     LOG_LEVEL: INFO
+    #
+    # mybot-prod:
+    #   backend: container
+    #   image: "mybot:latest"            # Container image (required)
+    #   volumes:                         # Volume mounts (host:container[:ro|:rw])
+    #     - "./data:/app/data"
+    #     - "./logs:/app/logs:rw"
+    #   ports:                           # Port mappings (host:container[/tcp|/udp])
+    #     - "8080:80"
+    #   log_volume: "./logs:/app/logs"   # Persistent logs for post-mortem
+
+###########################################################################################
+## SSL/TLS configuration (global settings for all HTTP clients)
+###########################################################################################
+ssl:
+  # Enable SSL certificate verification (default: true)
+  # Set to false ONLY for development with self-signed certificates
+  # WARNING: Disabling verification exposes you to MITM attacks
+  verify: true
+
+  # Custom CA bundle path for corporate PKI or self-signed certificates
+  # If provided, ssl_verify is implicitly true
+  # Accepts: null (use system CAs), or path to PEM file
+  ca_bundle: null

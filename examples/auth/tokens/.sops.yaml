@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: .*\.sops\.json$
+    age: age1cskfyccxlavuth2k3sxzx0vrpn22qzactayrgsv0t3mws74pp3vq3ps462

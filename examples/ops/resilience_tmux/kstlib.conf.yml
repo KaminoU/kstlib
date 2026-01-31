@@ -1,0 +1,51 @@
+# kstlib configuration for resilience tmux test
+#
+# 1h candles, 4h proactive restart, CSV logging, Slack alerts
+# Run via: kstlib ops start resilience-tmux
+
+# Include external config files
+include:
+  - config/binance.yml
+  - config/slack.sops.yml
+
+# Resilience settings (production-ready)
+#
+# Timing: heartbeat.interval (5s) < watchdog.max_heartbeat_age (30s)
+# = 6 missed heartbeats triggers alert
+resilience:
+  heartbeat:
+    interval: 5.0
+    state_file: state/heartbeat.state.json
+
+  watchdog:
+    state_file: state/heartbeat.state.json
+    cycle_interval: 10
+    max_heartbeat_age: 30
+
+# WebSocket settings
+websocket:
+  ping:
+    interval: 15
+    timeout: 10
+  connection:
+    timeout: 30
+  reconnect:
+    delay: 0.5
+    max_delay: 30.0
+    max_attempts: 20
+  proactive:
+    disconnect_check_interval: 1.0
+    reconnect_check_interval: 1.0
+
+# Logging
+logger:
+  preset: trace
+  icons:
+    show: false
+
+# kstlib ops session definition
+ops:
+  sessions:
+    resilience-tmux:
+      backend: tmux
+      command: "python main.py"

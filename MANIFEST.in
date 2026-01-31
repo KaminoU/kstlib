@@ -1,0 +1,49 @@
+# =============================================================================
+# MANIFEST.in - kstlib
+# Controls what goes into the source distribution (sdist)
+# =============================================================================
+
+# --- Include essential files ---
+include LICENSE.md
+include README.md
+include pyproject.toml
+
+# --- Include package data ---
+recursive-include src/kstlib *.yml
+recursive-include src/kstlib *.yaml
+recursive-include src/kstlib py.typed
+
+# --- Exclude examples and tests (available on GitHub, not needed in package) ---
+prune examples
+prune tests
+
+# --- Exclude development files ---
+exclude .gitattributes
+exclude .gitignore
+exclude .pre-commit-config.yaml
+exclude .editorconfig
+exclude tox.ini
+exclude Makefile
+exclude CLAUDE.md
+
+# --- Exclude directories ---
+prune .github
+prune .claude
+prune .vscode
+prune .idea
+prune infra
+prune docs
+
+# --- Exclude Python cache ---
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.egg-info
+
+# --- Exclude test artifacts ---
+global-exclude .coverage
+global-exclude .pytest_cache
+global-exclude .tox
+global-exclude .mypy_cache
+global-exclude .ruff_cache

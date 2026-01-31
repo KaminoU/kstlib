@@ -1,0 +1,36 @@
+# Binance configuration (business logic)
+# This file can be encrypted with SOPS if needed
+
+binance:
+  # Environment name - used for Slack alerts channel
+  # Values: "testnet" (testing) or "mainnet" (production)
+  environment: testnet
+
+  # WebSocket endpoint
+  # Testnet: wss://stream.testnet.binance.vision/ws
+  # Mainnet: wss://stream.binance.com:9443/ws
+  ws_url: wss://stream.testnet.binance.vision/ws
+
+  # WebSocket stream configuration
+  stream:
+    # Trading pair
+    symbol: btcusdt
+
+    # Candle timeframe (1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d)
+    timeframe: 5m
+
+    # Stream type (kline for candlesticks)
+    type: kline
+
+  # Reconnection policy
+  reconnect:
+    # Disconnect when minute is a multiple of this value
+    # e.g., 30 means disconnect at :00 and :30 of each hour
+    modulo_minutes: 30
+
+    # Seconds before the modulo time to start disconnect
+    # e.g., if modulo=30 and margin=5, disconnect at :25 and :55
+    margin_seconds: 5
+
+    # Minimum seconds to wait after reconnecting before allowing another disconnect
+    min_connection_duration: 60

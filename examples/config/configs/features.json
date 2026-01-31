@@ -1,0 +1,9 @@
+{
+    "features": {
+        "api_v2": true,
+        "cache_enabled": true,
+        "metrics": true,
+        "debug_toolbar": false,
+        "rate_limiting": true
+    }
+}

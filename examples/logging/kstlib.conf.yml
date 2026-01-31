@@ -1,0 +1,24 @@
+# Logging overrides used by the basic_usage demo.
+# Demonstrates how a local config file changes the defaults.
+logger:
+  defaults:
+    output: console
+    icons:
+      show: false
+    console:
+      level: DEBUG
+      show_path: false
+    theme:
+      debug: "black on sky_blue2"
+      info: "dark_olive_green3"
+      success: "black on spring_green2"
+      warning: "bold black on orange1"
+      error: "bold white on hot_pink3"
+      critical: "blink bold white on red3"
+  presets:
+    quiet:
+      output: file
+      file:
+        log_dir: logs
+        log_name: demo-custom.log
+        level: ERROR

@@ -1,0 +1,14 @@
+[run]
+relative_files = True
+omit =
+    examples/*
+
+[paths]
+source =
+    src
+    /mnt/c/Users/miche/OneDrive/Documents/_GITHUB_PROJECTS/kstlib/src
+    c:\Users\miche\OneDrive\Documents\_GITHUB_PROJECTS\kstlib\src
+tests =
+    tests
+    /mnt/c/Users/miche/OneDrive/Documents/_GITHUB_PROJECTS/kstlib/tests
+    c:\Users\miche\OneDrive\Documents\_GITHUB_PROJECTS\kstlib\tests
