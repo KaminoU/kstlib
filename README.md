@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/kstlib.svg" alt="Kstlib Logo" width="420">
+  <img src="https://raw.githubusercontent.com/KaminoU/kstlib/main/assets/kstlib.svg" alt="Kstlib Logo" width="420">
 </p>
 
 <p align="center">
