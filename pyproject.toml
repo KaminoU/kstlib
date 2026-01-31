@@ -1,0 +1,479 @@
+[build-system]
+requires = ["setuptools >= 80.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kstlib"
+authors = [{ name = "Michel TRUONG", email = "michel.truong@gmail.com" }]
+maintainers = [{ name = "Michel TRUONG", email = "michel.truong@gmail.com" }]
+description = "Config-driven helpers for Python projects (dynamic config, secure secrets, preset logging, and more…)"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "MIT"
+license-files = ["LICENSE.md"]
+keywords = ["kstlib"]
+dynamic = ["version"]
+dependencies = [
+    # --- Configuration & Serialization ---
+    "pyyaml>=6.0,<7",     # YAML config parsing
+    "tomli>=2.3,<3",      # Read-only TOML parser (for pyproject & configs)
+    "tomli-w>=1.0,<2",    # TOML writer for config exports
+    "python-box>=7.3,<8", # Dot-access dicts (Box, BoxList, ConfigBox)
+
+    # --- CLI & Output Interface ---
+    "typer>=0.19,<1", # CLI framework (based on Click)
+    "click>=8.3,<9",  # Command-line utilities backend
+    "rich>=14.2,<15", # Rich terminal output (logging, tables, panels)
+
+    # --- Core Async & Runtime Services ---
+    "structlog>=25.0,<26",  # Structured logging with async support
+    "aiosqlite>=0.21,<1",   # Async SQLite wrapper
+    "aiosmtplib>=4.0,<5",   # Async SMTP client (email sending)
+    "websockets>=15.0,<16", # WebSocket server/client
+    "jinja2>=3.1,<4",       # Template engine (used for mails, configs, etc.)
+
+    # --- Formatting & Display ---
+    "humanize>=4.11,<5", # Human-friendly formatting (file sizes, time deltas, etc.)
+
+    # --- HTTP Client & Auth ---
+    "httpx>=0.28,<1",  # Modern async HTTP client (OAuth2/OIDC flows)
+    "authlib>=1.5,<2", # OAuth2/OIDC client + JWT signature verification
+
+    # --- Time & Scheduling ---
+    "pendulum>=3.0,<4", # Modern datetime library with timezone support
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+requires-python = ">=3.10"
+
+[project.urls]
+Homepage = "https://github.com/KaminoU/kstlib"
+Repository = "https://github.com/KaminoU/kstlib"
+"Bug Tracker" = "https://github.com/KaminoU/kstlib/issues"
+Changelog = "https://github.com/KaminoU/kstlib/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+# Development tools (testing, linting, typing)
+dev = [
+    "pytest>=8.4,<9",
+    "pytest-cov>=7.0,<8",
+    "pytest-asyncio>=1.2,<2", # For async tests (roadmap Phase 0)
+
+    # Code style & linting
+    "ruff>=0.14,<1",  # Fast linter + formatter (replaces Flake8, isort, Black, Pylint)
+
+    # Typing checks
+    "mypy>=1.18,<2",        # Static type checker (validates type hints)
+    "types-PyYAML>=6.0,<7", # Type stubs for PyYAML (used by mypy)
+
+    # Git hooks
+    "pre-commit>=4.0,<5", # Git pre-commit hooks for local CI checks
+
+    # Optional providers (for integration tests)
+    "boto3>=1.35,<2", # AWS SDK (for KMS provider tests)
+]
+
+# SQLCipher encryption support (requires libsqlcipher-dev on Debian/Ubuntu)
+db-crypto = [
+    "sqlcipher3>=0.5,<1", # SQLCipher Python bindings
+]
+
+# Documentation
+docs = [
+    "sphinx>=8.1,<9",
+    "furo>=2025.9,<2026",
+    "myst-parser>=4.0,<5",
+    "sphinx-autodoc-typehints>=3.0,<4",
+    "sphinx-togglebutton>=0.3,<1",
+    "sphinx-design>=0.6,<0.7",
+]
+
+# Build & release
+build = ["build>=1.3,<2", "twine>=6.2,<7"]
+
+# Tox for multi-version testing
+tox = ["tox>=4.31,<5"]
+
+# Infrastructure tools (for local dev with LocalStack, Keycloak, etc.)
+infra-tools = [
+    "awscli-local>=0.22,<1", # LocalStack AWS CLI wrapper (awslocal command)
+]
+
+# Future: Textual TUI widgets (roadmap Phase 7) - truly optional
+textual = ["textual>=6.3,<7"]
+
+# Everything for local development
+all = [
+    "pytest>=8.4,<9",
+    "pytest-cov>=7.0,<8",
+    "pytest-asyncio>=1.2,<2",
+    "ruff>=0.14,<1",
+    "mypy>=1.18,<2",
+    "types-PyYAML>=6.0,<7",
+    "sphinx>=8.1,<9",
+    "furo>=2025.9,<2026",
+    "myst-parser>=4.0,<5",
+    "sphinx-autodoc-typehints>=3.0,<4",
+    "sphinx-togglebutton>=0.3,<1",
+    "sphinx-design>=0.6,<0.7",
+    "build>=1.3,<2",
+    "twine>=6.2,<7",
+    "tox>=4.31,<5",
+    "pre-commit>=4.0,<5",
+    "boto3>=1.35,<2",
+    "awscli-local>=0.22,<1",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "kstlib.meta.__version__" }
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["kstlib*"]
+exclude = ["docs*", "examples*", "resources*", "tests*"]
+
+[project.scripts]
+kstlib = "kstlib.__main__:main"
+
+[tool.setuptools.package-data]
+kstlib = ["*.conf.toml", "*.conf.yml"]
+
+# =============================================================================
+# TOOLING CONFIGURATION
+# =============================================================================
+
+[tool.ruff]
+# Target Python 3.10+
+target-version = "py310"
+line-length = 120
+
+# Source directories
+src = ["src"]
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".github",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    ".tox",
+    "__pycache__",
+    "build",
+    "dist",
+    "tmp",
+    ".gc",
+]
+
+[tool.ruff.lint]
+# Enable ALL rules (same as tox -e lint) to avoid noqa being removed by --fix
+select = ["ALL"]
+
+# Ignore specific rules (synchronized with tox.ini)
+ignore = [
+    # Documentation style (we use Google style, not numpy)
+    "D203",    # 1 blank line required before class docstring
+    "D213",    # Multi-line docstring summary should start at the second line
+    "D205",    # 1 blank line required between summary line and description
+    "D212",    # Multi-line docstring summary should start at the first line
+    "D400",    # First line should end with a period
+    "D413",    # Missing blank line after last section
+    "D415",    # First line should end with a period, question mark, or exclamation point
+    "D401",    # First line should be in imperative mood
+    "D403",    # First word of the first line should be capitalized
+    "D107",    # Missing docstring in __init__
+    # Line length (handled by formatter)
+    "E501",
+    # Annotations
+    "ANN204",  # Missing return type annotation for special method
+    "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
+    # Boolean arguments (common in CLI and config-driven code)
+    "FBT001",  # Boolean positional arg in function definition
+    "FBT002",  # Boolean default value in function definition
+    "FBT003",  # Boolean positional value in function call
+    # Exception messages (we use specific exception classes)
+    "TRY003",  # Avoid specifying long messages outside the exception class
+    "TRY300",  # Consider moving this statement to an else block
+    "TRY301",  # Abstract raise to an inner function
+    "EM101",   # Exception must not use a string literal
+    "EM102",   # Exception must not use an f-string literal
+    # Code style preferences
+    "COM812",  # Missing trailing comma (conflicts with formatter)
+    "RET504",  # Unnecessary variable assignment before return
+    "ERA001",  # Found commented-out code
+    "A004",    # Import is shadowing a Python builtin
+    "PIE790",  # Unnecessary pass statement
+    "PYI013",  # Non-empty class body must not contain ...
+    "ARG001",  # Unused function argument (used for interface compliance)
+    "RSE102",  # Unnecessary parentheses on raised exception
+    # Pylint
+    "PLC0415", # import should be at top of file
+    "PLW0603", # Using global statement
+    "PLR2004", # Magic value used in comparison
+    # TODO/FIXME comments
+    "TD002",   # Missing author in TODO
+    "TD003",   # Missing issue link in TODO
+    "FIX002",  # Line contains TODO
+    # Testing
+    "S101",    # Use of assert detected
+    "S105",    # Possible hardcoded password
+    # Performance (handled case by case)
+    "PERF203", # try-except within a loop
+    "BLE001",  # Do not catch blind exception
+    # Naming
+    "N802",    # Function name should be lowercase (needed for do_GET)
+    "N999",    # Invalid module name
+]
+
+[tool.ruff.lint.per-file-ignores]
+# PLR0913: Too many arguments - acceptable for CLI commands with many options
+"src/kstlib/cache/decorator.py" = ["PLR0913"]
+"src/kstlib/cli/commands/secrets/encrypt.py" = ["PLR0913"]
+"src/kstlib/cli/commands/secrets/shred.py" = ["PLR0913"]
+# T201: print statement - acceptable for CLI raw output (piping, --raw flags)
+# PLR0912/C901/PLR0915: Too many branches/complexity/statements - acceptable for CLI commands with multiple output modes
+"src/kstlib/cli/commands/auth/login.py" = ["PLR0912", "C901"]
+"src/kstlib/cli/commands/auth/status.py" = ["PLR0912", "C901"]
+"src/kstlib/cli/commands/auth/token.py" = ["T201", "C901", "PLR0912", "PLR0913", "PLR0915"]
+"src/kstlib/cli/commands/auth/whoami.py" = ["T201", "PLR0912", "C901"]
+"src/kstlib/cli/commands/rapi/call.py" = ["T201", "PLR0913"]
+# S110: try-except-pass - config loading is intentionally optional (no-op on failure)
+# PLR0913: Too many arguments - decorator API requires multiple options
+# T201: print statements - metrics output needs explicit stderr printing
+"src/kstlib/metrics/decorators.py" = ["S110", "PLR0913", "T201"]
+# S603: subprocess call with variable - safe usage (shell=False, args as list, binary from shutil.which)
+# TC003: pathlib used at runtime, not just for typing
+"src/kstlib/cli/commands/secrets/common.py" = ["S603"]
+"src/kstlib/cli/commands/secrets/doctor.py" = ["S603"]
+"src/kstlib/secrets/providers/sops.py" = ["S603"]
+"src/kstlib/utils/secure_delete.py" = ["S603"]
+"src/kstlib/auth/token.py" = ["S603"]
+"src/kstlib/config/sops.py" = ["S603", "TC003"]
+# Test files - acceptable patterns for test readability
+# SLF001: Private member access - needed for testing internal state
+# TRY002: Create own exception - acceptable for mock exceptions in tests
+# SIM117: Nested with statements - common pattern for mocking multiple things
+# RUF006: asyncio.create_task without storing reference - acceptable in tests
+# E402: Module level import not at top - sometimes needed for test setup
+# B017: assert blind exception - acceptable for testing exception paths
+# PT: pytest style - flexible in tests
+"tests/**/*.py" = ["SLF001", "TRY002", "PT"]
+"tests/config/test_loader_sops.py" = ["SIM117"]
+"tests/helpers/test_time_trigger.py" = ["SIM117"]
+"tests/websocket/test_manager.py" = ["RUF006"]
+"tests/websocket/test_reconnect.py" = ["RUF006", "B017"]
+"tests/resilience/test_watchdog.py" = ["E402"]
+# Mail transports - trace logging is intentionally verbose for debugging
+# C901: Complex functions - trace logging requires many conditional paths
+# PLR0912/PLR0915: Too many branches/statements - acceptable for comprehensive debug output
+# S110: try-except-pass - graceful degradation when extracting optional SSL info
+# PLW2901: Loop variable overwritten - intentional when parsing certificate tuples
+"src/kstlib/mail/transports/smtp.py" = ["C901", "PLR0912", "PLR0915", "S110", "PLW2901"]
+"src/kstlib/mail/transports/gmail.py" = ["C901"]
+# Resilience modules - complex configurations and intentional private member access
+# PLR0913: Many config options for robust error handling
+# SLF001: Intentional attachment of _rate_limiter to wrapper functions for inspection
+# ASYNC110: Polling threading.Event from async context requires sleep loop (see code comments)
+"src/kstlib/resilience/rate_limiter.py" = ["PLR0913", "SLF001"]
+"src/kstlib/resilience/shutdown.py" = ["ASYNC110"]
+"src/kstlib/resilience/heartbeat.py" = ["PLR0913"]
+"src/kstlib/resilience/watchdog.py" = ["PLR0913"]
+# UI components - many style/config options
+# SLF001: Calling class method _resolve_style on parent class is intentional
+"src/kstlib/ui/spinner.py" = ["PLR0913", "SLF001"]
+# WebSocket manager - complex config for robust connection handling
+"src/kstlib/websocket/manager.py" = ["PLR0913"]
+# Database - aiosqlite pool._init_pool() access is the documented initialization pattern
+"src/kstlib/db/database.py" = ["SLF001"]
+# RAPI modules - complex request building and config merging
+# SLF001: Calling own class method _merge_apis on freshly created instance is intentional
+# PLR0911/PLR0912: jq-like parser has many branches for different path types
+"src/kstlib/rapi/client.py" = ["PLR0913"]
+"src/kstlib/rapi/config.py" = ["SLF001"]
+"src/kstlib/rapi/credentials.py" = ["PLR0911", "PLR0912"]
+# Circuit breaker decorator has many config options
+"src/kstlib/resilience/circuit_breaker.py" = ["PLR0913"]
+# Auth session - many config options for SSL, timeout, retry behavior
+"src/kstlib/auth/session.py" = ["PLR0913"]
+# Slack channel - many config options for webhook, retry, formatting
+"src/kstlib/alerts/channels/slack.py" = ["PLR0913"]
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Use Unix line endings
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_optional = true
+strict_equality = true
+
+# Exclude test files with conditional boto3 imports - type: ignore comments
+# are needed for Pylance but become "unused" when boto3 is installed in tox
+# Also exclude auth_module tests until type annotations are added
+# tests/resilience/ excluded due to module name collision with src/kstlib/resilience/
+exclude = ["tests/secrets_module/", "tests/auth_module/", "tests/resilience/"]
+
+# Per-module overrides for optional dependencies
+[[tool.mypy.overrides]]
+module = "kstlib.secrets.providers.keyring"
+# keyring is optional: ignore may be used or unused depending on install state
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "kstlib.secrets.providers.kms"
+# boto3 is optional: ignore may be used or unused depending on install state
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "kstlib.auth.config"
+# Box.get() untyped call: ignore needed in strict mode but unused in basic mode
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+# boto3 is optional (for KMS provider)
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["httpx", "httpx.*"]
+# httpx type stubs not always installed
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["authlib", "authlib.*"]
+# authlib has no type stubs (no types-Authlib package exists)
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["sqlcipher3", "sqlcipher3.*"]
+# sqlcipher3 is optional (for db-crypto) and has no type stubs
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "kstlib.db.aiosqlcipher"
+# sqlcipher3 is optional: ignore may be used or unused depending on install state
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "kstlib.auth.providers.oidc"
+# authlib is optional: ignore may be used or unused depending on install state
+warn_unused_ignores = false
+
+# Pyright/Pylance configuration (VS Code language server)
+# Type checking delegated to mypy (tox -e lint) - Pylance for autocomplete/navigation only
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["docs", "examples", "resources", "**/__pycache__"]
+pythonVersion = "3.10"
+typeCheckingMode = "off"
+
+# Ignore missing stubs for optional/test dependencies (no type stubs available)
+reportMissingTypeStubs = false
+
+# Disable all diagnostics - ruff + mypy = source of truth
+# These would create duplicate warnings with ruff/mypy
+reportMissingImports = "none"
+reportMissingModuleSource = "none"
+reportUnusedImport = "none"
+reportUnusedVariable = "none"
+reportUnusedClass = "none"
+reportUnusedFunction = "none"
+reportDuplicateImport = "none"
+reportPrivateUsage = "none"
+reportConstantRedefinition = "none"
+reportIncompatibleMethodOverride = "none"
+reportIncompatibleVariableOverride = "none"
+reportInvalidStringEscapeSequence = "none"
+reportUnknownParameterType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportMissingParameterType = "none"
+reportMissingTypeArgument = "none"
+reportUndefinedVariable = "none"
+reportGeneralTypeIssues = "none"
+reportOptionalMemberAccess = "none"
+reportOptionalSubscript = "none"
+reportOptionalCall = "none"
+reportOptionalIterable = "none"
+reportOptionalContextManager = "none"
+reportOptionalOperand = "none"
+reportUntypedFunctionDecorator = "none"
+reportUntypedClassDecorator = "none"
+reportUntypedBaseClass = "none"
+reportUntypedNamedTuple = "none"
+reportCallInDefaultInitializer = "none"
+reportUnnecessaryIsInstance = "none"
+reportUnnecessaryCast = "none"
+reportUnnecessaryComparison = "none"
+reportAssertAlwaysTrue = "none"
+reportSelfClsParameterName = "none"
+reportImplicitStringConcatenation = "none"
+reportUnsupportedDunderAll = "none"
+reportUnusedCallResult = "none"
+reportUnusedCoroutine = "none"
+reportUnusedExpression = "none"
+reportWildcardImportFromLibrary = "none"
+reportPropertyTypeMismatch = "none"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+# Markers for test categorization
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (may require external resources)",
+    "slow: Slow tests",
+    "asyncio: Async tests using asyncio",
+    "cli: CLI tests (excluded from main tox runs, run with: tox -e cli)",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["examples/*", "*/examples/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+

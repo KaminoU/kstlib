@@ -1,0 +1,18 @@
+# Server monitoring configuration
+#
+# This file defines WHAT to render and WHERE to deliver.
+# The collectors (HOW to get data) are defined in Python via @mon.collector.
+
+monitoring:
+  name: PROD
+  template_file: server.html.j2
+  inline_css: true
+
+  delivery:
+    type: mail
+    sender: "michel.truong@gmail.com"
+    recipients:
+      - "michel.truong@gmail.com"
+    cc: []
+    bcc: []
+    subject_template: "[{name}] Server Status Report"

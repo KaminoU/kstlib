@@ -1,0 +1,3 @@
+# State directory for heartbeat files
+# This file ensures the directory is tracked by git
+# heartbeat.state.json will be written here at runtime

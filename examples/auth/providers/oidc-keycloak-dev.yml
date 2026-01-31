@@ -1,0 +1,26 @@
+# OIDC Provider - Auto-discovery via issuer URL
+# Public client with PKCE (no client_secret needed)
+#
+# OIDC = OAuth2 + identity layer
+# Just provide issuer URL, endpoints auto-discovered via:
+#   {issuer}/.well-known/openid-configuration
+
+auth:
+  providers:
+    oidc-keycloak-dev:
+      type: "oidc"
+      issuer: "http://localhost:8080/realms/kstlib-test"
+      client_id: "kstlib-test-public"
+      scopes:
+        - "openid"
+        - "profile"
+        - "email"
+      pkce: true
+      # Provider-specific storage (not overwritten by other includes)
+      token_storage: "sops"
+
+  # SOPS storage settings (shared config for any provider using sops)
+  storage:
+    sops:
+      # Cross-platform: ~ expands to user home directory
+      directory: "~/.kstlib/auth/tokens"

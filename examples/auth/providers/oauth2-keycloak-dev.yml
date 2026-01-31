@@ -1,0 +1,28 @@
+# OAuth2 Provider - Manual endpoint configuration (Confidential Client)
+#
+# OAuth2 = Authorization framework (no identity layer)
+# Must configure each endpoint manually (no auto-discovery)
+# Uses confidential client with client_secret (PKCE optional)
+
+auth:
+  providers:
+    oauth2-keycloak-dev:
+      type: "oauth2"
+      # Manual endpoints (no auto-discovery available for OAuth2)
+      authorize_url: "http://localhost:8080/realms/kstlib-test/protocol/openid-connect/auth"
+      token_url: "http://localhost:8080/realms/kstlib-test/protocol/openid-connect/token"
+      userinfo_url: "http://localhost:8080/realms/kstlib-test/protocol/openid-connect/userinfo"
+      # Confidential client (has client_secret)
+      client_id: "kstlib-test-confidential"
+      client_secret: "kstlib-test-secret"
+      scopes:
+        - "openid"
+        - "profile"
+        - "email"
+      # Provider-specific storage (not overwritten by other includes)
+      token_storage: "file"
+
+  # File storage settings (shared config for any provider using file)
+  storage:
+    file:
+      directory: "~/.kstlib/auth/tokens"

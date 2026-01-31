@@ -1,0 +1,20 @@
+# Example: Auto-decrypt SOPS secrets in config loader
+#
+# The mail.conf.sops.yml file contains REAL encrypted secrets (Resend API key).
+# When this config is loaded, kstlib automatically decrypts it using SOPS.
+#
+# Requirements:
+#   - sops binary installed and in PATH
+#   - Age private key matching the recipient in mail.conf.sops.yml
+#     (check with: kstlib secrets doctor)
+#
+# To re-encrypt with your own key:
+#   1. kstlib secrets decrypt mail.conf.sops.yml --out mail.conf.yml
+#   2. Edit mail.conf.yml with your Resend API key
+#   3. kstlib secrets encrypt mail.conf.yml --out mail.conf.sops.yml --force --shred
+
+# Include the encrypted secrets file (auto-decrypted on load)
+include: mail.conf.sops.yml
+
+# Test recipient for the example (override with your email)
+test_email: "you@example.com"

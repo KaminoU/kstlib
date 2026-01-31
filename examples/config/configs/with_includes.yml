@@ -1,0 +1,17 @@
+# Include multiple config files in different formats
+include:
+  - "database.toml"
+  - "features.json"
+  - "server.ini"
+
+# Main application config
+app:
+  name: "Multi-Format App"
+  version: "2.0.0"
+  environment: "production"
+  debug: false # Override any debug settings from included files
+
+# Additional settings
+api:
+  timeout: 30
+  retry_count: 3

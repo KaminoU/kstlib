@@ -1,0 +1,45 @@
+# Pre-commit hooks for kstlib
+# Install: pip install pre-commit && pre-commit install
+# Manual full CI: pre-commit run tox --hook-stage manual
+
+repos:
+  # Ruff - official hooks (cross-platform)
+  # Rules aligned with tox -e lint (same --select ALL + --ignore list)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.12
+    hooks:
+      - id: ruff
+        name: Ruff lint (src/ only)
+        files: ^src/
+        args:
+          - --fix
+          - --select=ALL
+          - --ignore=D203,D213,D205,D212,D400,D413,D415,D401,D403,E501,ANN204,ANN401,FBT001,FBT002,FBT003,TRY003,TRY300,EM101,EM102,COM812,RET504,ERA001,A004,PIE790,PYI013,ARG001,RSE102,PLC0415,PLW0603,TD002,TD003,FIX002,S101,S105,D107,PLR2004,TRY301,PERF203,BLE001,N802,PLC0414
+      - id: ruff
+        name: Ruff lint (examples/ relaxed)
+        files: ^examples/
+        args:
+          - --fix
+          - --select=E,F,W
+          - --ignore=T201
+      - id: ruff-format
+        name: Ruff format check
+        args: [--check]
+
+  # Local hooks
+  - repo: local
+    hooks:
+      - id: tox-marker-check
+        name: Tox gate (~4min if no marker)
+        entry: python .github/hooks/pre_commit_check.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: tox
+        name: Full tox suite (clean rebuild)
+        entry: tox -r
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [manual]

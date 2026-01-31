@@ -1,0 +1,38 @@
+# Alert examples configuration
+# Run from examples/alerts/ directory for auto-discovery
+
+credentials:
+  slack_hb:
+    type: sops
+    path: "secrets/slack.sops.yml"
+    key_field: "sops_hb"
+
+  slack_wd:
+    type: sops
+    path: "secrets/slack.sops.yml"
+    key_field: "sops_wd"
+
+# Alert channels configuration
+alerts:
+  throttle:
+    rate: 10
+    per: 60
+
+  channels:
+    # Short key "hb", alias "heartbeat"
+    hb:
+      type: slack
+      name: "heartbeat"
+      credentials: slack_hb
+      username: "kstlib-heartbeat"
+      icon_emoji: ":heartbeat:"
+      min_level: info
+
+    # Short key "wd", alias "watchdog"
+    wd:
+      type: slack
+      name: "watchdog"
+      credentials: slack_wd
+      username: "kstlib-watchdog"
+      icon_emoji: ":warning:"
+      min_level: warning

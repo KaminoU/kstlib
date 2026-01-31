@@ -1,0 +1,46 @@
+# httpbin.org API Configuration
+# Usage: RapiClient.from_file("httpbin.rapi.yml") or via include in kstlib.conf.yml
+# This is a test/demo API - no credentials required.
+
+name: httpbin
+base_url: "https://httpbin.org"
+
+# No authentication required for httpbin
+# credentials: null
+# auth: null
+
+headers:
+  User-Agent: "kstlib-rapi/1.0"
+
+endpoints:
+  # Basic GET endpoints
+  get_ip:
+    path: "/ip"
+    method: GET
+
+  echo_headers:
+    path: "/headers"
+    method: GET
+
+  get_uuid:
+    path: "/uuid"
+    method: GET
+
+  # Path parameters
+  delayed:
+    path: "/delay/{seconds}"
+    method: GET
+
+  get_status:
+    path: "/status/{code}"
+    method: GET
+
+  # POST endpoint
+  post_data:
+    path: "/post"
+    method: POST
+
+  # Authentication test (expects Bearer token)
+  bearer_auth:
+    path: "/bearer"
+    method: GET

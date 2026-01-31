@@ -1,0 +1,18 @@
+# kstlib.conf.yml - Config-driven tmux session example
+#
+# Run from this directory:
+#   cd examples/ops/config_driven/tmux
+#   python run.py
+
+ops:
+  default_backend: tmux
+  tmux_binary: tmux
+
+  sessions:
+    astro-dev:
+      backend: tmux
+      command: "python ../../astro_bot.py"
+      working_dir: "."
+      env:
+        BOT_MODE: "dev"
+        LOG_LEVEL: "DEBUG"

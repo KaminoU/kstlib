@@ -1,0 +1,33 @@
+# Binance configuration for 1h candle resilience test
+#
+# Key differences from binance_testnet example:
+# - Timeframe: 1h (not 5m/15m)
+# - Modulo: 240min = 4h (not 30min)
+# - URL: mainnet (real data for accurate gap detection)
+
+binance:
+  # Environment name - used for Slack alert channel routing
+  environment: mainnet
+
+  # WebSocket endpoint
+  # Mainnet: wss://stream.binance.com:9443/ws
+  # Testnet: wss://stream.testnet.binance.vision/ws
+  ws_url: wss://stream.binance.com:9443/ws
+
+  # Stream configuration
+  stream:
+    symbol: btcusdt
+    timeframe: 1h
+    type: kline
+
+  # Reconnection policy
+  reconnect:
+    # Proactive disconnect every 4h (240 minutes)
+    # At candle open boundaries: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
+    modulo_minutes: 240
+
+    # Seconds before modulo to start disconnect
+    margin_seconds: 5
+
+    # Minimum connection duration before allowing disconnect
+    min_connection_duration: 60

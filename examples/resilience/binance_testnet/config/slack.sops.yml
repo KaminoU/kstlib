@@ -1,0 +1,28 @@
+# Slack webhook configuration (TEMPLATE - encrypt with SOPS before use)
+#
+# To encrypt this file:
+#   sops --encrypt --in-place config/slack.sops.yml
+#
+# Create a Slack App with Incoming Webhooks:
+#   https://api.slack.com/apps
+# Webhook URLs (after SOPS decrypt, keys are sops_hb and sops_wd)
+credentials:
+    sops_testnet: ENC[AES256_GCM,data:pYMnTGUU7gDvCbZKs0hj7T89vl1vCtYj5tcyb+Hf1M4Orn0VxFYyeznof2JiXqVXThNTIWBlOmg2zyMB/84wUhsaUswaYl5DYiKbc98SMMn1,iv:UYZBIf6dYepGdNPljwZMWFUllXT9teEdNeWs32tbH14=,tag:ulNHEnpUDRkjhbI6BW5g9A==,type:str]
+    sops_mainnet: ENC[AES256_GCM,data:hoXWXpIBNaNndYvtH4IPW/01uIp+n/Osla4b212Of2tX0tHuP3EUYcSeLdK/baLsCcU5Qnbhvaek9wiGVTPnHHa5uYPDw5E5PT/LkHSISeCo,iv:FUYTG8ZcKZvGBz8FRz6Pz/8lnaHhqFgp9nGz3MMdKuY=,tag:jkbv3r0TtihmCCJR7nGuMw==,type:str]
+    sops_hb: ENC[AES256_GCM,data:h4Mw8XnUPMdi29VeUEQgbz0qlIRhAQXADArf0WxUQY5n+ikC0DbdgJAqPZtpV8+5BDVZJMDmUVsVVEcK1QeXEMlcirjdRKZhpcL8L8lNdEAx,iv:fKI+qBUtds3ZGt0hdI7nd43hF674SDuuNqHoTtdtASw=,tag:ltgWyAQa1EqYFKbO7D32pA==,type:str]
+    sops_wd: ENC[AES256_GCM,data:j2etcn8vYnIX+Cwl42FnilcBgxhlRvna7xIvylOP4590yVbGwKlvg4zPFAoVoIX/pgFgmQTXreZxbc2VRP1BNRVfzxjyhUycJXNqB/6rvkt1,iv:3sQmJOCjUj8TzFdDOU63VYrQC5SNHhtvMnPW/etsVJ0=,tag:/Lu1IBsyTYT8Pd29D7Smrw==,type:str]
+sops:
+    age:
+        - recipient: age1cskfyccxlavuth2k3sxzx0vrpn22qzactayrgsv0t3mws74pp3vq3ps462
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBSWWdJbUpaOUJSM0xLdW9R
+            OWdZd3Y2UUZCYmllL1YzUkppa2t0TlY0Qm04CmJiVjBzOXFlallGeXdRVkRVKzl2
+            UThhT3prMkplUnVsVGg2eDEwSDdWVncKLS0tIFUyRGFuc0JyYjc0NEMrMFp5eHJR
+            SmN4UFp1UitZNDZkUVE3Zml1amYxaDAK05mzQyVaTK8Op/wA/fWh8oRmdy/daf8a
+            ZpIjXmO5lU3MqyQ8bfiF6SgVqtzWVYYAPLKt+6T3mN/0idVcy+KnAw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-23T15:01:22Z"
+    mac: ENC[AES256_GCM,data:MpJpMawVgXExR9qAqtkmGjEiVy+xukiEwR3Gja5DyPbABXBqejkqp9VfV0MzQsDx7xBe3jLzI/t6ebzcNbAxl8vrcGXqoy4F7C1dZOanpw5cMMh/ikAN185QRvnR+WfJmtERmRQ/Es7/2CTvkNGHG0uQ2zOZY2x11C53i2ex45I=,iv:3umgHic74E/hyCcXyBZyX5uyhTUGB//A3UUUqbmh5RY=,tag:5uuC4bRsv/fI3KYsu5zMFg==,type:str]
+    encrypted_regex: .*(?:sops|key|password|secret|token|credentials?).*
+    version: 3.11.0

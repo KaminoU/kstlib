@@ -1,0 +1,82 @@
+# Binance API Configuration with HMAC Signing
+# Usage: kstlib rapi binance.balance (from this directory)
+#
+# Credentials: SOPS-encrypted in ./tokens/binance.sops.yml
+#   - api_key: Your Binance API key
+#   - secret_key: Your Binance secret key
+#
+# For testnet credentials: https://testnet.binance.vision/
+
+name: binance
+base_url: "https://testnet.binance.vision"  # Testnet
+
+credentials:
+  type: sops
+  path: "./tokens/binance.sops.yml"
+  fields:
+    key: api_key       # maps to CredentialRecord.value
+    secret: secret_key # maps to CredentialRecord.secret
+
+auth:
+  type: hmac
+  algorithm: sha256
+  timestamp_field: timestamp
+  signature_field: signature
+  signature_format: hex
+  key_header: X-MBX-APIKEY
+
+headers:
+  Content-Type: "application/x-www-form-urlencoded"
+
+endpoints:
+  # ============================================
+  # Public endpoints (no auth required)
+  # ============================================
+
+  ping:
+    path: "/api/v3/ping"
+    method: GET
+    auth: false
+
+  time:
+    path: "/api/v3/time"
+    method: GET
+    auth: false
+
+  exchange-info:
+    path: "/api/v3/exchangeInfo"
+    method: GET
+    auth: false
+
+  ticker-price:
+    path: "/api/v3/ticker/price"
+    method: GET
+    auth: false
+    query:
+      symbol: BTCUSDT  # default, override with: kstlib rapi binance.ticker-price symbol=ETHUSDT
+
+  # ============================================
+  # Private endpoints (HMAC auth required)
+  # ============================================
+
+  balance:
+    path: "/api/v3/account"
+    method: GET
+
+  my-trades:
+    path: "/api/v3/myTrades"
+    method: GET
+    query:
+      symbol: BTCUSDT
+      limit: "10"
+
+  open-orders:
+    path: "/api/v3/openOrders"
+    method: GET
+
+  all-orders:
+    path: "/api/v3/allOrders"
+    method: GET
+    query:
+      symbol: BTCUSDT
+      limit: "10"

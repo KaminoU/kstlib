@@ -1,0 +1,9 @@
+# Sphinx build output
+build/
+_build/
+
+# Sphinx cache
+source/_build/
+
+# Generated files
+source/api/_autosummary/

@@ -1,0 +1,815 @@
+/* ============================================================
+   kstlib Sphinx Theme - Lokaal Color Palette
+   ============================================================
+   Design System: tmp/_design_demo/widget_library.html
+
+   Color Palette:
+   - Primary:    #4A90E2 (blue)
+   - Success:    #16A085 (teal)
+   - Warning:    #F1C40F (yellow)
+   - Error:      #E85A4F (coral)
+   - Info:       #A78BFA (lavender)
+
+   Dark Theme Surfaces:
+   - Background: #0D1117
+   - Surface:    #161B22
+   - Elevated:   #21262D
+   - Border:     #30363D
+
+   Text:
+   - Primary:    #E6EDF3
+   - Secondary:  #8B949E
+   - Tertiary:   #6E7681
+   ============================================================ */
+
+/* -------------------------------------------------- */
+/* CSS Custom Properties - Dark Theme (default)       */
+/* -------------------------------------------------- */
+
+:root {
+    /* Lokaal Brand */
+    --lokaal-primary: #4A90E2;
+    --lokaal-primary-hover: #3A7BC8;
+    --lokaal-primary-10: rgba(74, 144, 226, 0.1);
+    --lokaal-primary-20: rgba(74, 144, 226, 0.2);
+
+    /* Lokaal Semantic */
+    --lokaal-success: #16A085;
+    --lokaal-success-10: rgba(22, 160, 133, 0.1);
+    --lokaal-warning: #F1C40F;
+    --lokaal-warning-10: rgba(241, 196, 15, 0.1);
+    --lokaal-error: #E85A4F;
+    --lokaal-error-10: rgba(232, 90, 79, 0.1);
+    --lokaal-info: #A78BFA;
+    --lokaal-info-10: rgba(167, 139, 250, 0.1);
+
+    /* Lokaal Dark Surfaces */
+    --lokaal-bg: #0D1117;
+    --lokaal-surface: #161B22;
+    --lokaal-surface-variant: #21262D;
+    --lokaal-surface-elevated: #1C2128;
+    --lokaal-border: #30363D;
+    --lokaal-border-subtle: #21262D;
+
+    /* Lokaal Text */
+    --lokaal-text-primary: #E6EDF3;
+    --lokaal-text-secondary: #8B949E;
+    --lokaal-text-tertiary: #6E7681;
+    --lokaal-text-disabled: #484F58;
+
+    /* API Reference Styling */
+    --kstlib-api-bg: #161B22;
+    --kstlib-api-border: #30363D;
+    --kstlib-api-shadow: rgba(10, 10, 10, 0.35);
+    --kstlib-api-text: #E6EDF3;
+    --kstlib-api-label: #16A085;
+    --kstlib-api-name: #A78BFA;
+    --kstlib-api-prename: #8B949E;
+    --kstlib-api-param: #4A90E2;
+    --kstlib-api-default: #F1C40F;
+    --kstlib-api-type: #16A085;
+    --kstlib-field-border: rgba(22, 160, 133, 0.25);
+    --kstlib-inline-code-bg: #21262D;
+    --kstlib-inline-code-border: #30363D;
+    --kstlib-inline-code-text: #E6EDF3;
+    --kstlib-config-snippet-summary: #4A90E2;
+    --kstlib-config-snippet-marker: #A78BFA;
+    --kstlib-config-snippet-border: rgba(74, 144, 226, 0.35);
+}
+
+/* -------------------------------------------------- */
+/* CSS Custom Properties - Light Theme                */
+/* -------------------------------------------------- */
+
+body[data-theme="light"] {
+    /* Lokaal Light Surfaces */
+    --lokaal-bg: #ffffff;
+    --lokaal-surface: #f6f8fa;
+    --lokaal-surface-variant: #eaeef2;
+    --lokaal-surface-elevated: #ffffff;
+    --lokaal-border: #d0d7de;
+    --lokaal-border-subtle: #eaeef2;
+
+    /* Lokaal Light Text */
+    --lokaal-text-primary: #1f2328;
+    --lokaal-text-secondary: #656d76;
+    --lokaal-text-tertiary: #8b949e;
+    --lokaal-text-disabled: #b1bac4;
+
+    /* Lokaal Semantic - slightly darker for light bg */
+    --lokaal-warning: #9a7b00;
+
+    /* API Reference Styling - Light */
+    --kstlib-api-bg: #f6f8fa;
+    --kstlib-api-border: #d0d7de;
+    --kstlib-api-shadow: rgba(20, 30, 65, 0.1);
+    --kstlib-api-text: #1f2328;
+    --kstlib-api-label: #0b7a6c;
+    --kstlib-api-name: #7c2bbf;
+    --kstlib-api-prename: #656d76;
+    --kstlib-api-param: #0550ae;
+    --kstlib-api-default: #9a6700;
+    --kstlib-api-type: #0b7a6c;
+    --kstlib-field-border: rgba(11, 122, 108, 0.25);
+    --kstlib-inline-code-bg: rgba(74, 144, 226, 0.08);
+    --kstlib-inline-code-border: rgba(74, 144, 226, 0.2);
+    --kstlib-inline-code-text: #1f2328;
+    --kstlib-config-snippet-summary: #0550ae;
+    --kstlib-config-snippet-marker: #7c2bbf;
+    --kstlib-config-snippet-border: rgba(11, 122, 108, 0.3);
+}
+
+/* -------------------------------------------------- */
+/* Layout helpers (drawer + TOC links)                */
+/* -------------------------------------------------- */
+
+.toc-drawer {
+    width: 23rem;
+    min-width: 23rem;
+}
+
+@media (max-width: 83em) {
+    .toc-drawer {
+        right: -23rem;
+    }
+}
+
+.toc-title-container .toc-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.toc-tree a.reference {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.toc-tree a.reference code {
+    white-space: nowrap;
+    word-break: break-word;
+}
+
+/* -------------------------------------------------- */
+/* Sidebar styling                                    */
+/* -------------------------------------------------- */
+
+.sidebar-brand {
+    color: var(--lokaal-primary) !important;
+}
+
+.sidebar-tree .reference {
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.sidebar-tree .reference:hover {
+    color: var(--lokaal-primary) !important;
+}
+
+.sidebar-tree .current-page > .reference {
+    background-color: var(--lokaal-primary-10);
+    color: var(--lokaal-primary) !important;
+}
+
+/* -------------------------------------------------- */
+/* Links                                              */
+/* -------------------------------------------------- */
+
+a {
+    color: var(--lokaal-primary);
+}
+
+a:hover {
+    color: var(--lokaal-primary-hover);
+}
+
+/* -------------------------------------------------- */
+/* Signature blocks (autodoc signatures)              */
+/* -------------------------------------------------- */
+
+.sig:not(.sig-inline) {
+    background: var(--kstlib-api-bg);
+    border: 1px solid var(--kstlib-api-border);
+    border-radius: 4px;
+    box-shadow: none;
+    color: var(--kstlib-api-text);
+    text-indent: -2em;
+    padding-left: 2.5em;
+}
+
+.sig:not(.sig-inline) em.property:first-child {
+    color: var(--kstlib-api-label);
+}
+
+.sig-prename .pre {
+    color: var(--kstlib-api-prename);
+}
+
+.sig-name .pre {
+    color: var(--kstlib-api-name);
+}
+
+.sig-paren {
+    color: var(--kstlib-api-text);
+}
+
+.sig-param .pre {
+    color: var(--kstlib-api-param);
+}
+
+.sig-param .default_value .pre,
+.sig .default_value .pre {
+    color: var(--kstlib-api-default);
+}
+
+/* -------------------------------------------------- */
+/* Field-list blocks (Parameters / Returns / Raises)  */
+/* -------------------------------------------------- */
+
+dl.field-list dt {
+    color: var(--kstlib-api-label);
+    letter-spacing: 0.08em;
+}
+
+dl.field-list dd {
+    padding-left: 0.75rem;
+    margin-left: 0.5rem;
+}
+
+dl.field-list.simple {
+    margin-left: 0;
+}
+
+dl.field-list.simple dd {
+    margin-left: 0;
+    padding-left: 1rem;
+}
+
+dl.field-list.simple dd > ul,
+dl.field-list.simple dd > ol {
+    margin: 0;
+    padding-left: 1.01rem;
+}
+
+dl.field-list strong {
+    color: var(--kstlib-api-param);
+}
+
+dl.field-list em {
+    color: var(--kstlib-api-type);
+    font-style: normal;
+}
+
+dl.field-list code.literal {
+    background: var(--kstlib-inline-code-bg);
+    color: var(--kstlib-api-name);
+    border: none;
+}
+
+/* -------------------------------------------------- */
+/* Inline code tokens                                 */
+/* -------------------------------------------------- */
+
+code.docutils.literal,
+.rst-content code.literal:not(.xref),
+.rst-content code:not([class*="highlight"]) {
+    background: var(--kstlib-inline-code-bg);
+    color: var(--lokaal-primary);
+    border: 1px solid var(--kstlib-inline-code-border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+}
+
+code.docutils.literal span.pre,
+.rst-content code.literal:not(.xref) span.pre {
+    color: inherit;
+    font-weight: 500;
+}
+
+/* -------------------------------------------------- */
+/* Admonitions - Lokaal colors                        */
+/* -------------------------------------------------- */
+
+/* Note - Lavender (Info) */
+.admonition.note {
+    border-color: var(--lokaal-info);
+}
+
+.admonition.note > .admonition-title {
+    background-color: var(--lokaal-info-10);
+}
+
+.admonition.note > .admonition-title::before {
+    background-color: var(--lokaal-info);
+}
+
+/* Tip/Hint - Success green */
+.admonition.tip,
+.admonition.hint {
+    border-color: var(--lokaal-success);
+}
+
+.admonition.tip > .admonition-title,
+.admonition.hint > .admonition-title {
+    background-color: var(--lokaal-success-10);
+}
+
+.admonition.tip > .admonition-title::before,
+.admonition.hint > .admonition-title::before {
+    background-color: var(--lokaal-success);
+}
+
+/* Warning/Caution - Yellow */
+.admonition.warning,
+.admonition.caution,
+.admonition.attention {
+    border-color: var(--lokaal-warning);
+}
+
+.admonition.warning > .admonition-title,
+.admonition.caution > .admonition-title,
+.admonition.attention > .admonition-title {
+    background-color: var(--lokaal-warning-10);
+}
+
+.admonition.warning > .admonition-title::before,
+.admonition.caution > .admonition-title::before,
+.admonition.attention > .admonition-title::before {
+    background-color: var(--lokaal-warning);
+}
+
+/* Danger/Error - Coral red */
+.admonition.danger,
+.admonition.error {
+    border-color: var(--lokaal-error);
+}
+
+.admonition.danger > .admonition-title,
+.admonition.error > .admonition-title {
+    background-color: var(--lokaal-error-10);
+}
+
+.admonition.danger > .admonition-title::before,
+.admonition.error > .admonition-title::before {
+    background-color: var(--lokaal-error);
+}
+
+/* Important - Primary blue */
+.admonition.important {
+    border-color: var(--lokaal-primary);
+}
+
+.admonition.important > .admonition-title {
+    background-color: var(--lokaal-primary-10);
+}
+
+.admonition.important > .admonition-title::before {
+    background-color: var(--lokaal-primary);
+}
+
+/* See Also - Muted */
+.admonition.seealso {
+    border-color: var(--lokaal-text-tertiary);
+}
+
+.admonition.seealso > .admonition-title {
+    background-color: rgba(110, 118, 129, 0.1);
+}
+
+/* Example admonitions */
+.admonition-example.admonition,
+.admonition-examples.admonition {
+    border-color: var(--lokaal-info);
+}
+
+.admonition-example.admonition > .admonition-title,
+.admonition-examples.admonition > .admonition-title {
+    background-color: var(--lokaal-info-10);
+    color: var(--lokaal-info);
+}
+
+/* -------------------------------------------------- */
+/* Code blocks - Container                            */
+/* -------------------------------------------------- */
+
+.highlight {
+    background: var(--lokaal-surface) !important;
+    border: 1px solid var(--lokaal-border);
+    border-radius: 6px;
+}
+
+.highlight pre {
+    background: transparent !important;
+}
+
+/* -------------------------------------------------- */
+/* Pygments Syntax Highlighting - Dark Theme          */
+/* Dracula-inspired with Lokaal palette               */
+/* -------------------------------------------------- */
+
+:root {
+    /* Syntax colors - Dark (Dracula-like) */
+    --syntax-comment: #6E7681;
+    --syntax-keyword: #A78BFA;
+    --syntax-keyword-namespace: #A78BFA;
+    --syntax-function: #4A90E2;
+    --syntax-class: #E85A4F;
+    --syntax-decorator: #F1C40F;
+    --syntax-string: #16A085;
+    --syntax-number: #F1C40F;
+    --syntax-operator: #A78BFA;
+    --syntax-punctuation: #8B949E;
+    --syntax-builtin: #8BE9FD;
+    --syntax-variable: #E6EDF3;
+    --syntax-constant: #F1C40F;
+    --syntax-module: #8BE9FD;
+    --syntax-attribute: #4A90E2;
+    --syntax-error: #E85A4F;
+}
+
+body[data-theme="light"] {
+    /* Syntax colors - Light */
+    --syntax-comment: #8B949E;
+    --syntax-keyword: #7C2BBF;
+    --syntax-keyword-namespace: #7C2BBF;
+    --syntax-function: #0550AE;
+    --syntax-class: #953800;
+    --syntax-decorator: #9A6700;
+    --syntax-string: #0A7A6C;
+    --syntax-number: #9A6700;
+    --syntax-operator: #7C2BBF;
+    --syntax-punctuation: #656D76;
+    --syntax-builtin: #0550AE;
+    --syntax-variable: #1F2328;
+    --syntax-constant: #9A6700;
+    --syntax-module: #0550AE;
+    --syntax-attribute: #0550AE;
+    --syntax-error: #CF222E;
+}
+
+/* Comments - dim and unobtrusive */
+.highlight .c,
+.highlight .c1,
+.highlight .ch,
+.highlight .cm,
+.highlight .cp,
+.highlight .cpf,
+.highlight .cs,
+.highlight pre .c,
+.highlight pre .c1,
+.highlight pre .ch,
+.highlight pre .cm,
+.highlight pre .cp,
+.highlight pre .cpf,
+.highlight pre .cs {
+    color: var(--syntax-comment) !important;
+    font-style: italic !important;
+}
+
+/* Keywords - import, def, class, if, else, return, await, async */
+.highlight .k,
+.highlight .kc,
+.highlight .kd,
+.highlight .kp,
+.highlight .kr,
+.highlight .kt,
+.highlight pre .k,
+.highlight pre .kc,
+.highlight pre .kd,
+.highlight pre .kp,
+.highlight pre .kr,
+.highlight pre .kt {
+    color: var(--syntax-keyword) !important;
+    font-weight: 500 !important;
+}
+
+/* Keyword.Namespace - import, from */
+.highlight .kn,
+.highlight pre .kn {
+    color: var(--syntax-keyword-namespace) !important;
+    font-weight: 500 !important;
+}
+
+/* Function names and definitions */
+.highlight .nf,
+.highlight .fm,
+.highlight pre .nf,
+.highlight pre .fm {
+    color: var(--syntax-function) !important;
+    font-weight: 500 !important;
+}
+
+/* Class names - make them stand out! */
+.highlight .nc,
+.highlight pre .nc {
+    color: var(--syntax-class) !important;
+    font-weight: 600 !important;
+}
+
+/* Decorators */
+.highlight .nd,
+.highlight pre .nd {
+    color: var(--syntax-decorator) !important;
+    font-weight: 500 !important;
+}
+
+/* Module/namespace names (in imports) */
+.highlight .nn,
+.highlight pre .nn {
+    color: var(--syntax-module) !important;
+}
+
+/* Builtin functions and names (print, len, range, etc.) */
+.highlight .nb,
+.highlight pre .nb {
+    color: var(--syntax-builtin) !important;
+}
+
+/* self, cls */
+.highlight .bp,
+.highlight pre .bp {
+    color: var(--syntax-builtin) !important;
+    font-style: italic !important;
+}
+
+/* Regular names/identifiers - keep readable but not too bright */
+.highlight .n,
+.highlight pre .n {
+    color: var(--syntax-variable) !important;
+}
+
+/* Variables */
+.highlight .nv,
+.highlight .vi,
+.highlight .vg,
+.highlight .vc,
+.highlight pre .nv,
+.highlight pre .vi,
+.highlight pre .vg,
+.highlight pre .vc {
+    color: var(--syntax-variable) !important;
+}
+
+/* Attributes (obj.attr) and named arguments (arg=value) */
+.highlight .na,
+.highlight pre .na {
+    color: var(--syntax-attribute) !important;
+}
+
+/* Constants (True, False, None, UPPER_CASE) */
+.highlight .no,
+.highlight .kc,
+.highlight pre .no,
+.highlight pre .kc {
+    color: var(--syntax-constant) !important;
+}
+
+/* Strings - all types */
+.highlight .s,
+.highlight .s1,
+.highlight .s2,
+.highlight .sa,
+.highlight .sb,
+.highlight .sc,
+.highlight .sd,
+.highlight .se,
+.highlight .sh,
+.highlight .si,
+.highlight .sr,
+.highlight .ss,
+.highlight .sx,
+.highlight pre .s,
+.highlight pre .s1,
+.highlight pre .s2,
+.highlight pre .sa,
+.highlight pre .sb,
+.highlight pre .sc,
+.highlight pre .sd,
+.highlight pre .se,
+.highlight pre .sh,
+.highlight pre .si,
+.highlight pre .sr,
+.highlight pre .ss,
+.highlight pre .sx {
+    color: var(--syntax-string) !important;
+}
+
+/* Numbers - all types */
+.highlight .m,
+.highlight .mb,
+.highlight .mf,
+.highlight .mh,
+.highlight .mi,
+.highlight .mo,
+.highlight .il,
+.highlight pre .m,
+.highlight pre .mb,
+.highlight pre .mf,
+.highlight pre .mh,
+.highlight pre .mi,
+.highlight pre .mo,
+.highlight pre .il {
+    color: var(--syntax-number) !important;
+}
+
+/* Operators */
+.highlight .o,
+.highlight .ow,
+.highlight pre .o,
+.highlight pre .ow {
+    color: var(--syntax-operator) !important;
+}
+
+/* Punctuation - subtle */
+.highlight .p,
+.highlight pre .p {
+    color: var(--syntax-punctuation) !important;
+}
+
+/* Errors */
+.highlight .err,
+.highlight pre .err {
+    color: var(--syntax-error) !important;
+    background-color: rgba(232, 90, 79, 0.1) !important;
+}
+
+/* Generic - Diff styles */
+.highlight .gd,
+.highlight pre .gd {
+    color: var(--syntax-error) !important;
+    background-color: rgba(232, 90, 79, 0.1) !important;
+}
+
+.highlight .gi,
+.highlight pre .gi {
+    color: var(--syntax-string) !important;
+    background-color: rgba(22, 160, 133, 0.1) !important;
+}
+
+.highlight .gh,
+.highlight pre .gh {
+    color: var(--syntax-function) !important;
+    font-weight: 600 !important;
+}
+
+.highlight .gu,
+.highlight pre .gu {
+    color: var(--syntax-keyword) !important;
+    font-weight: 500 !important;
+}
+
+/* YAML/JSON specific - keys */
+.highlight .nt,
+.highlight pre .nt {
+    color: var(--syntax-function) !important;
+}
+
+/* Literals */
+.highlight .l,
+.highlight .ld,
+.highlight pre .l,
+.highlight pre .ld {
+    color: var(--syntax-string) !important;
+}
+
+/* Name.Tag for XML/HTML */
+.highlight .ni,
+.highlight pre .ni {
+    color: var(--syntax-class) !important;
+}
+
+/* Whitespace - invisible */
+.highlight .w,
+.highlight pre .w {
+    color: transparent !important;
+}
+
+/* Name.Exception */
+.highlight .ne,
+.highlight pre .ne {
+    color: var(--syntax-class) !important;
+    font-weight: 600 !important;
+}
+
+/* Name.Label */
+.highlight .nl,
+.highlight pre .nl {
+    color: var(--syntax-function) !important;
+}
+
+/* -------------------------------------------------- */
+/* Tables                                             */
+/* -------------------------------------------------- */
+
+table.docutils {
+    border-color: var(--lokaal-border);
+}
+
+table.docutils th {
+    background-color: var(--lokaal-surface);
+    border-color: var(--lokaal-border);
+}
+
+table.docutils td {
+    border-color: var(--lokaal-border);
+}
+
+table.docutils tr:hover td {
+    background-color: var(--lokaal-surface-variant);
+}
+
+/* -------------------------------------------------- */
+/* Config snippet accordions                          */
+/* -------------------------------------------------- */
+
+details.config-snippet {
+    margin-left: 1rem;
+    border-left: 1px solid var(--kstlib-config-snippet-border);
+    padding-left: 0.75rem;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+details.config-snippet > summary {
+    color: var(--kstlib-config-snippet-summary);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+details.config-snippet > summary::marker,
+details.config-snippet > summary::-webkit-details-marker {
+    color: var(--kstlib-config-snippet-marker);
+}
+
+/* -------------------------------------------------- */
+/* Buttons                                            */
+/* -------------------------------------------------- */
+
+.btn,
+button {
+    border-radius: 4px;
+}
+
+.btn-primary {
+    background-color: var(--lokaal-primary);
+    border-color: var(--lokaal-primary);
+}
+
+.btn-primary:hover {
+    background-color: var(--lokaal-primary-hover);
+    border-color: var(--lokaal-primary-hover);
+}
+
+/* -------------------------------------------------- */
+/* Search                                             */
+/* -------------------------------------------------- */
+
+.search-button {
+    border-color: var(--lokaal-border);
+}
+
+.search-button:hover {
+    border-color: var(--lokaal-primary);
+}
+
+/* -------------------------------------------------- */
+/* Scrollbar (dark theme only)                        */
+/* -------------------------------------------------- */
+
+body[data-theme="dark"] ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+body[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--lokaal-bg);
+}
+
+body[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: var(--lokaal-border);
+    border-radius: 4px;
+}
+
+body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--lokaal-text-tertiary);
+}
+
+/* -------------------------------------------------- */
+/* Mobile responsive                                  */
+/* -------------------------------------------------- */
+
+@media (max-width: 67em) {
+    .sidebar-drawer {
+        background: var(--lokaal-surface);
+    }
+}
+
+/* -------------------------------------------------- */
+/* Print styles                                       */
+/* -------------------------------------------------- */
+
+@media print {
+    .admonition {
+        border-width: 2px !important;
+    }
+}

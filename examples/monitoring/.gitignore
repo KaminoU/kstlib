@@ -1,0 +1,6 @@
+# Generated HTML dashboards (output of service_dashboard.py)
+dashboard_*.html
+
+# OAuth tokens are stored in examples/mail/tokens/ (shared via config include)
+# This directory is created when running from monitoring/ due to relative path resolution
+tokens/

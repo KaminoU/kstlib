@@ -1,0 +1,2 @@
+foo: root
+include: C:\Users\miche\OneDrive\Documents\_GITHUB_PROJECTS\kstlib\tests\fixtures\config\included_absolute.ini

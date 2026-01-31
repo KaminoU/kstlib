@@ -1,0 +1,10 @@
+# kstlib configuration for Binance RAPI example
+# Run from this directory: kstlib rapi binance.balance
+
+rapi:
+  include:
+    - "./*.rapi.yml"  # Auto-discover binance.rapi.yml
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(levelname)-8s | %(message)s"

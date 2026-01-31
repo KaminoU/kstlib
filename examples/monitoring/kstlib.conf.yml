@@ -1,0 +1,12 @@
+# Monitoring dashboard example config
+#
+# Includes Google OAuth2 credentials from the mail example (SOPS-encrypted).
+# No need to duplicate tokens -- kstlib resolves relative include paths
+# and stores OAuth tokens in ~/.config/kstlib/auth/tokens/.
+#
+# Requirements:
+#   - sops binary installed and in PATH
+#   - Age private key matching the recipient in mail.conf.sops.yml
+#     (check with: kstlib secrets doctor)
+
+include: ../mail/mail.conf.sops.yml

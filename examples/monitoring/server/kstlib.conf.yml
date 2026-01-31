@@ -1,0 +1,9 @@
+# Server monitoring example config
+#
+# Inherits Google OAuth2 credentials from parent monitoring config.
+# This allows run.py to work directly from this directory without
+# needing to change working directory for OAuth2 authentication.
+
+include:
+  - ../../mail/mail.conf.sops.yml
+  - ./server.monitor.yml

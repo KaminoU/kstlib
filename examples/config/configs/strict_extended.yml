@@ -1,0 +1,5 @@
+extended:
+  value: "from extended config"
+  features:
+    - yaml_only
+    - strict_validation

@@ -1,0 +1,58 @@
+# GitHub API Configuration
+# Usage: RapiClient.from_file("github.rapi.yml") or via include in kstlib.conf.yml
+
+name: github
+base_url: "https://api.github.com"
+
+credentials:
+  type: sops
+  path: "./tokens/github.sops.json"
+  token_path: ".access_token"
+
+auth: bearer
+
+headers:
+  Accept: "application/vnd.github+json"
+  X-GitHub-Api-Version: "2022-11-28"
+  User-Agent: "kstlib-rapi/1.0"
+
+endpoints:
+  # User endpoints
+  user:
+    path: "/user"
+    method: GET
+
+  user-repos:
+    path: "/user/repos"
+    method: GET
+    query:
+      sort: updated
+      per_page: "10"
+
+  # Public user info
+  users-get:
+    path: "/users/{username}"
+    method: GET
+
+  # Repository endpoints
+  repos-get:
+    path: "/repos/{owner}/{repo}"
+    method: GET
+
+  repos-commits:
+    path: "/repos/{owner}/{repo}/commits"
+    method: GET
+    query:
+      per_page: "5"
+
+  repos-issues:
+    path: "/repos/{owner}/{repo}/issues"
+    method: GET
+    query:
+      state: open
+      per_page: "10"
+
+  # Rate limit
+  rate-limit:
+    path: "/rate_limit"
+    method: GET

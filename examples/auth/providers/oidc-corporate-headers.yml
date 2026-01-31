@@ -1,0 +1,39 @@
+# OIDC Provider - Corporate environment with custom headers
+# Example for Oracle OAM/IDCS or similar corporate IdPs
+#
+# Use case:
+#   - IdP requires specific Host header for routing
+#   - Callback server cannot bind on port 443 (use --manual mode)
+#   - PKCE enabled (public client)
+#
+# Usage:
+#   kstlib auth login --manual corp-oidc
+
+auth:
+  providers:
+    corp-oidc:
+      type: "oidc"
+      issuer: "https://sso.corp.example.com:443/oauth2"
+      client_id: "my-app-client-id"
+      scopes:
+        - "openid"
+      pkce: true
+      token_storage: "file"
+
+      # Custom headers sent to all IdP endpoints (authorize, token, userinfo)
+      # Useful for corporate environments requiring specific routing headers
+      headers:
+        Host: "sso.corp.example.com"
+        # X-Custom-Header: "value"  # Add any headers your IdP needs
+
+  # File storage for tokens (plaintext, local only)
+  storage:
+    file:
+      directory: "./tokens"
+
+  # Callback server config (for non-manual mode)
+  # If your redirect_uri is on port 443, use --manual mode instead
+  callback_server:
+    host: "127.0.0.1"
+    port: 8400
+    timeout: 120

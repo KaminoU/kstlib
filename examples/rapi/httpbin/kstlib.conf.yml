@@ -1,0 +1,10 @@
+# kstlib configuration for httpbin RAPI example
+# Run from this directory: kstlib rapi list
+
+rapi:
+  include:
+    - "./*.rapi.yml"  # Auto-discover all *.rapi.yml in current directory
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(levelname)-8s | %(message)s"
