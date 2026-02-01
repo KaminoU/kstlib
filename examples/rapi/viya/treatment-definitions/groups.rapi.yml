@@ -1,0 +1,144 @@
+# SAS Viya Treatment Definitions API - Groups section
+# https://developer.sas.com/rest-apis/treatmentDefinitions
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: treatment-definitions-groups
+
+endpoints:
+  # ============================================================
+  # Definition Groups Collection
+  # ============================================================
+  groups-list:
+    path: /treatmentDefinitions/definitionGroups
+    method: GET
+    description: Lists all groups.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  groups-create:
+    path: /treatmentDefinitions/definitionGroups
+    method: POST
+    description: Creates a new group.
+    body:
+      name*: null
+      description: null
+      members:
+        - definitionId: null
+          definitionRevisionId: null
+          attributeValueMappings:
+            - attributeId: null
+              mappingType: null
+              value: null
+
+  # ============================================================
+  # Single Group
+  # ============================================================
+  groups-get:
+    path: /treatmentDefinitions/definitionGroups/{groupId}
+    method: GET
+    description: Returns a specific group.
+
+  groups-update:
+    path: /treatmentDefinitions/definitionGroups/{groupId}
+    method: PUT
+    description: Updates a group.
+    body:
+      name*: null
+      description: null
+      members:
+        - definitionId: null
+          definitionRevisionId: null
+          attributeValueMappings:
+            - attributeId: null
+              mappingType: null
+              value: null
+
+  groups-delete:
+    path: /treatmentDefinitions/definitionGroups/{groupId}
+    method: DELETE
+    description: Removes a group.
+    safeguard: DELETE GROUP {groupId}
+
+  groups-dependencies:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/dependencies
+    method: GET
+    description: Returns direct dependencies.
+
+  groups-activate:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/active
+    method: PUT
+    description: Activates a locked revision.
+    body:
+      revisionId*: null
+
+  # ============================================================
+  # Group Code Generation
+  # ============================================================
+  groups-ds2-code:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/ds2Code
+    method: GET
+    description: Generates DS2 code.
+
+  groups-step-code:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/decisionStepCode
+    method: GET
+    description: Generates decision step code.
+
+  # ============================================================
+  # Group Revisions
+  # ============================================================
+  groups-revisions-list:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/revisions
+    method: GET
+    description: Lists group revisions.
+    query:
+      start: 0
+      limit: 10
+
+  groups-revisions-create:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/revisions
+    method: POST
+    description: Creates group revision.
+    body:
+      name: null
+      description: null
+
+  groups-revisions-get:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/revisions/{revisionId}
+    method: GET
+    description: Returns group revision.
+
+  groups-revisions-delete:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/revisions/{revisionId}
+    method: DELETE
+    description: Removes group revision.
+    safeguard: DELETE GROUP REVISION {revisionId}
+
+  groups-revisions-checkouts:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/revisions/{revisionId}/checkOuts
+    method: GET
+    description: Lists checkouts.
+
+  groups-revisions-ds2-code:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/revisions/{revisionId}/ds2Code
+    method: GET
+    description: Generates revision DS2 code.
+
+  groups-revisions-step-code:
+    path: /treatmentDefinitions/definitionGroups/{groupId}/revisions/{revisionId}/decisionStepCode
+    method: GET
+    description: Generates revision decision step code.
+
+  # ============================================================
+  # Cross-Group Revisions
+  # ============================================================
+  group-revisions-batch:
+    path: /treatmentDefinitions/definitionGroupRevisions
+    method: POST
+    description: Returns revisions across groups.
+    body:
+      groupIds*: null

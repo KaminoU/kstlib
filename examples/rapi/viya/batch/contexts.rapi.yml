@@ -1,0 +1,84 @@
+# SAS Viya Batch API - Contexts section
+# https://developer.sas.com/rest-apis/batch
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: batch-contexts
+
+endpoints:
+  # ============================================================
+  # Contexts Collection
+  # ============================================================
+  contexts-list:
+    path: /batch/contexts
+    method: GET
+    description: Returns a collection of batch contexts.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  contexts-check:
+    path: /batch/contexts
+    method: HEAD
+    description: Checks endpoint availability.
+
+  contexts-create:
+    path: /batch/contexts
+    method: POST
+    description: Creates a new batch context.
+    body:
+      name: null
+      description: null
+      launchContext: null
+      launchType: null
+      autorun: false
+
+  # ============================================================
+  # Single Context
+  # ============================================================
+  contexts-get:
+    path: /batch/contexts/{contextId}
+    method: GET
+    description: Returns a specific batch context.
+
+  contexts-head:
+    path: /batch/contexts/{contextId}
+    method: HEAD
+    description: Verifies that a context exists.
+
+  contexts-update:
+    path: /batch/contexts/{contextId}
+    method: PUT
+    description: Updates a batch context.
+    body:
+      name: null
+      description: null
+      launchContext: null
+      launchType: null
+      autorun: false
+
+  contexts-delete:
+    path: /batch/contexts/{contextId}
+    method: DELETE
+    description: Deletes a batch context.
+    safeguard: DELETE CONTEXT {contextId}
+
+  # ============================================================
+  # Context by Name
+  # ============================================================
+  contexts-get-by-name:
+    path: /batch/contexts/@item
+    method: GET
+    description: Returns a context by name.
+    query:
+      name: null
+
+  contexts-check-by-name:
+    path: /batch/contexts/@item
+    method: HEAD
+    description: Verifies a context exists by name.
+    query:
+      name: null

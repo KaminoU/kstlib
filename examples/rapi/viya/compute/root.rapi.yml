@@ -1,0 +1,49 @@
+# SAS Viya Compute API - Root section
+# https://developer.sas.com/rest-apis/compute
+#
+# Entry point for the Compute API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute
+
+include:
+  - "./contexts.rapi.yml"
+  - "./servers.rapi.yml"
+  - "./sessions.rapi.yml"
+  - "./jobs.rapi.yml"
+  - "./data.rapi.yml"
+  - "./filerefs.rapi.yml"
+  - "./filesystem.rapi.yml"
+  - "./variables.rapi.yml"
+  - "./engines.rapi.yml"
+  - "./options.rapi.yml"
+  - "./formats.rapi.yml"
+  - "./results.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /compute/
+    method: GET
+    description: Returns API resource links.
+
+  root-check:
+    path: /compute/
+    method: HEAD
+    description: Checks service availability.
+
+  # ============================================================
+  # Tasks
+  # ============================================================
+  tasks-execute:
+    path: /compute/tasks
+    method: POST
+    description: Executes a task.
+    body:
+      code*: null
+      contextName: null
+      serverId: null
+      sessionId: null
+      environment: null

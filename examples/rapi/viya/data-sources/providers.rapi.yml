@@ -1,0 +1,28 @@
+# SAS Viya Data Sources API - Providers section
+# https://developer.sas.com/rest-apis/dataSources
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-sources-providers
+
+endpoints:
+  # ============================================================
+  # Providers Collection
+  # ============================================================
+  providers-list:
+    path: /dataSources/providers
+    method: GET
+    description: Returns collection of data providers.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  # ============================================================
+  # Single Provider
+  # ============================================================
+  providers-get:
+    path: /dataSources/providers/{providerId}
+    method: GET
+    description: Returns details for a specific provider.

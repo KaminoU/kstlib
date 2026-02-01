@@ -1,0 +1,84 @@
+# SAS Viya List Data API - Jobs section
+# https://developer.sas.com/rest-apis/listData
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: list-data-jobs
+
+endpoints:
+  # ============================================================
+  # List Jobs
+  # ============================================================
+  jobs-check:
+    path: /listData/lists/{listId}/jobs
+    method: HEAD
+    description: Checks for running jobs.
+
+  jobs-list:
+    path: /listData/lists/{listId}/jobs
+    method: GET
+    description: Returns job history.
+
+  # ============================================================
+  # Import Jobs
+  # ============================================================
+  import-jobs-list:
+    path: /listData/lists/{listId}/importJobs
+    method: GET
+    description: Returns import jobs.
+
+  import-jobs-create:
+    path: /listData/lists/{listId}/importJobs
+    method: POST
+    description: Creates import job.
+    headers:
+      Content-Type: text/csv
+    body: null
+
+  import-jobs-get:
+    path: /listData/lists/{listId}/importJobs/{jobId}
+    method: GET
+    description: Returns specific import job.
+
+  # ============================================================
+  # Purge Jobs
+  # ============================================================
+  purge-jobs-list:
+    path: /listData/lists/{listId}/purgeJobs
+    method: GET
+    description: Returns purge jobs.
+
+  purge-jobs-create:
+    path: /listData/lists/{listId}/purgeJobs
+    method: POST
+    description: Creates purge job.
+    body:
+      purgeType: null
+      purgeDate: null
+
+  purge-jobs-get:
+    path: /listData/lists/{listId}/purgeJobs/{jobId}
+    method: GET
+    description: Returns specific purge job.
+
+  # ============================================================
+  # Update Content State Jobs
+  # ============================================================
+  state-jobs-list:
+    path: /listData/lists/{listId}/updateContentStateJobs
+    method: GET
+    description: Returns state update jobs.
+
+  state-jobs-create:
+    path: /listData/lists/{listId}/updateContentStateJobs
+    method: POST
+    description: Creates state update job.
+    body:
+      keys*: null
+      state*: null
+
+  state-jobs-get:
+    path: /listData/lists/{listId}/updateContentStateJobs/{jobId}
+    method: GET
+    description: Returns specific state update job.

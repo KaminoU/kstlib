@@ -1,0 +1,170 @@
+# SAS Viya Identities API (SCIM)
+# https://developer.sas.com/rest-apis/identities
+#
+# Entry point for the Identities API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: identities
+
+endpoints:
+  # ============================================================
+  # Users
+  # ============================================================
+  users-list:
+    path: /identities/scim/v2/Users
+    method: GET
+    description: Returns collection of SCIM users.
+    query:
+      startIndex: 1
+      count: 10
+      filter: null
+
+  users-create:
+    path: /identities/scim/v2/Users
+    method: POST
+    description: Creates a new SCIM user.
+    body:
+      schemas*: null
+      userName*: null
+      displayName: null
+      title: null
+      active: true
+      emails: null
+      phoneNumbers: null
+      addresses: null
+
+  users-delete-all:
+    path: /identities/scim/v2/Users
+    method: DELETE
+    description: Deletes all or inactive SCIM users.
+    safeguard: DELETE ALL USERS
+
+  users-get:
+    path: /identities/scim/v2/Users/{userId}
+    method: GET
+    description: Returns a single SCIM user by ID.
+
+  users-patch:
+    path: /identities/scim/v2/Users/{userId}
+    method: PATCH
+    description: Updates SCIM user attributes via PATCH.
+    body:
+      schemas*: null
+      Operations*:
+        - op*: null
+          path: null
+          value: null
+
+  users-update:
+    path: /identities/scim/v2/Users/{userId}
+    method: PUT
+    description: Updates a complete SCIM user record.
+    body:
+      schemas*: null
+      userName*: null
+      displayName: null
+      title: null
+      active: true
+      emails: null
+      phoneNumbers: null
+      addresses: null
+
+  users-delete:
+    path: /identities/scim/v2/Users/{userId}
+    method: DELETE
+    description: Deletes a specific SCIM user.
+    safeguard: DELETE USER {userId}
+
+  # ============================================================
+  # Groups
+  # ============================================================
+  groups-list:
+    path: /identities/scim/v2/Groups
+    method: GET
+    description: Returns groups collection with paging and filtering.
+    query:
+      startIndex: 1
+      count: 10
+      filter: null
+
+  groups-create:
+    path: /identities/scim/v2/Groups
+    method: POST
+    description: Creates a new SCIM group.
+    body:
+      schemas*: null
+      displayName*: null
+      externalId: null
+      members: null
+
+  groups-delete-all:
+    path: /identities/scim/v2/Groups
+    method: DELETE
+    description: Deletes all SCIM groups.
+    safeguard: DELETE ALL GROUPS
+
+  groups-get:
+    path: /identities/scim/v2/Groups/{groupId}
+    method: GET
+    description: Returns a single SCIM group.
+
+  groups-patch:
+    path: /identities/scim/v2/Groups/{groupId}
+    method: PATCH
+    description: Updates group attributes via PATCH.
+    body:
+      schemas*: null
+      Operations*:
+        - op*: null
+          path: null
+          value: null
+
+  groups-update:
+    path: /identities/scim/v2/Groups/{groupId}
+    method: PUT
+    description: Updates a complete SCIM group.
+    body:
+      schemas*: null
+      displayName*: null
+      externalId: null
+      members: null
+
+  groups-delete:
+    path: /identities/scim/v2/Groups/{groupId}
+    method: DELETE
+    description: Deletes a specific SCIM group.
+    safeguard: DELETE GROUP {groupId}
+
+  # ============================================================
+  # Schemas
+  # ============================================================
+  schemas-list:
+    path: /identities/scim/v2/Schemas
+    method: GET
+    description: Returns all SCIM schemas per RFC 7643.
+
+  schemas-get:
+    path: /identities/scim/v2/Schemas/{schemaId}
+    method: GET
+    description: Returns a specific SCIM schema.
+
+  # ============================================================
+  # Resource Types
+  # ============================================================
+  resource-types-list:
+    path: /identities/scim/v2/ResourceTypes
+    method: GET
+    description: Returns SCIM resource types per RFC 7643.
+
+  resource-types-get:
+    path: /identities/scim/v2/ResourceTypes/{resourceId}
+    method: GET
+    description: Returns a specific resource type.
+
+  # ============================================================
+  # Service Provider Config
+  # ============================================================
+  service-provider-config:
+    path: /identities/scim/v2/ServiceProviderConfig
+    method: GET
+    description: Returns SCIM Service Provider Configuration.

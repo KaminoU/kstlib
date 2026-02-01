@@ -1,0 +1,39 @@
+# SAS Viya CAS Management API - Nodes section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-nodes
+
+endpoints:
+  # ============================================================
+  # Nodes
+  # ============================================================
+  nodes-list:
+    path: /casManagement/servers/{serverName}/nodes
+    method: GET
+    description: Returns list of nodes.
+    query:
+      start: 0
+      limit: 10
+
+  nodes-create:
+    path: /casManagement/servers/{serverName}/nodes
+    method: POST
+    description: Adds a node.
+    body:
+      name*: null
+      host*: null
+      port: null
+
+  nodes-get:
+    path: /casManagement/servers/{serverName}/nodes/{nodeId}
+    method: GET
+    description: Returns a node.
+
+  nodes-delete:
+    path: /casManagement/servers/{serverName}/nodes/{nodeId}
+    method: DELETE
+    description: Removes a node.
+    safeguard: DELETE NODE {nodeId}

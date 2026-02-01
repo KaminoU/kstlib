@@ -8,7 +8,9 @@ import pytest
 
 from kstlib.rapi.client import RapiClient, RapiResponse
 from kstlib.rapi.config import RapiConfigManager
+from kstlib.rapi.config import SafeguardConfig
 from kstlib.rapi.exceptions import (
+    ConfirmationRequiredError,
     EndpointNotFoundError,
     RequestError,
     ResponseTooLargeError,
@@ -609,6 +611,7 @@ class TestRapiClientShortcuts:
             "test.endpoint",
             body={"key": "value"},
             headers=None,
+            confirm=None,
         )
         assert response.status_code == 200
 
@@ -1547,3 +1550,249 @@ endpoints:
         url_str = str(request.url)
         assert "timestamp=" in url_str
         assert "signature=" in url_str
+
+
+class TestRapiClientSafeguard:
+    """Tests for safeguard confirmation in RapiClient."""
+
+    def test_call_without_confirm_on_safe_endpoint(self) -> None:
+        """Call GET endpoint without confirm succeeds."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoints": {
+                        "get_data": {"path": "/data", "method": "GET"},
+                    },
+                }
+            }
+        }
+        # Use custom safeguard config to avoid validation issues
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager(config, safeguard_config=safeguard_config)
+        client = RapiClient(config_manager=manager)
+
+        # This should not raise (no safeguard on GET)
+        with mock.patch("httpx.Client") as mock_client_class:
+            mock_response = mock.Mock(spec=httpx.Response)
+            mock_response.status_code = 200
+            mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"ok": true}'
+            mock_response.json.return_value = {"ok": True}
+
+            mock_client = mock.Mock()
+            mock_client.send.return_value = mock_response
+            mock_client.__enter__ = mock.Mock(return_value=mock_client)
+            mock_client.__exit__ = mock.Mock(return_value=False)
+            mock_client_class.return_value = mock_client
+
+            response = client.call("api.get_data")
+            assert response.ok
+
+    def test_call_dangerous_endpoint_missing_confirm(self) -> None:
+        """Call DELETE endpoint without confirm raises ConfirmationRequiredError."""
+        config = {
+            "api": {
+                "admin": {
+                    "base_url": "https://admin.example.com",
+                    "endpoints": {
+                        "delete_user": {
+                            "path": "/users/{userId}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE USER {userId}",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        with pytest.raises(ConfirmationRequiredError) as exc_info:
+            client.call("admin.delete_user", userId="abc123")
+
+        assert "admin.delete_user" in str(exc_info.value)
+        assert "DELETE USER abc123" in str(exc_info.value)
+        assert exc_info.value.expected == "DELETE USER abc123"
+        assert exc_info.value.actual is None
+
+    def test_call_dangerous_endpoint_wrong_confirm(self) -> None:
+        """Call DELETE endpoint with wrong confirm raises ConfirmationRequiredError."""
+        config = {
+            "api": {
+                "admin": {
+                    "base_url": "https://admin.example.com",
+                    "endpoints": {
+                        "delete_user": {
+                            "path": "/users/{userId}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE USER {userId}",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        with pytest.raises(ConfirmationRequiredError) as exc_info:
+            client.call("admin.delete_user", userId="abc123", confirm="wrong")
+
+        assert exc_info.value.expected == "DELETE USER abc123"
+        assert exc_info.value.actual == "wrong"
+        assert "mismatch" in str(exc_info.value).lower()
+
+    @mock.patch("httpx.Client")
+    def test_call_dangerous_endpoint_correct_confirm(self, mock_client_class: mock.Mock) -> None:
+        """Call DELETE endpoint with correct confirm succeeds."""
+        mock_response = mock.Mock(spec=httpx.Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.text = '{"deleted": true}'
+        mock_response.json.return_value = {"deleted": True}
+
+        mock_client = mock.Mock()
+        mock_client.send.return_value = mock_response
+        mock_client.__enter__ = mock.Mock(return_value=mock_client)
+        mock_client.__exit__ = mock.Mock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        config = {
+            "api": {
+                "admin": {
+                    "base_url": "https://admin.example.com",
+                    "endpoints": {
+                        "delete_user": {
+                            "path": "/users/{userId}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE USER {userId}",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        response = client.call(
+            "admin.delete_user",
+            userId="abc123",
+            confirm="DELETE USER abc123",
+        )
+
+        assert response.ok
+        assert response.data == {"deleted": True}
+        mock_client.send.assert_called_once()
+
+    @mock.patch("httpx.AsyncClient")
+    @pytest.mark.asyncio
+    async def test_call_async_dangerous_endpoint_missing_confirm(self, mock_client_class: mock.Mock) -> None:
+        """Async call to DELETE endpoint without confirm raises error."""
+        config = {
+            "api": {
+                "admin": {
+                    "base_url": "https://admin.example.com",
+                    "endpoints": {
+                        "delete_user": {
+                            "path": "/users/{userId}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE USER {userId}",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        with pytest.raises(ConfirmationRequiredError):
+            await client.call_async("admin.delete_user", userId="abc123")
+
+    @mock.patch("httpx.AsyncClient")
+    @pytest.mark.asyncio
+    async def test_call_async_dangerous_endpoint_correct_confirm(self, mock_client_class: mock.Mock) -> None:
+        """Async call to DELETE endpoint with correct confirm succeeds."""
+        mock_response = mock.Mock(spec=httpx.Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.text = '{"deleted": true}'
+        mock_response.json.return_value = {"deleted": True}
+
+        mock_client = mock.AsyncMock()
+        mock_client.send.return_value = mock_response
+        mock_client.__aenter__ = mock.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mock.AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        config = {
+            "api": {
+                "admin": {
+                    "base_url": "https://admin.example.com",
+                    "endpoints": {
+                        "delete_user": {
+                            "path": "/users/{userId}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE USER {userId}",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        response = await client.call_async(
+            "admin.delete_user",
+            userId="abc123",
+            confirm="DELETE USER abc123",
+        )
+
+        assert response.ok
+
+    def test_safeguard_with_positional_args(self) -> None:
+        """Safeguard works with positional path arguments."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoints": {
+                        "delete": {
+                            "path": "/items/{0}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE ITEM {0}",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        # Missing confirm
+        with pytest.raises(ConfirmationRequiredError) as exc_info:
+            client.call("api.delete", "item-123")
+
+        assert exc_info.value.expected == "DELETE ITEM item-123"
+
+    def test_safeguard_case_sensitive(self) -> None:
+        """Confirmation is case-sensitive."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoints": {
+                        "delete": {
+                            "path": "/items/{id}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE ITEM {id}",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        # Wrong case
+        with pytest.raises(ConfirmationRequiredError):
+            client.call("api.delete", id="123", confirm="delete item 123")

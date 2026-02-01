@@ -1,0 +1,98 @@
+# SAS Viya Catalog API - Instances section
+# https://developer.sas.com/rest-apis/catalog
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: catalog-instances
+
+endpoints:
+  # ============================================================
+  # Instances Collection
+  # ============================================================
+  instances-list:
+    path: /catalog/instances
+    method: GET
+    description: Returns catalog instances.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  instances-create:
+    path: /catalog/instances
+    method: POST
+    description: Creates an instance.
+    body:
+      name*: null
+      definition*: null
+      resourceId: null
+      attributes: null
+
+  instances-stats:
+    path: /catalog/instances/statistics
+    method: GET
+    description: Returns instance statistics.
+
+  instances-upload:
+    path: /catalog/instances/upload
+    method: POST
+    description: Uploads instances.
+    headers:
+      Content-Type: application/zip
+    body: null
+
+  instances-download:
+    path: /catalog/instances/download
+    method: GET
+    description: Downloads instances.
+
+  # ============================================================
+  # Single Instance
+  # ============================================================
+  instances-get:
+    path: /catalog/instances/{instanceId}
+    method: GET
+    description: Returns an instance.
+
+  instances-update:
+    path: /catalog/instances/{instanceId}
+    method: PUT
+    description: Updates an instance.
+    body:
+      name*: null
+      definition*: null
+      resourceId: null
+      attributes: null
+
+  instances-patch:
+    path: /catalog/instances/{instanceId}
+    method: PATCH
+    description: Patches an instance.
+    body:
+      name: null
+      attributes: null
+
+  instances-delete:
+    path: /catalog/instances/{instanceId}
+    method: DELETE
+    description: Deletes an instance.
+    safeguard: DELETE INSTANCE {instanceId}
+
+  instances-archive:
+    path: /catalog/instances/{instanceId}/archive
+    method: POST
+    description: Archives an instance.
+    body: null
+
+  instances-history:
+    path: /catalog/instances/{instanceId}/history
+    method: GET
+    description: Returns instance history.
+
+  instances-description:
+    path: /catalog/instances/{instanceId}/businessDescription
+    method: POST
+    description: Generates business description.
+    body:
+      prompt: null

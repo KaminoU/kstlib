@@ -1,0 +1,69 @@
+# SAS Viya CAS Management API - Caslibs section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-caslibs
+
+endpoints:
+  # ============================================================
+  # Caslibs Collection
+  # ============================================================
+  caslibs-list:
+    path: /casManagement/servers/{serverName}/caslibs
+    method: GET
+    description: Returns list of caslibs.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      includeHidden: false
+
+  caslibs-create:
+    path: /casManagement/servers/{serverName}/caslibs
+    method: POST
+    description: Creates a caslib.
+    body:
+      name*: null
+      path*: null
+      type: null
+      description: null
+      scope: null
+
+  caslibs-create-advanced:
+    path: /casManagement/servers/{serverName}/caslibs
+    method: POST
+    description: Creates a caslib with advanced options.
+    headers:
+      Content-Type: application/vnd.sas.cas.caslib+json
+    body:
+      name*: null
+      path*: null
+      type: null
+      description: null
+      scope: null
+      dataSource: null
+      attributes: null
+
+  # ============================================================
+  # Single Caslib
+  # ============================================================
+  caslibs-get:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}
+    method: GET
+    description: Returns a caslib.
+
+  caslibs-delete:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}
+    method: DELETE
+    description: Removes a caslib.
+    safeguard: DELETE CASLIB {caslibName}
+
+  caslibs-patch:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}
+    method: PATCH
+    description: Edits a global caslib.
+    body:
+      description: null
+      path: null

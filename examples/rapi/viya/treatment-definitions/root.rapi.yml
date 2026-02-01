@@ -1,0 +1,160 @@
+# SAS Viya Treatment Definitions API - Root section
+# https://developer.sas.com/rest-apis/treatmentDefinitions
+#
+# Entry point for the Treatment Definitions API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: treatment-definitions
+
+include:
+  - "./groups.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /treatmentDefinitions/
+    method: GET
+    description: Returns top-level resource links.
+
+  # ============================================================
+  # Definitions Collection
+  # ============================================================
+  definitions-list:
+    path: /treatmentDefinitions/definitions
+    method: GET
+    description: Lists all treatment definitions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  definitions-create:
+    path: /treatmentDefinitions/definitions
+    method: POST
+    description: Creates a new treatment definition.
+    body:
+      name*: null
+      description: null
+      eligibility:
+        ruleSetUri: null
+      attributes:
+        - name: null
+          valueConstraints:
+            dataType: null
+            format: null
+            readOnly: false
+
+  # ============================================================
+  # Single Definition
+  # ============================================================
+  definitions-get:
+    path: /treatmentDefinitions/definitions/{definitionId}
+    method: GET
+    description: Returns a specific treatment definition.
+
+  definitions-update:
+    path: /treatmentDefinitions/definitions/{definitionId}
+    method: PUT
+    description: Updates a treatment definition.
+    body:
+      name*: null
+      description: null
+      eligibility:
+        ruleSetUri: null
+      attributes:
+        - name: null
+          valueConstraints:
+            dataType: null
+            format: null
+            readOnly: false
+
+  definitions-delete:
+    path: /treatmentDefinitions/definitions/{definitionId}
+    method: DELETE
+    description: Removes a treatment definition.
+    safeguard: DELETE TREATMENT DEFINITION {definitionId}
+
+  definitions-dependencies:
+    path: /treatmentDefinitions/definitions/{definitionId}/dependencies
+    method: GET
+    description: Returns direct dependencies.
+
+  # ============================================================
+  # Definition Validations
+  # ============================================================
+  definitions-validate-create:
+    path: /treatmentDefinitions/commons/validations/definitions
+    method: POST
+    description: Validates new treatment definition.
+    body:
+      name*: null
+      description: null
+      attributes:
+        - name: null
+          valueConstraints:
+            dataType: null
+
+  definitions-validate-update:
+    path: /treatmentDefinitions/commons/validations/definitions/{definitionId}
+    method: PUT
+    description: Validates updates.
+    body:
+      name*: null
+      description: null
+      attributes:
+        - name: null
+          valueConstraints:
+            dataType: null
+
+  definitions-validate-delete:
+    path: /treatmentDefinitions/commons/validations/definitions/{definitionId}
+    method: DELETE
+    description: Validates deletion.
+    safeguard: VALIDATE DELETE DEFINITION {definitionId}
+
+  # ============================================================
+  # Definition Revisions
+  # ============================================================
+  definitions-revisions-list:
+    path: /treatmentDefinitions/definitions/{definitionId}/revisions
+    method: GET
+    description: Lists all revisions.
+    query:
+      start: 0
+      limit: 10
+
+  definitions-revisions-create:
+    path: /treatmentDefinitions/definitions/{definitionId}/revisions
+    method: POST
+    description: Creates a new revision.
+    body:
+      name: null
+      description: null
+
+  definitions-revisions-get:
+    path: /treatmentDefinitions/definitions/{definitionId}/revisions/{revisionId}
+    method: GET
+    description: Returns specific revision.
+
+  definitions-revisions-delete:
+    path: /treatmentDefinitions/definitions/{definitionId}/revisions/{revisionId}
+    method: DELETE
+    description: Removes a revision.
+    safeguard: DELETE REVISION {revisionId}
+
+  definitions-revisions-checkouts:
+    path: /treatmentDefinitions/definitions/{definitionId}/revisions/{revisionId}/checkOuts
+    method: GET
+    description: Lists checkouts.
+
+  # ============================================================
+  # Cross-Definition Revisions
+  # ============================================================
+  definition-revisions-batch:
+    path: /treatmentDefinitions/definitionRevisions
+    method: POST
+    description: Returns revisions across definitions.
+    body:
+      definitionIds*: null

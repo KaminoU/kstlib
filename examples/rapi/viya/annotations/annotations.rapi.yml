@@ -1,0 +1,86 @@
+# SAS Viya Annotations API - Annotations section
+# https://developer.sas.com/rest-apis/annotations
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: annotations-annotations
+
+endpoints:
+  # ============================================================
+  # Annotations Collection
+  # ============================================================
+  list:
+    path: /annotations/annotations
+    method: GET
+    description: Returns a collection of annotations with paging, filtering, sorting.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+      resourceUri: null
+
+  create:
+    path: /annotations/annotations
+    method: POST
+    description: Creates an annotation from the specified request.
+    body:
+      domain: null
+      name: null
+      label: null
+      description: null
+
+  search:
+    path: /annotations/annotations
+    method: POST
+    description: Searches for annotations linked to provided resourceUris.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri: null
+
+  batch-create:
+    path: /annotations/annotations
+    method: POST
+    description: Adds multiple annotations in bulk (items array).
+    headers:
+      Content-Type: application/vnd.sas.collection+json
+    body:
+      items:
+        - domain: null
+          name: null
+          label: null
+          description: null
+
+  # ============================================================
+  # Single Annotation
+  # ============================================================
+  get:
+    path: /annotations/annotations/{annotationId}
+    method: GET
+    description: Returns information about a single annotation by ID.
+
+  check:
+    path: /annotations/annotations/{annotationId}
+    method: HEAD
+    description: Verifies annotation existence and returns header data.
+
+  update:
+    path: /annotations/annotations/{annotationId}
+    method: PUT
+    description: Updates an existing annotation with full replacement.
+    body:
+      version: null
+      id: null
+      domain: null
+      name: null
+      label: null
+      description: null
+
+  delete:
+    path: /annotations/annotations/{annotationId}
+    method: DELETE
+    description: Permanently removes an annotation and its members.
+    safeguard: DELETE ANNOTATION {annotationId}

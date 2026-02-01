@@ -1,0 +1,47 @@
+# SAS Viya Compute API - Engines section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-engines
+
+endpoints:
+  # ============================================================
+  # Engines Collection
+  # ============================================================
+  engines-check:
+    path: /compute/sessions/{sessionId}/engines
+    method: HEAD
+    description: Checks engine list availability for a session.
+
+  engines-list:
+    path: /compute/sessions/{sessionId}/engines
+    method: GET
+    description: Returns an engine list for a session.
+    query:
+      start: 0
+      limit: 10
+
+  # ============================================================
+  # Single Engine
+  # ============================================================
+  engines-get-check:
+    path: /compute/sessions/{sessionId}/engines/{engineName}
+    method: HEAD
+    description: Gets engine information.
+
+  engines-get:
+    path: /compute/sessions/{sessionId}/engines/{engineName}
+    method: GET
+    description: Returns engine information for a session.
+
+  engines-definition-check:
+    path: /compute/sessions/{sessionId}/engines/{engineName}/definition
+    method: HEAD
+    description: Gets engine information for a session.
+
+  engines-definition:
+    path: /compute/sessions/{sessionId}/engines/{engineName}/definition
+    method: GET
+    description: Returns options schema for an engine.

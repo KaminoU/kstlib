@@ -27,6 +27,7 @@ from kstlib.rapi.config import (
 )
 from kstlib.rapi.credentials import CredentialRecord, CredentialResolver
 from kstlib.rapi.exceptions import (
+    ConfirmationRequiredError,
     RequestError,
     ResponseTooLargeError,
 )
@@ -43,6 +44,37 @@ log = get_logger(__name__)
 def _log_trace(msg: str, *args: Any) -> None:
     """Log at TRACE level."""
     log.log(TRACE_LEVEL, msg, *args)
+
+
+def _validate_safeguard(
+    endpoint_config: EndpointConfig,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    confirm: str | None,
+) -> None:
+    """Validate safeguard confirmation for dangerous endpoints.
+
+    Args:
+        endpoint_config: Endpoint configuration.
+        args: Positional arguments for path/safeguard substitution.
+        kwargs: Keyword arguments for path/safeguard substitution.
+        confirm: Confirmation string provided by caller.
+
+    Raises:
+        ConfirmationRequiredError: If safeguard is required but confirm is missing or wrong.
+    """
+    if endpoint_config.safeguard is None:
+        return
+
+    expected = endpoint_config.build_safeguard(*args, **kwargs)
+    if expected is None:
+        return
+
+    if confirm is None:
+        raise ConfirmationRequiredError(endpoint_config.full_ref, expected=expected)
+
+    if confirm != expected:
+        raise ConfirmationRequiredError(endpoint_config.full_ref, expected=expected, actual=confirm)
 
 
 @dataclass
@@ -238,6 +270,7 @@ class RapiClient:
         body: Any = None,
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
+        confirm: str | None = None,
         **kwargs: Any,
     ) -> RapiResponse:
         """Make a synchronous API call.
@@ -248,12 +281,14 @@ class RapiClient:
             body: Request body (dict for JSON, str for raw).
             headers: Runtime headers (override service/endpoint headers).
             timeout: Request timeout (uses config default if None).
+            confirm: Confirmation string for dangerous endpoints with safeguard.
             **kwargs: Keyword arguments for path parameters and query params.
 
         Returns:
             RapiResponse with parsed data.
 
         Raises:
+            ConfirmationRequiredError: If safeguard requires confirmation.
             RequestError: If request fails after retries.
             ResponseTooLargeError: If response exceeds max size.
 
@@ -262,12 +297,16 @@ class RapiClient:
             >>> client.call("httpbin.get_ip")  # doctest: +SKIP
             >>> client.call("httpbin.delayed", 5)  # doctest: +SKIP
             >>> client.call("httpbin.post_data", body={"key": "value"})  # doctest: +SKIP
+            >>> client.call("admin.delete_user", userId="123", confirm="DELETE USER 123")  # doctest: +SKIP
         """
         log.debug("Calling endpoint: %s", endpoint_ref)
 
         # Resolve endpoint
         api_config, endpoint_config = self._config_manager.resolve(endpoint_ref)
         _log_trace("Resolved to: %s", endpoint_config.full_ref)
+
+        # Validate safeguard before proceeding
+        _validate_safeguard(endpoint_config, args, kwargs, confirm)
 
         # Build request
         request = self._build_request(
@@ -290,6 +329,7 @@ class RapiClient:
         body: Any = None,
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
+        confirm: str | None = None,
         **kwargs: Any,
     ) -> RapiResponse:
         """Make an asynchronous API call.
@@ -300,12 +340,14 @@ class RapiClient:
             body: Request body (dict for JSON, str for raw).
             headers: Runtime headers (override service/endpoint headers).
             timeout: Request timeout (uses config default if None).
+            confirm: Confirmation string for dangerous endpoints with safeguard.
             **kwargs: Keyword arguments for path parameters and query params.
 
         Returns:
             RapiResponse with parsed data.
 
         Raises:
+            ConfirmationRequiredError: If safeguard requires confirmation.
             RequestError: If request fails after retries.
             ResponseTooLargeError: If response exceeds max size.
         """
@@ -314,6 +356,9 @@ class RapiClient:
         # Resolve endpoint
         api_config, endpoint_config = self._config_manager.resolve(endpoint_ref)
         _log_trace("Resolved to: %s", endpoint_config.full_ref)
+
+        # Validate safeguard before proceeding
+        _validate_safeguard(endpoint_config, args, kwargs, confirm)
 
         # Build request
         request = self._build_request(
@@ -814,6 +859,7 @@ def call(
     *args: Any,
     body: Any = None,
     headers: Mapping[str, str] | None = None,
+    confirm: str | None = None,
     **kwargs: Any,
 ) -> RapiResponse:
     """Convenience function for quick API calls.
@@ -825,6 +871,7 @@ def call(
         *args: Positional path parameters.
         body: Request body.
         headers: Runtime headers.
+        confirm: Confirmation string for dangerous endpoints with safeguard.
         **kwargs: Keyword parameters.
 
     Returns:
@@ -835,7 +882,7 @@ def call(
         >>> response = call("httpbin.get_ip")  # doctest: +SKIP
     """
     client = RapiClient()
-    return client.call(endpoint_ref, *args, body=body, headers=headers, **kwargs)
+    return client.call(endpoint_ref, *args, body=body, headers=headers, confirm=confirm, **kwargs)
 
 
 async def call_async(
@@ -843,6 +890,7 @@ async def call_async(
     *args: Any,
     body: Any = None,
     headers: Mapping[str, str] | None = None,
+    confirm: str | None = None,
     **kwargs: Any,
 ) -> RapiResponse:
     """Convenience function for async API calls.
@@ -854,6 +902,7 @@ async def call_async(
         *args: Positional path parameters.
         body: Request body.
         headers: Runtime headers.
+        confirm: Confirmation string for dangerous endpoints with safeguard.
         **kwargs: Keyword parameters.
 
     Returns:
@@ -864,7 +913,7 @@ async def call_async(
         >>> response = await call_async("httpbin.get_ip")  # doctest: +SKIP
     """
     client = RapiClient()
-    return await client.call_async(endpoint_ref, *args, body=body, headers=headers, **kwargs)
+    return await client.call_async(endpoint_ref, *args, body=body, headers=headers, confirm=confirm, **kwargs)
 
 
 __all__ = [

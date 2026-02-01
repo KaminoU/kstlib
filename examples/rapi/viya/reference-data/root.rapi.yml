@@ -1,0 +1,203 @@
+# SAS Viya Reference Data API - Root section
+# https://developer.sas.com/rest-apis/referenceData
+#
+# Entry point for the Reference Data API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: reference-data
+
+include:
+  - "./global-variables.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /referenceData/
+    method: GET
+    description: Returns top-level resource links.
+
+  # ============================================================
+  # Domains Collection
+  # ============================================================
+  domains-list:
+    path: /referenceData/domains
+    method: GET
+    description: Lists all domains or value lists.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  domains-create:
+    path: /referenceData/domains
+    method: POST
+    description: Creates new domain or value list.
+    body:
+      name*: null
+      description*: null
+      domainType*: lookup
+
+  domains-search:
+    path: /referenceData/domains
+    method: GET
+    description: Searches domains.
+    query:
+      q: null
+
+  # ============================================================
+  # Single Domain
+  # ============================================================
+  domains-get:
+    path: /referenceData/domains/{domainId}
+    method: GET
+    description: Returns specific domain details.
+
+  domains-update:
+    path: /referenceData/domains/{domainId}
+    method: PUT
+    description: Modifies domain information.
+    body:
+      description: null
+
+  domains-delete:
+    path: /referenceData/domains/{domainId}
+    method: DELETE
+    description: Removes domain.
+    safeguard: DELETE DOMAIN {domainId}
+
+  domains-search-within:
+    path: /referenceData/domains/{domainId}
+    method: GET
+    description: Searches within domain.
+    query:
+      q: null
+
+  domains-dependencies:
+    path: /referenceData/domains/{domainId}/dependencies
+    method: GET
+    description: Returns domain dependencies.
+
+  # ============================================================
+  # Domain Contents
+  # ============================================================
+  contents-list:
+    path: /referenceData/domains/{domainId}/contents
+    method: GET
+    description: Lists domain content versions.
+
+  contents-create:
+    path: /referenceData/domains/{domainId}/contents
+    method: POST
+    description: Creates new content version.
+    body:
+      label: null
+      status*: developing
+      majorNumber: null
+      minorNumber: null
+
+  contents-create-full:
+    path: /referenceData/domains/{domainId}/contents
+    method: POST
+    description: Creates content with entries.
+    headers:
+      Content-Type: application/vnd.sas.data.value.list.content.full+json
+    body:
+      label: null
+      status*: developing
+      majorNumber: null
+      minorNumber: null
+      keyLabel: null
+      valueLabel: null
+      entries:
+        - key: null
+          value: null
+
+  contents-get:
+    path: /referenceData/domains/{domainId}/contents/{contentId}
+    method: GET
+    description: Returns content details.
+
+  contents-update:
+    path: /referenceData/domains/{domainId}/contents/{contentId}
+    method: PUT
+    description: Updates content metadata.
+    body:
+      label: null
+      status: null
+
+  contents-delete:
+    path: /referenceData/domains/{domainId}/contents/{contentId}
+    method: DELETE
+    description: Removes content.
+    safeguard: DELETE CONTENT {contentId}
+
+  # ============================================================
+  # Content Entries
+  # ============================================================
+  entries-list:
+    path: /referenceData/domains/{domainId}/contents/{contentId}/entries
+    method: GET
+    description: Returns entries.
+
+  entries-create:
+    path: /referenceData/domains/{domainId}/contents/{contentId}/entries
+    method: POST
+    description: Adds or replaces entries.
+    headers:
+      Content-Type: application/vnd.sas.collection+json
+    body:
+      items:
+        - key: null
+          value: null
+
+  entries-patch:
+    path: /referenceData/domains/{domainId}/contents/{contentId}/entries
+    method: PATCH
+    description: Modifies entries.
+    headers:
+      Content-Type: application/vnd.sas.collection+json
+    body:
+      items:
+        - key: null
+          value: null
+
+  entries-delete:
+    path: /referenceData/domains/{domainId}/contents/{contentId}/entries
+    method: DELETE
+    description: Deletes entries.
+    safeguard: DELETE ENTRIES
+
+  # ============================================================
+  # Current Contents
+  # ============================================================
+  current-contents-list:
+    path: /referenceData/domains/{domainId}/currentContents
+    method: GET
+    description: Lists production versions.
+
+  current-contents-copy:
+    path: /referenceData/domains/{domainId}/currentContents
+    method: PATCH
+    description: Copies content to environment.
+    body:
+      targetEnvironment: null
+
+  # ============================================================
+  # Domain Entries (Bulk)
+  # ============================================================
+  domain-entries-export:
+    path: /referenceData/domainEntries
+    method: GET
+    description: Exports entries across all domains as CSV.
+    headers:
+      Accept: text/csv
+
+  domain-entries-import:
+    path: /referenceData/domainEntries
+    method: POST
+    description: Bulk imports entries for multiple domains.
+    headers:
+      Content-Type: text/csv
+    body: null

@@ -1,0 +1,47 @@
+# SAS Viya Catalog API - Search Indices section
+# https://developer.sas.com/rest-apis/catalog
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: catalog-indices
+
+endpoints:
+  # ============================================================
+  # Search Indices Collection
+  # ============================================================
+  indices-list:
+    path: /catalog/search/indices
+    method: GET
+    description: Returns a list of search index definitions.
+
+  indices-rebuild-all:
+    path: /catalog/search/indices
+    method: POST
+    description: Deletes and rebuilds all indices.
+    body: null
+
+  # ============================================================
+  # Single Search Index
+  # ============================================================
+  indices-check:
+    path: /catalog/search/indices/{indexId}
+    method: HEAD
+    description: Checks search index exists.
+
+  indices-get:
+    path: /catalog/search/indices/{indexId}
+    method: GET
+    description: Returns a search index definition.
+
+  indices-delete:
+    path: /catalog/search/indices/{indexId}
+    method: DELETE
+    description: Deletes a search index.
+    safeguard: DELETE SEARCH INDEX {indexId}
+
+  indices-rebuild:
+    path: /catalog/search/indices/{indexId}
+    method: POST
+    description: Rebuilds a specific search index.
+    body: null

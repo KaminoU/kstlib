@@ -1,0 +1,109 @@
+# SAS Viya Folders API - Members section
+# https://developer.sas.com/rest-apis/folders
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: folders-members
+
+endpoints:
+  # ============================================================
+  # Members Collection
+  # ============================================================
+  members-list:
+    path: /folders/folders/{folderId}/members
+    method: GET
+    description: Lists folder members with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  members-list-check:
+    path: /folders/folders/{folderId}/members
+    method: HEAD
+    description: Returns member list headers.
+
+  members-add:
+    path: /folders/folders/{folderId}/members
+    method: POST
+    description: Adds member to folder.
+    body:
+      uri*: null
+      type*: child
+      name*: null
+      description: null
+      contentType: null
+      typeDefName: null
+      iconUri: null
+      orderNum: null
+
+  # ============================================================
+  # Single Member
+  # ============================================================
+  members-get:
+    path: /folders/folders/{folderId}/members/{memberId}
+    method: GET
+    description: Returns specific member.
+
+  members-check:
+    path: /folders/folders/{folderId}/members/{memberId}
+    method: HEAD
+    description: Returns member headers.
+
+  members-delete:
+    path: /folders/folders/{folderId}/members/{memberId}
+    method: DELETE
+    description: Removes member from folder.
+    safeguard: DELETE MEMBER {memberId}
+
+  members-update:
+    path: /folders/folders/{folderId}/members/{memberId}
+    method: PUT
+    description: Replaces folder member.
+    body:
+      uri*: null
+      type*: child
+      name*: null
+      parentFolderUri: null
+      description: null
+      contentType: null
+      typeDefName: null
+      iconUri: null
+      orderNum: null
+
+  members-patch:
+    path: /folders/folders/{folderId}/members/{memberId}
+    method: PATCH
+    description: Partially updates member.
+    body:
+      name: null
+      parentFolderUri: null
+      description: null
+      contentType: null
+      typeDefName: null
+      iconUri: null
+      orderNum: null
+
+  # ============================================================
+  # History
+  # ============================================================
+  members-history-update:
+    path: /folders/folders/{folderId}/histories
+    method: POST
+    description: Updates history member modification date.
+    body:
+      uri*: null
+
+  # ============================================================
+  # Validations
+  # ============================================================
+  members-validate-name:
+    path: /folders/commons/validations/folders/{folderId}/members/{memberId}/name
+    method: PUT
+    description: Validates member name uniqueness.
+    query:
+      value*: null
+      type*: null
+      typeDefName: null
+    body: null

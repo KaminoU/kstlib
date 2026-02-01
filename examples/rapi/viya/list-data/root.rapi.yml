@@ -1,0 +1,118 @@
+# SAS Viya List Data API - Root section
+# https://developer.sas.com/rest-apis/listData
+#
+# Entry point for the List Data API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: list-data
+
+include:
+  - "./contents.rapi.yml"
+  - "./revisions.rapi.yml"
+  - "./jobs.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /listData/
+    method: GET
+    description: Returns top-level links for the API.
+
+  # ============================================================
+  # Lists Collection
+  # ============================================================
+  lists-list:
+    path: /listData/lists
+    method: GET
+    description: Returns a collection of lists.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  lists-create:
+    path: /listData/lists
+    method: POST
+    description: Creates a new list definition.
+    body:
+      name*: null
+      description: null
+      label: null
+      state: developing
+      columns: null
+
+  lists-by-folder:
+    path: /listData/folders/{folderId}/lists
+    method: GET
+    description: Returns lists from a folder.
+
+  # ============================================================
+  # Single List
+  # ============================================================
+  lists-check:
+    path: /listData/lists/{listId}
+    method: HEAD
+    description: Checks list existence.
+
+  lists-get:
+    path: /listData/lists/{listId}
+    method: GET
+    description: Returns a specific list.
+
+  lists-update:
+    path: /listData/lists/{listId}
+    method: PUT
+    description: Updates list properties.
+    body:
+      name*: null
+      description: null
+      label: null
+      columns: null
+
+  lists-delete:
+    path: /listData/lists/{listId}
+    method: DELETE
+    description: Removes a list.
+    safeguard: DELETE LIST {listId}
+
+  lists-privileged-delete:
+    path: /listData/lists/{listId}/privilegedDelete
+    method: DELETE
+    description: Removes list with privileged access.
+    safeguard: PRIVILEGED DELETE LIST {listId}
+
+  lists-privileged-edit:
+    path: /listData/lists/{listId}/privilegedEdit
+    method: PUT
+    description: Updates properties with privileged access.
+    body:
+      name*: null
+      description: null
+      label: null
+      columns: null
+
+  # ============================================================
+  # List State
+  # ============================================================
+  lists-state-get:
+    path: /listData/lists/{listId}/state
+    method: GET
+    description: Returns list state (deployed/developing).
+
+  lists-state-update:
+    path: /listData/lists/{listId}/state
+    method: PUT
+    description: Updates list state.
+    headers:
+      Content-Type: text/plain
+    body: null
+
+  # ============================================================
+  # List Consumers
+  # ============================================================
+  lists-consumers:
+    path: /listData/lists/{listId}/consumers
+    method: GET
+    description: Returns list consumers.

@@ -1,0 +1,86 @@
+# SAS Viya Decisions API - Node Types section
+# https://developer.sas.com/rest-apis/decisions
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: decisions-node-types
+
+endpoints:
+  # ============================================================
+  # Decision Node Types Collection
+  # ============================================================
+  node-types-list:
+    path: /decisions/decisionNodeTypes
+    method: GET
+    description: Lists all node types.
+    query:
+      start: 0
+      limit: 10
+
+  node-types-create:
+    path: /decisions/decisionNodeTypes
+    method: POST
+    description: Creates node type.
+    body:
+      name*: null
+      description: null
+      hasProperties: false
+      hasInputs: false
+      hasOutputs: false
+      type: null
+
+  # ============================================================
+  # Single Node Type
+  # ============================================================
+  node-types-get:
+    path: /decisions/decisionNodeTypes/{nodeTypeId}
+    method: GET
+    description: Returns node type.
+
+  node-types-update:
+    path: /decisions/decisionNodeTypes/{nodeTypeId}
+    method: PUT
+    description: Updates node type.
+    body:
+      name*: null
+      description: null
+      hasProperties: false
+      hasInputs: false
+      hasOutputs: false
+      type: null
+
+  node-types-delete:
+    path: /decisions/decisionNodeTypes/{nodeTypeId}
+    method: DELETE
+    description: Deletes node type.
+    safeguard: DELETE NODE TYPE {nodeTypeId}
+
+  node-types-step-code:
+    path: /decisions/decisionNodeTypes/{nodeTypeId}/decisionStepCode
+    method: GET
+    description: Returns step code for static types.
+
+  # ============================================================
+  # Node Type Content
+  # ============================================================
+  node-types-content-create:
+    path: /decisions/decisionNodeTypes/{nodeTypeId}/content
+    method: POST
+    description: Adds node type content.
+    body:
+      contentType*: null
+      content*: null
+
+  node-types-content-get:
+    path: /decisions/decisionNodeTypes/{nodeTypeId}/content
+    method: GET
+    description: Returns node type content.
+
+  node-types-content-update:
+    path: /decisions/decisionNodeTypes/{nodeTypeId}/content
+    method: PUT
+    description: Updates node type content.
+    body:
+      contentType*: null
+      content*: null

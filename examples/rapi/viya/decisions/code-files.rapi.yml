@@ -1,0 +1,129 @@
+# SAS Viya Decisions API - Code Files section
+# https://developer.sas.com/rest-apis/decisions
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: decisions-code-files
+
+endpoints:
+  # ============================================================
+  # Code Files Collection
+  # ============================================================
+  code-files-list:
+    path: /decisions/codeFiles
+    method: GET
+    description: Lists code files.
+    query:
+      start: 0
+      limit: 10
+
+  code-files-create:
+    path: /decisions/codeFiles
+    method: POST
+    description: Creates code file.
+    body:
+      name*: null
+      description: null
+      type*: null
+      code*: null
+      signature:
+        - name: null
+          direction: null
+          dataType: null
+
+  code-files-terms:
+    path: /decisions/codeFileTerms
+    method: GET
+    description: Finds terms across code files.
+    query:
+      term: null
+
+  # ============================================================
+  # Single Code File
+  # ============================================================
+  code-files-get:
+    path: /decisions/codeFiles/{codeFileId}
+    method: GET
+    description: Returns code file.
+
+  code-files-update:
+    path: /decisions/codeFiles/{codeFileId}
+    method: PUT
+    description: Updates code file.
+    body:
+      name*: null
+      description: null
+      type*: null
+      code*: null
+      signature:
+        - name: null
+          direction: null
+          dataType: null
+
+  code-files-delete:
+    path: /decisions/codeFiles/{codeFileId}
+    method: DELETE
+    description: Deletes code file.
+    safeguard: DELETE CODE FILE {codeFileId}
+
+  code-files-mapped-code:
+    path: /decisions/codeFiles/{codeFileId}/mappedCode
+    method: POST
+    description: Generates mapped code.
+    body:
+      scoreDefinitionId: null
+      mappingUri: null
+
+  code-files-step-code:
+    path: /decisions/codeFiles/{codeFileId}/decisionStepCode
+    method: GET
+    description: Returns decision step code.
+
+  code-files-dependencies:
+    path: /decisions/codeFiles/{codeFileId}/dependencies
+    method: GET
+    description: Lists dependent objects.
+
+  # ============================================================
+  # Code File Revisions
+  # ============================================================
+  code-files-revisions-list:
+    path: /decisions/codeFiles/{codeFileId}/revisions
+    method: GET
+    description: Lists code file revisions.
+    query:
+      start: 0
+      limit: 10
+
+  code-files-revisions-create:
+    path: /decisions/codeFiles/{codeFileId}/revisions
+    method: POST
+    description: Creates revision.
+    body:
+      name: null
+      description: null
+
+  code-files-revisions-get:
+    path: /decisions/codeFiles/{codeFileId}/revisions/{revisionId}
+    method: GET
+    description: Returns revision.
+
+  code-files-revisions-delete:
+    path: /decisions/codeFiles/{codeFileId}/revisions/{revisionId}
+    method: DELETE
+    description: Deletes revision.
+    safeguard: DELETE CODE FILE REVISION {revisionId}
+
+  code-files-revisions-mapped-code:
+    path: /decisions/codeFiles/{codeFileId}/revisions/{revisionId}/mappedCode
+    method: POST
+    description: Generates mapped code.
+    body:
+      scoreDefinitionId: null
+      mappingUri: null
+
+  code-files-revisions-step-code:
+    path: /decisions/codeFiles/{codeFileId}/revisions/{revisionId}/decisionStepCode
+    method: GET
+    description: Returns step code.

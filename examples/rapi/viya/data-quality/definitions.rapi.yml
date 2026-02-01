@@ -1,0 +1,44 @@
+# SAS Viya Data Quality API - Definitions and Tokens section
+# https://developer.sas.com/rest-apis/dataQuality
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-quality-definitions
+
+endpoints:
+  # ============================================================
+  # Definitions
+  # ============================================================
+  definitions-list:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}/definitions
+    method: GET
+    description: Lists data quality definitions.
+
+  definitions-get:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}/definitions/{definitionName}
+    method: GET
+    description: Returns definition details.
+
+  definitions-check:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}/definitions/{definitionName}
+    method: HEAD
+    description: Verifies definition existence.
+
+  # ============================================================
+  # Tokens
+  # ============================================================
+  tokens-list:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}/definitions/{definitionName}/tokens
+    method: GET
+    description: Lists tokens.
+
+  tokens-get:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}/definitions/{definitionName}/tokens/{tokenName}
+    method: GET
+    description: Returns token information.
+
+  tokens-check:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}/definitions/{definitionName}/tokens/{tokenName}
+    method: HEAD
+    description: Verifies token existence.

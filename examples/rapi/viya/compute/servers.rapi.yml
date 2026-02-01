@@ -1,0 +1,63 @@
+# SAS Viya Compute API - Servers section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-servers
+
+endpoints:
+  # ============================================================
+  # Servers Collection
+  # ============================================================
+  servers-check:
+    path: /compute/servers
+    method: HEAD
+    description: Checks endpoint availability.
+
+  servers-list:
+    path: /compute/servers
+    method: GET
+    description: Returns active servers.
+    query:
+      start: 0
+      limit: 10
+
+  # ============================================================
+  # Single Server
+  # ============================================================
+  servers-get-check:
+    path: /compute/servers/{serverId}
+    method: HEAD
+    description: Verifies that a server exists.
+
+  servers-get:
+    path: /compute/servers/{serverId}
+    method: GET
+    description: Returns links for the active server.
+
+  servers-stop:
+    path: /compute/servers/{serverId}
+    method: DELETE
+    description: Stops the server.
+    safeguard: STOP SERVER {serverId}
+
+  servers-state-check:
+    path: /compute/servers/{serverId}/state
+    method: HEAD
+    description: Checks server status endpoint.
+
+  servers-state:
+    path: /compute/servers/{serverId}/state
+    method: GET
+    description: Returns server status.
+
+  servers-sessions-check:
+    path: /compute/servers/{serverId}/sessions
+    method: HEAD
+    description: Checks sessions endpoint for a server.
+
+  servers-sessions:
+    path: /compute/servers/{serverId}/sessions
+    method: GET
+    description: Returns active sessions for server.

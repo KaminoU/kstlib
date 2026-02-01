@@ -1,0 +1,235 @@
+# SAS Viya Compute API - Data Access section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-data
+
+endpoints:
+  # ============================================================
+  # Libraries
+  # ============================================================
+  data-check:
+    path: /compute/sessions/{sessionId}/data
+    method: HEAD
+    description: Checks access to data for a session.
+
+  data-libraries:
+    path: /compute/sessions/{sessionId}/data
+    method: GET
+    description: Returns libraries in a session.
+    query:
+      start: 0
+      limit: 10
+
+  data-libref-assign:
+    path: /compute/sessions/{sessionId}/data
+    method: POST
+    description: Assigns a libref.
+    body:
+      libref*: null
+      engine: null
+      engineOptions: null
+      path: null
+
+  # ============================================================
+  # Single Library
+  # ============================================================
+  data-libref-check:
+    path: /compute/sessions/{sessionId}/data/{libref}
+    method: HEAD
+    description: Verifies that a libref exists.
+
+  data-libref-get:
+    path: /compute/sessions/{sessionId}/data/{libref}
+    method: GET
+    description: Returns libref information.
+
+  data-libref-deassign:
+    path: /compute/sessions/{sessionId}/data/{libref}
+    method: DELETE
+    description: Deassigns libref.
+    safeguard: DEASSIGN LIBREF {libref}
+
+  data-libref-summary:
+    path: /compute/sessions/{sessionId}/data/{libref}
+    method: GET
+    description: Returns libref summary.
+    query:
+      format: summary
+
+  data-libref-tables:
+    path: /compute/sessions/{sessionId}/data/{libref}
+    method: GET
+    description: Returns data sets in a libref.
+    query:
+      format: tables
+
+  # ============================================================
+  # Tables
+  # ============================================================
+  data-table-check:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}
+    method: HEAD
+    description: Checks for a data set in a libref.
+
+  data-table-get:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}
+    method: GET
+    description: Returns a data set.
+
+  data-table-update:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}
+    method: PUT
+    description: Updates table information.
+    body:
+      label: null
+
+  data-table-delete:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}
+    method: DELETE
+    description: Deletes a table or view.
+    safeguard: DELETE TABLE {libref}/{tableName}
+
+  data-table-summary:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}
+    method: GET
+    description: Returns a summary of a data set.
+    query:
+      format: summary
+
+  data-view-create:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/views
+    method: POST
+    description: Creates a data set view.
+    body:
+      name*: null
+      columns: null
+      where: null
+
+  # ============================================================
+  # Columns
+  # ============================================================
+  data-columns-check:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/columns
+    method: HEAD
+    description: Checks for available columns in a table.
+
+  data-columns-list:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/columns
+    method: GET
+    description: Returns column information.
+
+  data-columns-retrieve:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/columns
+    method: POST
+    description: Retrieves column information.
+    body:
+      columns: null
+
+  data-column-check:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/columns/{columnName}
+    method: HEAD
+    description: Checks for a column in a table.
+
+  data-column-get:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/columns/{columnName}
+    method: GET
+    description: Returns a column.
+
+  data-column-update:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/columns/{columnName}
+    method: PUT
+    description: Updates column information.
+    body:
+      label: null
+      format: null
+      informat: null
+
+  # ============================================================
+  # Rows
+  # ============================================================
+  data-rows-check:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rows
+    method: HEAD
+    description: Checks row availability.
+
+  data-rows-list:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rows
+    method: GET
+    description: Returns row information.
+    query:
+      start: 0
+      limit: 100
+
+  data-rows-retrieve:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rows
+    method: POST
+    description: Obtains rows from a data set.
+    body:
+      columns: null
+      where: null
+      orderBy: null
+      start: 0
+      limit: 100
+
+  data-rows-csv-check:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rows
+    method: HEAD
+    description: Gets headers for rows as CSV.
+    headers:
+      Accept: text/csv
+
+  data-rows-csv:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rows
+    method: GET
+    description: Returns row information as CSV.
+    headers:
+      Accept: text/csv
+
+  # ============================================================
+  # Row Set
+  # ============================================================
+  data-rowset-check:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rowSet
+    method: HEAD
+    description: Checks row set availability.
+
+  data-rowset-get:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rowSet
+    method: GET
+    description: Returns a row set from a data set.
+
+  data-rowset-retrieve:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/rowSet
+    method: POST
+    description: Returns a row set from a data set.
+    body:
+      columns: null
+      where: null
+      orderBy: null
+      start: 0
+      limit: 100
+
+  # ============================================================
+  # Prompt Content
+  # ============================================================
+  data-prompt-check:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/promptContent
+    method: HEAD
+    description: Checks prompt content availability.
+
+  data-prompt-get:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/promptContent
+    method: GET
+    description: Returns prompt content from a data set.
+
+  data-prompt-retrieve:
+    path: /compute/sessions/{sessionId}/data/{libref}/{tableName}/promptContent
+    method: POST
+    description: Returns prompt content from a data set.
+    body:
+      columns: null
+      where: null
+      orderBy: null

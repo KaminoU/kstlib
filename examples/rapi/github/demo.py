@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from kstlib.rapi import RapiClient
+from kstlib.rapi.exceptions import ConfirmationRequiredError
 
 
 def safe_print(text: str) -> None:
@@ -100,6 +101,20 @@ def main() -> None:
             safe_print(f"    - {sha}: {msg}")
     else:
         safe_print(f"    Error: {response.status_code}")
+
+    # Demonstrate safeguard feature (dangerous endpoint protection)
+    safe_print("\n[7] Safeguard demo (dangerous endpoint protection)...")
+    safe_print("    Trying to delete a repo WITHOUT confirmation...")
+    try:
+        # This will fail because repos-delete has a safeguard
+        client.call("github.repos-delete", owner="test", repo="fake-repo")
+    except ConfirmationRequiredError as e:
+        safe_print(f"    Blocked! {e.message}")
+        safe_print(f'    Expected confirmation: "{e.expected}"')
+
+    safe_print("\n    To actually delete, you would need:")
+    safe_print('    client.call("github.repos-delete", owner="X", repo="Y",')
+    safe_print('                confirm="DELETE REPO X/Y")')
 
     safe_print("\n" + "=" * 60)
     safe_print("Demo complete!")

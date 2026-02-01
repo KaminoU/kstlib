@@ -1,0 +1,66 @@
+# SAS Viya Compute API - Formats and Informats section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-formats
+
+endpoints:
+  # ============================================================
+  # Formats Collection
+  # ============================================================
+  formats-check:
+    path: /compute/sessions/{sessionId}/formats
+    method: HEAD
+    description: Checks endpoint availability.
+
+  formats-list:
+    path: /compute/sessions/{sessionId}/formats
+    method: GET
+    description: Lists formats in a session.
+    query:
+      start: 0
+      limit: 10
+
+  # ============================================================
+  # Single Format
+  # ============================================================
+  formats-get-check:
+    path: /compute/sessions/{sessionId}/formats/{formatName}
+    method: HEAD
+    description: Checks for a format.
+
+  formats-get:
+    path: /compute/sessions/{sessionId}/formats/{formatName}
+    method: GET
+    description: Returns format information.
+
+  # ============================================================
+  # Informats Collection
+  # ============================================================
+  informats-check:
+    path: /compute/sessions/{sessionId}/informats
+    method: HEAD
+    description: Checks endpoint availability.
+
+  informats-list:
+    path: /compute/sessions/{sessionId}/informats
+    method: GET
+    description: Lists informats in a session.
+    query:
+      start: 0
+      limit: 10
+
+  # ============================================================
+  # Single Informat
+  # ============================================================
+  informats-get-check:
+    path: /compute/sessions/{sessionId}/informats/{informatName}
+    method: HEAD
+    description: Checks for an informat.
+
+  informats-get:
+    path: /compute/sessions/{sessionId}/informats/{informatName}
+    method: GET
+    description: Returns informat information.

@@ -1,0 +1,116 @@
+# SAS Viya Decisions API - Revisions section
+# https://developer.sas.com/rest-apis/decisions
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: decisions-revisions
+
+endpoints:
+  # ============================================================
+  # Decision Revisions
+  # ============================================================
+  revisions-list:
+    path: /decisions/flows/{decisionId}/revisions
+    method: GET
+    description: Lists all revisions.
+    query:
+      start: 0
+      limit: 10
+
+  revisions-create:
+    path: /decisions/flows/{decisionId}/revisions
+    method: POST
+    description: Creates new revision.
+    body:
+      name: null
+      description: null
+
+  revisions-get:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}
+    method: GET
+    description: Returns revision content.
+
+  revisions-delete:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}
+    method: DELETE
+    description: Deletes locked revision.
+    safeguard: DELETE REVISION {revisionId}
+
+  # ============================================================
+  # Revision Code
+  # ============================================================
+  revisions-code:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/code
+    method: GET
+    description: Returns revision code.
+
+  revisions-mapped-code:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/mappedCode
+    method: POST
+    description: Generates revision mapped code.
+    body:
+      scoreDefinitionId: null
+      mappingUri: null
+
+  revisions-analysis-code:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/analysisCode
+    method: POST
+    description: Returns revision analysis code.
+    body:
+      scoreDefinitionId: null
+
+  revisions-step-code:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/decisionStepCode
+    method: GET
+    description: Returns revision step code.
+
+  # ============================================================
+  # Revision Metadata
+  # ============================================================
+  revisions-artifacts:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/externalArtifacts
+    method: GET
+    description: Lists revision artifacts.
+
+  revisions-node-objects:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/nodeObjects
+    method: GET
+    description: Lists node reference objects.
+
+  revisions-checkouts:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/checkOuts
+    method: GET
+    description: Lists all checkouts.
+
+  revisions-errors:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/errors
+    method: GET
+    description: Returns revision validation errors.
+
+  revisions-error-markers:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/errorMarkers
+    method: GET
+    description: Returns revision error markers.
+
+  revisions-tagged-components:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/decisionComponentsWithTags
+    method: GET
+    description: Returns tagged components.
+
+  # ============================================================
+  # Revision Workflows
+  # ============================================================
+  revisions-workflow-start:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/workflows
+    method: PUT
+    description: Starts workflow.
+    body:
+      definitionId*: null
+      name: null
+
+  revisions-workflow-terminate:
+    path: /decisions/flows/{decisionId}/revisions/{revisionId}/workflows
+    method: DELETE
+    description: Terminates workflow.
+    safeguard: TERMINATE WORKFLOW {revisionId}

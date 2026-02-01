@@ -59,6 +59,28 @@ def _mock_config_manager() -> RapiConfigManager:
     return RapiConfigManager(config)
 
 
+def _mock_config_manager_with_descriptions() -> RapiConfigManager:
+    """Create a mock config manager with long descriptions for testing."""
+    config = {
+        "api": {
+            "testapi": {
+                "base_url": "https://api.test.com",
+                "endpoints": {
+                    "short_desc": {
+                        "path": "/short",
+                        "description": "Short description.",
+                    },
+                    "long_desc": {
+                        "path": "/long",
+                        "description": "This is a very long description that exceeds forty three characters and should be truncated.",
+                    },
+                },
+            },
+        }
+    }
+    return RapiConfigManager(config)
+
+
 def _mock_config_manager_with_query() -> RapiConfigManager:
     """Create a mock config manager with endpoints that have query params."""
     config = {
@@ -152,7 +174,7 @@ class TestRapiList:
             assert "not found" in result.stdout
 
     def test_list_verbose(self) -> None:
-        """Verbose output shows method and query params."""
+        """Verbose output shows method, query, body, and description columns."""
         with patch.object(list_module, "load_rapi_config") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
@@ -163,6 +185,8 @@ class TestRapiList:
             assert "GET" in result.stdout
             assert "POST" in result.stdout
             assert "Query" in result.stdout
+            assert "Body" in result.stdout
+            assert "Description" in result.stdout
 
     def test_list_empty_config(self) -> None:
         """Empty config shows message."""
@@ -173,6 +197,89 @@ class TestRapiList:
 
             assert result.exit_code == 0
             assert "No APIs configured" in result.stdout
+
+    def test_list_filter_single_term(self) -> None:
+        """Filter by single keyword matches endpoints."""
+        with patch.object(list_module, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager()
+
+            result = runner.invoke(app, ["rapi", "list", "--filter", "github"])
+
+            assert result.exit_code == 0
+            assert "github.user" in result.stdout
+            assert "httpbin" not in result.stdout
+            assert "1 matching" in result.stdout
+
+    def test_list_filter_multiple_terms(self) -> None:
+        """Filter with multiple terms uses AND logic."""
+        with patch.object(list_module, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager()
+
+            result = runner.invoke(app, ["rapi", "list", "--filter", "httpbin GET"])
+
+            assert result.exit_code == 0
+            assert "httpbin.get_ip" in result.stdout
+            assert "httpbin.delay" in result.stdout
+            assert "httpbin.post_data" not in result.stdout  # POST, not GET
+
+    def test_list_filter_no_match(self) -> None:
+        """Filter with no matches shows message."""
+        with patch.object(list_module, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager()
+
+            result = runner.invoke(app, ["rapi", "list", "--filter", "nonexistent"])
+
+            assert result.exit_code == 0
+            assert "No endpoints matching" in result.stdout
+
+    def test_list_filter_combined_with_api(self) -> None:
+        """Filter can be combined with API argument."""
+        with patch.object(list_module, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager()
+
+            result = runner.invoke(app, ["rapi", "list", "httpbin", "--filter", "ip"])
+
+            assert result.exit_code == 0
+            assert "httpbin.get_ip" in result.stdout
+            assert "github" not in result.stdout
+
+    def test_list_verbose_full_description(self) -> None:
+        """Verbose mode shows full description without truncation."""
+        with patch.object(list_module, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager_with_descriptions()
+
+            result = runner.invoke(app, ["rapi", "list", "--verbose"])
+
+            assert result.exit_code == 0
+            # Full description should be displayed (Rich may word-wrap)
+            # Check that "be truncated." appears (end of full description)
+            assert "be truncated." in result.stdout
+            # No "..." truncation marker in long_desc row
+            # (Note: short_desc row won't have "..." either since it's short)
+
+    def test_list_verbose_short_desc_truncates(self) -> None:
+        """Verbose mode with --short-desc truncates long descriptions."""
+        with patch.object(list_module, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager_with_descriptions()
+
+            result = runner.invoke(app, ["rapi", "list", "--verbose", "--short-desc"])
+
+            assert result.exit_code == 0
+            # Long description should be truncated with "..."
+            assert "..." in result.stdout
+            # Full text should NOT appear
+            assert "should be truncated" not in result.stdout
+
+    def test_list_short_desc_without_verbose_ignored(self) -> None:
+        """--short-desc without verbose is ignored (no description column)."""
+        with patch.object(list_module, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager_with_descriptions()
+
+            result = runner.invoke(app, ["rapi", "list", "--short-desc"])
+
+            assert result.exit_code == 0
+            # No description column in non-verbose mode
+            assert "Description" not in result.stdout
 
 
 class TestRapiCall:

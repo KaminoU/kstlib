@@ -1,0 +1,77 @@
+# kstlib configuration for SAS Viya REST APIs
+#
+# This example demonstrates a modular, config-driven approach to
+# interacting with SAS Viya 3.5+ REST APIs using kstlib.rapi.
+#
+# Usage:
+#   cd examples/rapi/viyapi
+#   export VIYA_HOST=your-viya-server.example.com
+#   python -c "from kstlib.rapi import call; print(call('annotations.root'))"
+#
+# =============================================================================
+# CONVENTIONS FOR VIYA API YAML FILES
+# =============================================================================
+#
+# Structure (1 folder per API family):
+#   viyapi/
+#     kstlib.conf.yml              <- This file (defaults + global config)
+#     <api>/                       <- One folder per API (e.g., annotations)
+#       root.rapi.yml              <- Entry point: name=<api>, includes sub-modules
+#       <section>.rapi.yml         <- One file per swagger section
+#
+# Naming rules:
+#   - root.rapi.yml:    name: <api>                (e.g., name: annotations)
+#   - sub-modules:      name: <api>-<section>      (e.g., name: annotations-members)
+#   - endpoints:        <verb>                     (main section: list, create, get)
+#                       <section>-<verb>           (other sections: members-list, root-check)
+#
+# See CLAUDE.md "RAPI Conventions (SAS Viya)" for full documentation.
+#
+# Inheritance (sub-modules inherit from defaults, do NOT repeat):
+#   - base_url      <- inherited
+#   - credentials   <- inherited
+#   - auth          <- inherited
+#   - headers       <- inherited (can override specific headers in root.rapi.yml)
+#
+# Safeguard:
+#   - Global: required_methods: [DELETE] (only DELETE requires confirmation)
+#   - Inline safeguard: ONLY on DELETE endpoints, NEVER on PUT
+#
+# Body templates (POST/PUT):
+#   - Document all fields with null as default
+#   - Batch endpoints: show ONE example item in items array
+#
+# =============================================================================
+
+rapi:
+  # Defaults inherited by all included *.rapi.yml files
+  # Individual files can override any of these values
+  defaults:
+    base_url: https://${VIYA_HOST:-your-viya-server.example.com}
+    credentials:
+      type: file
+      path: ~/.sas/credentials.json
+      token_path: ".Default['access-token']"
+    auth: bearer
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+
+  # Include only root.rapi.yml from each API directory
+  # Each root.rapi.yml includes its sub-modules (annotations, members, etc.)
+  include:
+    - "./*/root.rapi.yml"
+    # This pattern loads:
+    # - ./annotations/root.rapi.yml  (includes annotations.rapi.yml, members.rapi.yml)
+    # - ./identities/root.rapi.yml   (future)
+    # - ./files/root.rapi.yml        (future)
+    # - etc.
+
+  # Safeguard: only DELETE requires confirmation (PUT is common in Viya)
+  safeguard:
+    required_methods:
+      - DELETE
+
+# SSL configuration for corporate CA
+ssl:
+  ca_bundle: /opt/sas/viya/config/etc/SASSecurityCertificateFramework/cacerts/trustedcerts.pem

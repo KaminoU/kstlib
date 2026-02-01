@@ -1,0 +1,36 @@
+# SAS Viya Batch API - Root section
+# https://developer.sas.com/rest-apis/batch
+#
+# Entry point for the Batch API.
+# Includes sub-modules: contexts, filesets, jobs, servers.
+#
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: batch
+
+# Include sub-modules
+include:
+  - "./contexts.rapi.yml"
+  - "./filesets.rapi.yml"
+  - "./jobs.rapi.yml"
+  - "./servers.rapi.yml"
+
+# Override default Accept header for this API
+headers:
+  Accept: application/vnd.sas.batch+json
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /batch/
+    method: GET
+    description: Returns API resource links.
+    auth: false
+
+  root-check:
+    path: /batch/
+    method: HEAD
+    description: Checks whether the Batch API is available.
+    auth: false

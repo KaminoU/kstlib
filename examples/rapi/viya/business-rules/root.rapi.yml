@@ -1,0 +1,30 @@
+# SAS Viya Business Rules API - Root section
+# https://developer.sas.com/rest-apis/businessRules
+#
+# Entry point for the Business Rules API.
+# Includes sub-modules: rulesets, rules, function-categories, functions.
+#
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: business-rules
+
+# Include sub-modules
+include:
+  - "./rulesets.rapi.yml"
+  - "./rules.rapi.yml"
+  - "./function-categories.rapi.yml"
+  - "./functions.rapi.yml"
+
+# Override default Accept header for this API
+headers:
+  Accept: application/vnd.sas.business.rule+json
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /businessRules/
+    method: GET
+    description: Returns API resource links.
+    auth: false

@@ -1,0 +1,53 @@
+# SAS Viya Model Repository API - Repositories section
+# https://developer.sas.com/rest-apis/modelRepository
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-repository-repositories
+
+endpoints:
+  # ============================================================
+  # Repositories Collection
+  # ============================================================
+  repositories-check:
+    path: /modelRepository/repositories
+    method: HEAD
+    description: Checks repository existence.
+
+  repositories-list:
+    path: /modelRepository/repositories
+    method: GET
+    description: Lists repositories.
+
+  repositories-create:
+    path: /modelRepository/repositories
+    method: POST
+    description: Creates repository.
+    body:
+      name*: null
+      description: null
+      location: null
+
+  # ============================================================
+  # Single Repository
+  # ============================================================
+  repositories-get:
+    path: /modelRepository/repositories/{repositoryId}
+    method: GET
+    description: Returns repository.
+
+  repositories-update:
+    path: /modelRepository/repositories/{repositoryId}
+    method: PUT
+    description: Updates repository.
+    body:
+      name*: null
+      description: null
+      location: null
+
+  repositories-delete:
+    path: /modelRepository/repositories/{repositoryId}
+    method: DELETE
+    description: Removes repository.
+    safeguard: DELETE REPOSITORY {repositoryId}

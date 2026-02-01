@@ -1,0 +1,47 @@
+# SAS Viya CAS Management API - Root section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Entry point for the CAS Management API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management
+
+# Include sub-modules
+include:
+  - "./servers.rapi.yml"
+  - "./sessions.rapi.yml"
+  - "./caslibs.rapi.yml"
+  - "./tables.rapi.yml"
+  - "./columns.rapi.yml"
+  - "./nodes.rapi.yml"
+  - "./loggers.rapi.yml"
+  - "./policies.rapi.yml"
+  - "./sources.rapi.yml"
+  - "./provider.rapi.yml"
+
+headers:
+  Accept: application/vnd.sas.cas.management+json
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /casManagement/
+    method: GET
+    description: Returns API resource links.
+    auth: false
+
+  root-check:
+    path: /casManagement/
+    method: HEAD
+    description: Checks API availability.
+    auth: false
+
+  # ============================================================
+  # Settings
+  # ============================================================
+  settings:
+    path: /casManagement/commons/settings
+    method: GET
+    description: Returns API settings.

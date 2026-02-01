@@ -470,6 +470,55 @@ By default, all endpoints inherit API-level authentication (`auth: true`).
 Set `auth: false` on public endpoints to skip credential resolution and signature generation.
 ```
 
+## Safeguards for Dangerous Endpoints
+
+For destructive operations (DELETE, PUT), kstlib requires explicit confirmation to prevent accidental data loss.
+
+### Configuration
+
+Define a `safeguard` string on dangerous endpoints:
+
+```yaml
+endpoints:
+  delete-user:
+    path: "/users/{user_id}"
+    method: DELETE
+    safeguard: "DELETE USER {user_id}"
+```
+
+By default, DELETE and PUT methods require a safeguard. Configure this in `kstlib.conf.yml`:
+
+```yaml
+rapi:
+  safeguard:
+    required_methods:
+      - DELETE
+      - PUT
+```
+
+### Calling Safeguarded Endpoints
+
+```python
+from kstlib.rapi import RapiClient
+from kstlib.rapi.exceptions import ConfirmationRequiredError
+
+client = RapiClient()
+
+# Without confirmation - raises ConfirmationRequiredError
+try:
+    client.call("admin.delete-user", user_id="123")
+except ConfirmationRequiredError as e:
+    print(f"Required: {e.expected}")  # "DELETE USER 123"
+
+# With correct confirmation - proceeds
+client.call("admin.delete-user", user_id="123", confirm="DELETE USER 123")
+```
+
+```{warning}
+If an endpoint uses a method in `required_methods` but lacks a `safeguard` string,
+`SafeguardMissingError` is raised at config load time (not at runtime).
+```
+
 ### Exchange Examples
 
 **Binance** (SHA256, hex, query string):
@@ -579,6 +628,14 @@ kstlib -vvv rapi binance.balance   # TRACE mode to see signature details
    :show-inheritance:
 
 .. autoexception:: kstlib.rapi.ResponseTooLargeError
+   :members:
+   :show-inheritance:
+
+.. autoexception:: kstlib.rapi.ConfirmationRequiredError
+   :members:
+   :show-inheritance:
+
+.. autoexception:: kstlib.rapi.SafeguardMissingError
    :members:
    :show-inheritance:
 ```

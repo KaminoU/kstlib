@@ -1,0 +1,49 @@
+# SAS Viya Business Rules API - Function Categories section
+# https://developer.sas.com/rest-apis/businessRules
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: business-rules-function-categories
+
+endpoints:
+  # ============================================================
+  # Function Categories Collection
+  # ============================================================
+  function-categories-list:
+    path: /businessRules/functionCategories
+    method: GET
+    description: Returns all function categories.
+    query:
+      start: 0
+      limit: 10
+
+  function-categories-create:
+    path: /businessRules/functionCategories
+    method: POST
+    description: Creates a function category.
+    body:
+      name: null
+      description: null
+
+  # ============================================================
+  # Single Function Category
+  # ============================================================
+  function-categories-get:
+    path: /businessRules/functionCategories/{categoryId}
+    method: GET
+    description: Returns a function category.
+
+  function-categories-update:
+    path: /businessRules/functionCategories/{categoryId}
+    method: PUT
+    description: Updates a function category.
+    body:
+      name: null
+      description: null
+
+  function-categories-delete:
+    path: /businessRules/functionCategories/{categoryId}
+    method: DELETE
+    description: Deletes a function category.
+    safeguard: DELETE CATEGORY {categoryId}

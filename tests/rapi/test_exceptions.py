@@ -1,12 +1,15 @@
 """Tests for kstlib.rapi.exceptions module."""
 
 from kstlib.rapi.exceptions import (
+    ConfirmationRequiredError,
     CredentialError,
     EndpointAmbiguousError,
     EndpointNotFoundError,
+    EnvVarError,
     RapiError,
     RequestError,
     ResponseTooLargeError,
+    SafeguardMissingError,
 )
 
 
@@ -141,3 +144,113 @@ class TestResponseTooLargeError:
         error = ResponseTooLargeError(200, 100)
         assert error.details["response_size"] == 200
         assert error.details["max_size"] == 100
+
+
+class TestConfirmationRequiredError:
+    """Tests for ConfirmationRequiredError exception."""
+
+    def test_missing_confirmation(self) -> None:
+        """Create error when confirmation is missing."""
+        error = ConfirmationRequiredError("admin.delete_user", expected="DELETE USER 123")
+        assert "admin.delete_user" in str(error)
+        assert "requires confirmation" in str(error)
+        assert 'confirm="DELETE USER 123"' in str(error)
+        assert error.endpoint_ref == "admin.delete_user"
+        assert error.expected == "DELETE USER 123"
+        assert error.actual is None
+
+    def test_mismatch_confirmation(self) -> None:
+        """Create error when confirmation does not match."""
+        error = ConfirmationRequiredError(
+            "admin.delete_user",
+            expected="DELETE USER 123",
+            actual="wrong",
+        )
+        assert "admin.delete_user" in str(error)
+        assert "mismatch" in str(error).lower()
+        assert '"DELETE USER 123"' in str(error)
+        assert '"wrong"' in str(error)
+        assert error.expected == "DELETE USER 123"
+        assert error.actual == "wrong"
+
+    def test_inherits_rapi_error(self) -> None:
+        """Verify ConfirmationRequiredError inherits from RapiError."""
+        error = ConfirmationRequiredError("test.ep", expected="CONFIRM")
+        assert isinstance(error, RapiError)
+        assert "endpoint_ref" in error.details
+        assert "expected" in error.details
+        assert "actual" in error.details
+
+    def test_details_populated(self) -> None:
+        """Verify details dict is properly populated."""
+        error = ConfirmationRequiredError("api.endpoint", expected="EXPECTED", actual="ACTUAL")
+        assert error.details["endpoint_ref"] == "api.endpoint"
+        assert error.details["expected"] == "EXPECTED"
+        assert error.details["actual"] == "ACTUAL"
+
+
+class TestSafeguardMissingError:
+    """Tests for SafeguardMissingError exception."""
+
+    def test_basic_creation(self) -> None:
+        """Create SafeguardMissingError with endpoint and method."""
+        error = SafeguardMissingError("admin.delete_user", "DELETE")
+        assert "admin.delete_user" in str(error)
+        assert "DELETE" in str(error)
+        assert "safeguard" in str(error).lower()
+        assert error.endpoint_ref == "admin.delete_user"
+        assert error.method == "DELETE"
+
+    def test_message_suggests_fix(self) -> None:
+        """Error message suggests how to fix the issue."""
+        error = SafeguardMissingError("api.ep", "PUT")
+        msg = str(error)
+        assert 'safeguard: "..."' in msg
+        assert "required_methods" in msg
+
+    def test_inherits_rapi_error(self) -> None:
+        """Verify SafeguardMissingError inherits from RapiError."""
+        error = SafeguardMissingError("test.ep", "DELETE")
+        assert isinstance(error, RapiError)
+        assert "endpoint_ref" in error.details
+        assert "method" in error.details
+
+    def test_details_populated(self) -> None:
+        """Verify details dict is properly populated."""
+        error = SafeguardMissingError("api.endpoint", "DELETE")
+        assert error.details["endpoint_ref"] == "api.endpoint"
+        assert error.details["method"] == "DELETE"
+
+
+class TestEnvVarError:
+    """Tests for EnvVarError exception."""
+
+    def test_basic_creation(self) -> None:
+        """Create EnvVarError with variable name only."""
+        error = EnvVarError("VIYA_HOST")
+        assert "VIYA_HOST" in str(error)
+        assert "not set" in str(error)
+        assert "${VAR:-default}" in str(error)
+        assert error.var_name == "VIYA_HOST"
+        assert error.source is None
+
+    def test_with_source(self) -> None:
+        """Create EnvVarError with source file context."""
+        error = EnvVarError("API_KEY", source="config.rapi.yml")
+        assert "API_KEY" in str(error)
+        assert "config.rapi.yml" in str(error)
+        assert error.var_name == "API_KEY"
+        assert error.source == "config.rapi.yml"
+
+    def test_inherits_rapi_error(self) -> None:
+        """Verify EnvVarError inherits from RapiError."""
+        error = EnvVarError("TEST_VAR")
+        assert isinstance(error, RapiError)
+        assert "var_name" in error.details
+        assert "source" in error.details
+
+    def test_details_populated(self) -> None:
+        """Verify details dict is properly populated."""
+        error = EnvVarError("MY_VAR", source="test.yml")
+        assert error.details["var_name"] == "MY_VAR"
+        assert error.details["source"] == "test.yml"

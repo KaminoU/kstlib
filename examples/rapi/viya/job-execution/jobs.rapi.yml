@@ -1,0 +1,142 @@
+# SAS Viya Job Execution API - Jobs section
+# https://developer.sas.com/rest-apis/jobExecution
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: job-execution-jobs
+
+endpoints:
+  # ============================================================
+  # Jobs Collection
+  # ============================================================
+  jobs-list:
+    path: /jobExecution/jobs
+    method: GET
+    description: Returns job collection with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  jobs-submit:
+    path: /jobExecution/jobs
+    method: POST
+    description: Submits a job request.
+    body:
+      name: null
+      description: null
+      jobDefinitionUri*: null
+      arguments:
+        _contextName: null
+      expiresAfter: null
+
+  jobs-filter:
+    path: /jobExecution/jobs
+    method: POST
+    description: Returns all jobs using filter in request body.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      filter: null
+      sortBy: null
+      start: 0
+      limit: 10
+
+  jobs-update-state-batch:
+    path: /jobExecution/jobs/@selection/state
+    method: PUT
+    description: Updates state for multiple jobs.
+    headers:
+      Content-Type: text/plain
+    body: null
+
+  # ============================================================
+  # Single Job
+  # ============================================================
+  jobs-get:
+    path: /jobExecution/jobs/{jobId}
+    method: GET
+    description: Returns specific job information.
+
+  jobs-check:
+    path: /jobExecution/jobs/{jobId}
+    method: HEAD
+    description: Checks job existence.
+
+  jobs-update:
+    path: /jobExecution/jobs/{jobId}
+    method: PUT
+    description: Updates or replaces existing job.
+    body:
+      name: null
+      description: null
+      state: null
+      results:
+        _contextName: null
+
+  jobs-delete:
+    path: /jobExecution/jobs/{jobId}
+    method: DELETE
+    description: Removes job from system.
+    safeguard: DELETE JOB {jobId}
+
+  # ============================================================
+  # Job State
+  # ============================================================
+  jobs-state-get:
+    path: /jobExecution/jobs/{jobId}/state
+    method: GET
+    description: Returns current job state.
+
+  jobs-state-check:
+    path: /jobExecution/jobs/{jobId}/state
+    method: HEAD
+    description: Checks job state existence.
+
+  jobs-state-update:
+    path: /jobExecution/jobs/{jobId}/state
+    method: PUT
+    description: Updates job state.
+    headers:
+      Content-Type: text/plain
+    body: null
+
+  # ============================================================
+  # Heartbeat
+  # ============================================================
+  jobs-heartbeat-get:
+    path: /jobExecution/jobs/{jobId}/heartbeatTimeStamp
+    method: GET
+    description: Returns last heartbeat timestamp.
+
+  jobs-heartbeat-check:
+    path: /jobExecution/jobs/{jobId}/heartbeatTimeStamp
+    method: HEAD
+    description: Checks heartbeat timestamp existence.
+
+  jobs-heartbeat-update:
+    path: /jobExecution/jobs/{jobId}/heartbeatTimeStamp
+    method: POST
+    description: Updates heartbeat timestamp.
+
+  # ============================================================
+  # Expiration
+  # ============================================================
+  jobs-expiration-get:
+    path: /jobExecution/jobs/{jobId}/expirationTimeStamp
+    method: GET
+    description: Returns expiration timestamp.
+
+  jobs-expiration-check:
+    path: /jobExecution/jobs/{jobId}/expirationTimeStamp
+    method: HEAD
+    description: Checks expiration timestamp existence.
+
+  jobs-expiration-update:
+    path: /jobExecution/jobs/{jobId}/expirationTimeStamp
+    method: PUT
+    description: Sets expiration timestamp.
+    headers:
+      Content-Type: text/plain
+    body: null

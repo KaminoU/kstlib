@@ -1,0 +1,34 @@
+# SAS Viya Annotations API - Root section
+# https://developer.sas.com/rest-apis/annotations
+#
+# Entry point for the Annotations API.
+# Includes sub-modules: annotations, members.
+#
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: annotations
+
+# Include sub-modules
+include:
+  - "./annotations.rapi.yml"
+  - "./members.rapi.yml"
+
+# Override default Accept header for this API
+headers:
+  Accept: application/vnd.sas.annotation+json
+
+endpoints:
+  # ============================================================
+  # Root Resource
+  # ============================================================
+  root:
+    path: /annotations/
+    method: GET
+    description: Returns links to top-level collections.
+    auth: false
+
+  root-check:
+    path: /annotations/
+    method: HEAD
+    description: Checks whether the Annotations API is available.
+    auth: false

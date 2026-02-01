@@ -1,0 +1,411 @@
+# SAS Viya Model Repository API - Models section
+# https://developer.sas.com/rest-apis/modelRepository
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-repository-models
+
+endpoints:
+  # ============================================================
+  # Models Collection
+  # ============================================================
+  models-check:
+    path: /modelRepository/models
+    method: HEAD
+    description: Checks model existence.
+
+  models-list:
+    path: /modelRepository/models
+    method: GET
+    description: Returns all models.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  models-create:
+    path: /modelRepository/models
+    method: POST
+    description: Creates a model.
+    body:
+      name*: null
+      description: null
+      function: null
+      algorithm: null
+      tool: null
+      projectId: null
+      folderId: null
+      scoreCodeType: null
+      trainCodeType: null
+      targetVariable: null
+      inputVariables:
+        - name: null
+          role: input
+          type: null
+      outputVariables:
+        - name: null
+          role: output
+          type: null
+
+  models-import-project:
+    path: /modelRepository/models
+    method: POST
+    description: Imports models to project.
+    headers:
+      Content-Type: application/vnd.sas.models.model.import.request+json
+    body:
+      projectId*: null
+      modelFiles:
+        - name: null
+          file: null
+
+  models-import-folder:
+    path: /modelRepository/models
+    method: POST
+    description: Imports model to folder.
+    headers:
+      Content-Type: application/vnd.sas.models.model.import.request+json
+    body:
+      folderId*: null
+      modelFiles:
+        - name: null
+          file: null
+
+  # ============================================================
+  # Single Model
+  # ============================================================
+  models-get-check:
+    path: /modelRepository/models/{modelId}
+    method: HEAD
+    description: Checks model existence.
+
+  models-get:
+    path: /modelRepository/models/{modelId}
+    method: GET
+    description: Returns specific model.
+
+  models-update:
+    path: /modelRepository/models/{modelId}
+    method: PUT
+    description: Modifies model.
+    body:
+      name*: null
+      description: null
+      function: null
+      algorithm: null
+      tool: null
+      scoreCodeType: null
+      targetVariable: null
+
+  models-delete:
+    path: /modelRepository/models/{modelId}
+    method: DELETE
+    description: Removes model.
+    safeguard: DELETE MODEL {modelId}
+
+  models-code:
+    path: /modelRepository/models/{modelId}/code
+    method: GET
+    description: Returns score code.
+
+  # ============================================================
+  # Model Contents
+  # ============================================================
+  contents-list:
+    path: /modelRepository/models/{modelId}/contents
+    method: GET
+    description: Lists model contents.
+
+  contents-create:
+    path: /modelRepository/models/{modelId}/contents
+    method: POST
+    description: Adds content.
+    body:
+      name*: null
+      role: null
+      fileType: null
+
+  contents-get-check:
+    path: /modelRepository/models/{modelId}/contents/{contentId}
+    method: HEAD
+    description: Checks content existence.
+
+  contents-get:
+    path: /modelRepository/models/{modelId}/contents/{contentId}
+    method: GET
+    description: Returns content metadata.
+
+  contents-update:
+    path: /modelRepository/models/{modelId}/contents/{contentId}
+    method: PUT
+    description: Updates metadata.
+    body:
+      name*: null
+      role: null
+      fileType: null
+
+  contents-delete:
+    path: /modelRepository/models/{modelId}/contents/{contentId}
+    method: DELETE
+    description: Removes content.
+    safeguard: DELETE MODEL CONTENT {contentId}
+
+  contents-content:
+    path: /modelRepository/models/{modelId}/contents/{contentId}/content
+    method: GET
+    description: Returns content.
+
+  contents-stream:
+    path: /modelRepository/models/{modelId}/contents/{contentId}/stream
+    method: GET
+    description: Streams content.
+
+  contents-stream-update:
+    path: /modelRepository/models/{modelId}/contents/{contentId}/stream
+    method: PUT
+    description: Updates content.
+    headers:
+      Content-Type: application/octet-stream
+
+  # ============================================================
+  # Model Variables
+  # ============================================================
+  variables-list:
+    path: /modelRepository/models/{modelId}/variables
+    method: GET
+    description: Returns variables.
+
+  variables-create:
+    path: /modelRepository/models/{modelId}/variables
+    method: POST
+    description: Adds variables.
+    body:
+      name*: null
+      role*: null
+      type*: null
+      level: null
+      length: null
+
+  variables-get:
+    path: /modelRepository/models/{modelId}/variables/{variableId}
+    method: GET
+    description: Returns variable.
+
+  variables-update:
+    path: /modelRepository/models/{modelId}/variables/{variableId}
+    method: PUT
+    description: Updates variable.
+    body:
+      name*: null
+      role*: null
+      type*: null
+      level: null
+      length: null
+
+  variables-delete:
+    path: /modelRepository/models/{modelId}/variables/{variableId}
+    method: DELETE
+    description: Removes variable.
+    safeguard: DELETE VARIABLE {variableId}
+
+  # ============================================================
+  # Model History/Versions
+  # ============================================================
+  history-list:
+    path: /modelRepository/models/{modelId}/history
+    method: GET
+    description: Lists version history.
+
+  history-create:
+    path: /modelRepository/models/{modelId}/history
+    method: POST
+    description: Adds version.
+    body:
+      name: null
+      description: null
+      note: null
+
+  history-get:
+    path: /modelRepository/models/{modelId}/history/{versionId}
+    method: GET
+    description: Returns version.
+
+  history-contents:
+    path: /modelRepository/models/{modelId}/history/{versionId}/contents
+    method: GET
+    description: Lists version contents.
+
+  history-content-get:
+    path: /modelRepository/models/{modelId}/history/{versionId}/contents/{contentId}
+    method: GET
+    description: Returns version content metadata.
+
+  history-content-content:
+    path: /modelRepository/models/{modelId}/history/{versionId}/contents/{contentId}/content
+    method: GET
+    description: Returns version content.
+
+  versions-list:
+    path: /modelRepository/models/{modelId}/versions
+    method: GET
+    description: Lists versions with model.
+
+  versions-get:
+    path: /modelRepository/models/{modelId}/versions/{versionId}
+    method: GET
+    description: Returns version or model.
+
+  # ============================================================
+  # Model Locks
+  # ============================================================
+  locks-list:
+    path: /modelRepository/models/{modelId}/locks
+    method: GET
+    description: Lists locks.
+
+  locks-get:
+    path: /modelRepository/models/{modelId}/locks/{lockName}
+    method: GET
+    description: Returns lock.
+
+  locks-set:
+    path: /modelRepository/models/{modelId}/locks/{lockName}
+    method: POST
+    description: Sets lock.
+    body: null
+
+  locks-clear:
+    path: /modelRepository/models/{modelId}/locks/{lockName}
+    method: DELETE
+    description: Clears lock.
+    safeguard: CLEAR LOCK {lockName}
+
+  # ============================================================
+  # Model User Properties
+  # ============================================================
+  user-properties-all:
+    path: /modelRepository/models/userProperties
+    method: GET
+    description: Lists all user properties.
+
+  user-properties-check:
+    path: /modelRepository/models/{modelId}/userProperties
+    method: HEAD
+    description: Checks properties exist.
+
+  user-properties-list:
+    path: /modelRepository/models/{modelId}/userProperties
+    method: GET
+    description: Returns properties.
+
+  user-properties-create:
+    path: /modelRepository/models/{modelId}/userProperties
+    method: POST
+    description: Creates or updates properties.
+    body:
+      - name*: null
+        value*: null
+
+  user-property-check:
+    path: /modelRepository/models/{modelId}/userProperties/{propertyKey}
+    method: HEAD
+    description: Checks property exists.
+
+  user-property-get:
+    path: /modelRepository/models/{modelId}/userProperties/{propertyKey}
+    method: GET
+    description: Returns property.
+
+  user-property-update:
+    path: /modelRepository/models/{modelId}/userProperties/{propertyKey}
+    method: PUT
+    description: Updates property.
+    body:
+      value*: null
+
+  user-property-delete:
+    path: /modelRepository/models/{modelId}/userProperties/{propertyKey}
+    method: DELETE
+    description: Removes property.
+    safeguard: DELETE PROPERTY {propertyKey}
+
+  # ============================================================
+  # Model Metrics
+  # ============================================================
+  health-metrics:
+    path: /modelRepository/models/{modelId}/healthMetrics
+    method: GET
+    description: Returns health metrics.
+
+  classification-matrix:
+    path: /modelRepository/models/{modelId}/classificationMatrix
+    method: GET
+    description: Returns classification metrics.
+
+  metrics:
+    path: /modelRepository/models/{modelId}/metrics
+    method: GET
+    description: Returns model metrics.
+
+  generalizability:
+    path: /modelRepository/models/{modelId}/generalizability
+    method: GET
+    description: Returns generalizability metrics.
+
+  variable-importance:
+    path: /modelRepository/models/{modelId}/variableImportance
+    method: GET
+    description: Returns importance scores.
+
+  fairness-metrics:
+    path: /modelRepository/models/{modelId}/fairnessMetrics
+    method: GET
+    description: Returns fairness metrics.
+
+  lift-data:
+    path: /modelRepository/models/{modelId}/liftData
+    method: GET
+    description: Returns lift statistics.
+
+  # ============================================================
+  # Analytic Stores
+  # ============================================================
+  analytic-stores-list:
+    path: /modelRepository/models/{modelId}/analyticStore
+    method: GET
+    description: Lists analytic stores.
+
+  analytic-stores-copy-all:
+    path: /modelRepository/models/{modelId}/analyticStore
+    method: PUT
+    description: Copies all analytic stores.
+    body:
+      destinationPath*: null
+
+  analytic-store-get:
+    path: /modelRepository/models/{modelId}/analyticStore/{analyticStoreName}
+    method: GET
+    description: Returns specific store.
+
+  analytic-store-copy:
+    path: /modelRepository/models/{modelId}/analyticStore/{analyticStoreName}
+    method: PUT
+    description: Copies single store.
+    body:
+      destinationPath*: null
+
+  # ============================================================
+  # Score Resources
+  # ============================================================
+  score-resources-list:
+    path: /modelRepository/models/{modelId}/scoreResources
+    method: GET
+    description: Lists score resources.
+
+  score-resources-move:
+    path: /modelRepository/models/{modelId}/scoreResources
+    method: PUT
+    description: Moves resources to server.
+    body:
+      destinationPath*: null

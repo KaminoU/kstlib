@@ -378,6 +378,7 @@ Define APIs in YAML, call from CLI or Python.
 | [binance/](https://github.com/KaminoU/kstlib/tree/main/examples/rapi/binance) | **Binance API** - HMAC signing, SOPS credentials, testnet |
 | [github/](https://github.com/KaminoU/kstlib/tree/main/examples/rapi/github) | **GitHub API** - Real token via SOPS, `from_file()` demo |
 | [httpbin/](https://github.com/KaminoU/kstlib/tree/main/examples/rapi/httpbin) | **httpbin.org** - External config, auto-discovery |
+| [viya/](https://github.com/KaminoU/kstlib/tree/main/examples/rapi/viya) | **SAS Viya** - POC with ~1250 endpoints, nested includes |
 
 ```bash
 # Run the Binance demo (requires SOPS-encrypted API keys)

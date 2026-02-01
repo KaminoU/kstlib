@@ -1,0 +1,85 @@
+# SAS Viya Annotations API - Members section
+# https://developer.sas.com/rest-apis/annotations
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: annotations-members
+
+endpoints:
+  # ============================================================
+  # Members Collection
+  # ============================================================
+  members-list:
+    path: /annotations/annotations/{annotationId}/members
+    method: GET
+    description: Returns members of an annotation.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  members-create:
+    path: /annotations/annotations/{annotationId}/members
+    method: POST
+    description: Creates a new member for an annotation.
+    body:
+      annotationId: null
+      resourceUri: null
+      resourceType: null
+      value: null
+
+  members-batch-create:
+    path: /annotations/members
+    method: POST
+    description: Creates members for multiple annotations (items array).
+    headers:
+      Content-Type: application/vnd.sas.collection+json
+    body:
+      items:
+        - annotationId: null
+          members:
+            - resourceUri: null
+              resourceType: null
+              value: null
+
+  members-search:
+    path: /annotations/members
+    method: POST
+    description: Returns members for multiple annotations by annotation IDs.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - annotationId: null
+
+  # ============================================================
+  # Single Member
+  # ============================================================
+  members-get:
+    path: /annotations/annotations/{annotationId}/members/{memberId}
+    method: GET
+    description: Returns a specific member by ID.
+
+  members-check:
+    path: /annotations/annotations/{annotationId}/members/{memberId}
+    method: HEAD
+    description: Checks whether a member exists and returns header data.
+
+  members-update:
+    path: /annotations/annotations/{annotationId}/members/{memberId}
+    method: PUT
+    description: Updates a member value.
+    body:
+      id: null
+      annotationId: null
+      resourceUri: null
+      resourceType: null
+      value: null
+
+  members-delete:
+    path: /annotations/annotations/{annotationId}/members/{memberId}
+    method: DELETE
+    description: Removes a member from an annotation.
+    safeguard: DELETE MEMBER {memberId}

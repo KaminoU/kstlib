@@ -1,0 +1,61 @@
+# SAS Viya Compute API - Sessions section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-sessions
+
+endpoints:
+  # ============================================================
+  # Sessions Collection
+  # ============================================================
+  sessions-check:
+    path: /compute/sessions
+    method: HEAD
+    description: Checks endpoint availability.
+
+  sessions-list:
+    path: /compute/sessions
+    method: GET
+    description: Returns active compute sessions.
+    query:
+      start: 0
+      limit: 10
+
+  # ============================================================
+  # Single Session
+  # ============================================================
+  sessions-get-check:
+    path: /compute/sessions/{sessionId}
+    method: HEAD
+    description: Verifies session availability.
+
+  sessions-get:
+    path: /compute/sessions/{sessionId}
+    method: GET
+    description: Returns current session information.
+
+  sessions-delete:
+    path: /compute/sessions/{sessionId}
+    method: DELETE
+    description: Deletes session.
+    safeguard: DELETE SESSION {sessionId}
+
+  sessions-state-check:
+    path: /compute/sessions/{sessionId}/state
+    method: HEAD
+    description: Checks state availability.
+
+  sessions-state-get:
+    path: /compute/sessions/{sessionId}/state
+    method: GET
+    description: Returns session state.
+
+  sessions-state-set:
+    path: /compute/sessions/{sessionId}/state
+    method: PUT
+    description: Sets state of a session.
+    headers:
+      Content-Type: text/plain
+    body: null

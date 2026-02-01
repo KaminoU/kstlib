@@ -1,0 +1,327 @@
+# SAS Viya Model Repository API - Projects section
+# https://developer.sas.com/rest-apis/modelRepository
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-repository-projects
+
+endpoints:
+  # ============================================================
+  # Projects Collection
+  # ============================================================
+  projects-check:
+    path: /modelRepository/projects
+    method: HEAD
+    description: Checks project existence.
+
+  projects-list:
+    path: /modelRepository/projects
+    method: GET
+    description: Lists projects.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  projects-create:
+    path: /modelRepository/projects
+    method: POST
+    description: Creates project.
+    body:
+      name*: null
+      description: null
+      function: null
+      repositoryId: null
+      folderId: null
+      targetVariable: null
+      targetLevel: null
+      targetEventValue: null
+      classTargetValues: null
+      predictionVariable: null
+      eventProbabilityVariable: null
+
+  # ============================================================
+  # Single Project
+  # ============================================================
+  projects-get:
+    path: /modelRepository/projects/{projectId}
+    method: GET
+    description: Returns project.
+
+  projects-update:
+    path: /modelRepository/projects/{projectId}
+    method: PUT
+    description: Updates project.
+    body:
+      name*: null
+      description: null
+      function: null
+      targetVariable: null
+      targetLevel: null
+      targetEventValue: null
+
+  projects-delete:
+    path: /modelRepository/projects/{projectId}
+    method: DELETE
+    description: Removes project.
+    safeguard: DELETE PROJECT {projectId}
+
+  projects-history:
+    path: /modelRepository/projects/{projectId}/history
+    method: GET
+    description: Returns history.
+
+  # ============================================================
+  # Project Models
+  # ============================================================
+  projects-models-check:
+    path: /modelRepository/projects/{projectId}/models
+    method: HEAD
+    description: Checks models exist.
+
+  projects-models-list:
+    path: /modelRepository/projects/{projectId}/models
+    method: GET
+    description: Lists project models.
+
+  # ============================================================
+  # Champion and Challengers
+  # ============================================================
+  champion-get:
+    path: /modelRepository/projects/{projectId}/champion
+    method: GET
+    description: Returns champion model.
+
+  champion-set:
+    path: /modelRepository/projects/{projectId}/champion
+    method: POST
+    description: Sets champion.
+    body:
+      modelId*: null
+
+  champion-clear:
+    path: /modelRepository/projects/{projectId}/champion
+    method: DELETE
+    description: Clears champion.
+    safeguard: CLEAR CHAMPION {projectId}
+
+  champion-code:
+    path: /modelRepository/projects/{projectId}/champion/code
+    method: GET
+    description: Returns champion code.
+
+  challengers-list:
+    path: /modelRepository/projects/{projectId}/challengers
+    method: GET
+    description: Lists challengers.
+
+  challengers-add:
+    path: /modelRepository/projects/{projectId}/challengers
+    method: POST
+    description: Adds challenger.
+    body:
+      modelId*: null
+
+  challengers-clear:
+    path: /modelRepository/projects/{projectId}/challengers
+    method: DELETE
+    description: Clears challengers.
+    safeguard: CLEAR CHALLENGERS {projectId}
+
+  # ============================================================
+  # Project Versions
+  # ============================================================
+  versions-check:
+    path: /modelRepository/projects/{projectId}/projectVersions
+    method: HEAD
+    description: Checks versions exist.
+
+  versions-list:
+    path: /modelRepository/projects/{projectId}/projectVersions
+    method: GET
+    description: Lists versions.
+
+  versions-create:
+    path: /modelRepository/projects/{projectId}/projectVersions
+    method: POST
+    description: Creates version.
+    body:
+      name: null
+      description: null
+      note: null
+
+  versions-get:
+    path: /modelRepository/projects/{projectId}/projectVersions/{versionId}
+    method: GET
+    description: Returns version.
+
+  versions-update:
+    path: /modelRepository/projects/{projectId}/projectVersions/{versionId}
+    method: PUT
+    description: Updates version.
+    body:
+      name: null
+      description: null
+      note: null
+
+  versions-delete:
+    path: /modelRepository/projects/{projectId}/projectVersions/{versionId}
+    method: DELETE
+    description: Removes version.
+    safeguard: DELETE VERSION {versionId}
+
+  versions-models-check:
+    path: /modelRepository/projects/{projectId}/projectVersions/{versionId}/models
+    method: HEAD
+    description: Checks version models exist.
+
+  versions-models-list:
+    path: /modelRepository/projects/{projectId}/projectVersions/{versionId}/models
+    method: GET
+    description: Lists version models.
+
+  # ============================================================
+  # Project Variables
+  # ============================================================
+  variables-check:
+    path: /modelRepository/projects/{projectId}/variables
+    method: HEAD
+    description: Checks variables exist.
+
+  variables-list:
+    path: /modelRepository/projects/{projectId}/variables
+    method: GET
+    description: Returns variables.
+
+  variables-create:
+    path: /modelRepository/projects/{projectId}/variables
+    method: POST
+    description: Adds variables.
+    body:
+      name*: null
+      role*: null
+      type*: null
+      level: null
+      length: null
+
+  variables-get:
+    path: /modelRepository/projects/{projectId}/variables/{variableId}
+    method: GET
+    description: Returns variable.
+
+  variables-update:
+    path: /modelRepository/projects/{projectId}/variables/{variableId}
+    method: PUT
+    description: Updates variable.
+    body:
+      name*: null
+      role*: null
+      type*: null
+      level: null
+      length: null
+
+  variables-delete:
+    path: /modelRepository/projects/{projectId}/variables/{variableId}
+    method: DELETE
+    description: Removes variable.
+    safeguard: DELETE VARIABLE {variableId}
+
+  # ============================================================
+  # Project Contents
+  # ============================================================
+  contents-list:
+    path: /modelRepository/projects/{projectId}/contents
+    method: GET
+    description: Lists contents.
+
+  contents-create:
+    path: /modelRepository/projects/{projectId}/contents
+    method: POST
+    description: Adds content.
+    body:
+      name*: null
+      role: null
+      fileType: null
+
+  contents-get:
+    path: /modelRepository/projects/{projectId}/contents/{contentId}
+    method: GET
+    description: Returns metadata.
+
+  contents-update:
+    path: /modelRepository/projects/{projectId}/contents/{contentId}
+    method: PUT
+    description: Updates metadata.
+    body:
+      name*: null
+      role: null
+      fileType: null
+
+  contents-delete:
+    path: /modelRepository/projects/{projectId}/contents/{contentId}
+    method: DELETE
+    description: Removes content.
+    safeguard: DELETE CONTENT {contentId}
+
+  contents-content:
+    path: /modelRepository/projects/{projectId}/contents/{contentId}/content
+    method: GET
+    description: Returns content.
+
+  contents-content-update:
+    path: /modelRepository/projects/{projectId}/contents/{contentId}/content
+    method: PUT
+    description: Updates content.
+    headers:
+      Content-Type: application/octet-stream
+    body: null
+
+  # ============================================================
+  # Project User Properties
+  # ============================================================
+  user-properties-all:
+    path: /modelRepository/projects/userProperties
+    method: GET
+    description: Lists all project properties.
+
+  user-properties-check:
+    path: /modelRepository/projects/{projectId}/userProperties
+    method: HEAD
+    description: Checks properties exist.
+
+  user-properties-list:
+    path: /modelRepository/projects/{projectId}/userProperties
+    method: GET
+    description: Returns properties.
+
+  user-properties-create:
+    path: /modelRepository/projects/{projectId}/userProperties
+    method: POST
+    description: Creates or updates properties.
+    body:
+      - name*: null
+        value*: null
+
+  user-property-check:
+    path: /modelRepository/projects/{projectId}/userProperties/{propertyKey}
+    method: HEAD
+    description: Checks property exists.
+
+  user-property-get:
+    path: /modelRepository/projects/{projectId}/userProperties/{propertyKey}
+    method: GET
+    description: Returns property.
+
+  user-property-update:
+    path: /modelRepository/projects/{projectId}/userProperties/{propertyKey}
+    method: PUT
+    description: Updates property.
+    body:
+      value*: null
+
+  user-property-delete:
+    path: /modelRepository/projects/{projectId}/userProperties/{propertyKey}
+    method: DELETE
+    description: Removes property.
+    safeguard: DELETE PROPERTY {propertyKey}

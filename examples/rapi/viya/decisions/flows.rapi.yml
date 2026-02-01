@@ -1,0 +1,132 @@
+# SAS Viya Decisions API - Flows (Decisions) section
+# https://developer.sas.com/rest-apis/decisions
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: decisions-flows
+
+endpoints:
+  # ============================================================
+  # Decisions Collection
+  # ============================================================
+  flows-list:
+    path: /decisions/flows
+    method: GET
+    description: Lists all decisions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  flows-create:
+    path: /decisions/flows
+    method: POST
+    description: Creates a new decision.
+    body:
+      name*: null
+      description: null
+      type: null
+      signature:
+        - name: null
+          direction: null
+          dataType: null
+      flow:
+        steps:
+          - type: null
+            name: null
+
+  # ============================================================
+  # Single Decision
+  # ============================================================
+  flows-get:
+    path: /decisions/flows/{decisionId}
+    method: GET
+    description: Returns decision content.
+
+  flows-update:
+    path: /decisions/flows/{decisionId}
+    method: PUT
+    description: Updates a decision.
+    body:
+      name*: null
+      description: null
+      type: null
+      signature:
+        - name: null
+          direction: null
+          dataType: null
+      flow:
+        steps:
+          - type: null
+            name: null
+
+  flows-delete:
+    path: /decisions/flows/{decisionId}
+    method: DELETE
+    description: Removes a decision.
+    safeguard: DELETE DECISION {decisionId}
+
+  # ============================================================
+  # Decision Code
+  # ============================================================
+  flows-code:
+    path: /decisions/flows/{decisionId}/code
+    method: GET
+    description: Returns DS2 package code.
+
+  flows-mapped-code:
+    path: /decisions/flows/{decisionId}/mappedCode
+    method: POST
+    description: Generates mapped execution code.
+    body:
+      scoreDefinitionId: null
+      mappingUri: null
+
+  flows-analysis-code:
+    path: /decisions/flows/{decisionId}/analysisCode
+    method: POST
+    description: Returns analysis code.
+    body:
+      scoreDefinitionId: null
+
+  flows-step-code:
+    path: /decisions/flows/{decisionId}/decisionStepCode
+    method: GET
+    description: Returns step code.
+
+  # ============================================================
+  # Decision Metadata
+  # ============================================================
+  flows-artifacts:
+    path: /decisions/flows/{decisionId}/externalArtifacts
+    method: GET
+    description: Lists external artifacts.
+
+  flows-legacy-variables:
+    path: /decisions/flows/{decisionId}/legacyVariables
+    method: GET
+    description: Returns legacy variables.
+
+  flows-errors:
+    path: /decisions/flows/{decisionId}/errors
+    method: GET
+    description: Returns validation errors.
+
+  flows-error-markers:
+    path: /decisions/flows/{decisionId}/errorMarkers
+    method: GET
+    description: Returns error markers.
+
+  flows-dependencies:
+    path: /decisions/flows/{decisionId}/dependencies
+    method: GET
+    description: Lists dependent objects.
+
+  # ============================================================
+  # Workflows
+  # ============================================================
+  flows-workflow-history:
+    path: /decisions/flows/{decisionId}/workflows/history
+    method: GET
+    description: Returns workflow history.

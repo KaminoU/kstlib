@@ -1,0 +1,200 @@
+# SAS Viya Glossary API
+# https://developer.sas.com/rest-apis/glossary
+#
+# Entry point for the Glossary API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: glossary
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /glossary/
+    method: GET
+    description: Returns top-level resource links.
+
+  # ============================================================
+  # Term Types
+  # ============================================================
+  term-types-list:
+    path: /glossary/termTypes
+    method: GET
+    description: Lists term types sorted by name.
+    query:
+      start: 0
+      limit: 10
+
+  term-types-create:
+    path: /glossary/termTypes
+    method: POST
+    description: Creates a new term type.
+    body:
+      id*: null
+      name*: null
+      label: null
+      description: null
+      baseType: null
+      attributes: null
+
+  term-types-check:
+    path: /glossary/termTypes/{termTypeId}
+    method: HEAD
+    description: Returns headers for a term type.
+
+  term-types-get:
+    path: /glossary/termTypes/{termTypeId}
+    method: GET
+    description: Returns a specific term type.
+
+  term-types-update:
+    path: /glossary/termTypes/{termTypeId}
+    method: PUT
+    description: Updates a term type.
+    body:
+      id*: null
+      name*: null
+      label: null
+      description: null
+      baseType: null
+      attributes: null
+
+  term-types-delete:
+    path: /glossary/termTypes/{termTypeId}
+    method: DELETE
+    description: Deletes a term type.
+    safeguard: DELETE TERM TYPE {termTypeId}
+
+  # ============================================================
+  # Terms
+  # ============================================================
+  terms-list:
+    path: /glossary/terms
+    method: GET
+    description: Lists terms sorted by name.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  terms-create:
+    path: /glossary/terms
+    method: POST
+    description: Creates a new term.
+    body:
+      name*: null
+      termTypeId*: null
+      label: null
+      description: null
+      definition: null
+      parentId: null
+      attributes: null
+
+  terms-import:
+    path: /glossary/importTerms
+    method: POST
+    description: Imports terms from a CSV file.
+    headers:
+      Content-Type: text/csv
+    body: null
+
+  # ============================================================
+  # Single Term
+  # ============================================================
+  terms-check:
+    path: /glossary/terms/{termId}
+    method: HEAD
+    description: Returns headers for a term.
+
+  terms-get:
+    path: /glossary/terms/{termId}
+    method: GET
+    description: Returns a specific term.
+
+  terms-update:
+    path: /glossary/terms/{termId}
+    method: PUT
+    description: Updates a term.
+    body:
+      name*: null
+      termTypeId*: null
+      label: null
+      description: null
+      definition: null
+      parentId: null
+      attributes: null
+
+  terms-patch:
+    path: /glossary/terms/{termId}
+    method: PATCH
+    description: Modifies individual term properties.
+    body:
+      name: null
+      label: null
+      description: null
+      definition: null
+      attributes: null
+
+  terms-delete:
+    path: /glossary/terms/{termId}
+    method: DELETE
+    description: Deletes a term.
+    safeguard: DELETE TERM {termId}
+
+  # ============================================================
+  # Draft Terms
+  # ============================================================
+  terms-draft-check:
+    path: /glossary/terms/{termId}/draft
+    method: HEAD
+    description: Returns headers for a draft term.
+
+  terms-draft-create:
+    path: /glossary/terms/{termId}/draft
+    method: POST
+    description: Creates a draft from a published term.
+    body: null
+
+  terms-draft-get:
+    path: /glossary/terms/{termId}/draft
+    method: GET
+    description: Returns a draft term.
+
+  terms-draft-update:
+    path: /glossary/terms/{termId}/draft
+    method: PUT
+    description: Updates a draft term.
+    body:
+      name*: null
+      termTypeId*: null
+      label: null
+      description: null
+      definition: null
+      parentId: null
+      attributes: null
+
+  terms-draft-patch:
+    path: /glossary/terms/{termId}/draft
+    method: PATCH
+    description: Modifies draft term properties.
+    body:
+      name: null
+      label: null
+      description: null
+      definition: null
+      attributes: null
+
+  terms-draft-delete:
+    path: /glossary/terms/{termId}/draft
+    method: DELETE
+    description: Deletes a draft term.
+    safeguard: DELETE DRAFT TERM {termId}
+
+  terms-draft-publish:
+    path: /glossary/terms/{termId}/draft/state
+    method: PUT
+    description: Publishes a draft term.
+    query:
+      action: publish
+    body: null

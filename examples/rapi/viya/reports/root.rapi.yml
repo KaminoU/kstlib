@@ -1,0 +1,101 @@
+# SAS Viya Reports API - Root section
+# https://developer.sas.com/rest-apis/reports
+#
+# Entry point for the Reports API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: reports
+
+include:
+  - "./content.rapi.yml"
+  - "./states.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /reports/
+    method: GET
+    description: Returns top-level service links.
+
+  root-check:
+    path: /reports/
+    method: HEAD
+    description: Verifies service availability.
+
+  # ============================================================
+  # Reports Collection
+  # ============================================================
+  reports-list:
+    path: /reports/reports
+    method: GET
+    description: Returns collection of reports with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  reports-create:
+    path: /reports/reports
+    method: POST
+    description: Creates new report and adds to folder.
+    body:
+      name*: null
+      description: null
+      parentFolderUri: null
+
+  # ============================================================
+  # Single Report
+  # ============================================================
+  reports-check:
+    path: /reports/reports/{reportId}
+    method: HEAD
+    description: Verifies report status via headers.
+
+  reports-get:
+    path: /reports/reports/{reportId}
+    method: GET
+    description: Returns specified report with ETag.
+
+  reports-update:
+    path: /reports/reports/{reportId}
+    method: PUT
+    description: Modifies report (requires If-Match header).
+    body:
+      name*: null
+      description: null
+
+  reports-delete:
+    path: /reports/reports/{reportId}
+    method: DELETE
+    description: Removes specified report and content.
+    safeguard: DELETE REPORT {reportId}
+
+  # ============================================================
+  # Validations
+  # ============================================================
+  validations-name:
+    path: /reports/validations/name
+    method: POST
+    description: Validates that name does not exceed maximum length.
+    body:
+      name*: null
+
+  # ============================================================
+  # Content Versions
+  # ============================================================
+  versions-list:
+    path: /reports/versions
+    method: GET
+    description: Returns all available report content versions.
+
+  versions-default:
+    path: /reports/versions/@defaultVersion
+    method: GET
+    description: Returns current default content versions.
+
+  versions-get:
+    path: /reports/versions/{semanticVersion}
+    method: GET
+    description: Returns content version for specified semantic version.

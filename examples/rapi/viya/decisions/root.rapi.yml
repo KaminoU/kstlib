@@ -1,0 +1,87 @@
+# SAS Viya Decisions API - Root section
+# https://developer.sas.com/rest-apis/decisions
+#
+# Entry point for the Decisions API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: decisions
+
+include:
+  - "./flows.rapi.yml"
+  - "./revisions.rapi.yml"
+  - "./code-files.rapi.yml"
+  - "./node-types.rapi.yml"
+  - "./trees.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /decisions/
+    method: GET
+    description: Returns top-level resource links.
+
+  # ============================================================
+  # Terms Search
+  # ============================================================
+  terms:
+    path: /decisions/terms
+    method: GET
+    description: Finds terms across all decisions.
+    query:
+      term: null
+
+  # ============================================================
+  # Validations
+  # ============================================================
+  validations-expression:
+    path: /decisions/validations/expressionValidations
+    method: POST
+    description: Validates DS2 expression.
+    body:
+      expression*: null
+      signature:
+        - name: null
+          direction: null
+          dataType: null
+
+  # ============================================================
+  # Decision Types (Flow Types)
+  # ============================================================
+  flow-types-list:
+    path: /decisions/flowTypes
+    method: GET
+    description: Lists decision types.
+    query:
+      start: 0
+      limit: 10
+
+  flow-types-create:
+    path: /decisions/flowTypes
+    method: POST
+    description: Creates decision type.
+    body:
+      name*: null
+      description: null
+      baseUrl: null
+
+  flow-types-get:
+    path: /decisions/flowTypes/{flowTypeId}
+    method: GET
+    description: Returns decision type.
+
+  flow-types-update:
+    path: /decisions/flowTypes/{flowTypeId}
+    method: PUT
+    description: Updates decision type.
+    body:
+      name*: null
+      description: null
+      baseUrl: null
+
+  flow-types-delete:
+    path: /decisions/flowTypes/{flowTypeId}
+    method: DELETE
+    description: Deletes decision type.
+    safeguard: DELETE FLOW TYPE {flowTypeId}

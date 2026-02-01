@@ -1,0 +1,167 @@
+# SAS Viya Folders API - Root section
+# https://developer.sas.com/rest-apis/folders
+#
+# Entry point for the Folders API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: folders
+
+include:
+  - "./members.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /folders/
+    method: GET
+    description: Returns top-level collection links.
+
+  # ============================================================
+  # Root Folders
+  # ============================================================
+  root-folders-list:
+    path: /folders/rootFolders
+    method: GET
+    description: Lists root folders with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  # ============================================================
+  # Folders Collection
+  # ============================================================
+  folders-list:
+    path: /folders/folders
+    method: GET
+    description: Lists all folders with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  folders-create:
+    path: /folders/folders
+    method: POST
+    description: Creates new empty folder.
+    body:
+      name*: null
+      description: null
+      type: folder
+      parentFolderUri: null
+
+  folders-move-item:
+    path: /folders/folders/@item
+    method: PATCH
+    description: Moves child member to specified parent folder.
+    body:
+      parentFolderUri*: null
+
+  folders-get-by-path:
+    path: /folders/folders/@item
+    method: GET
+    description: Returns folder by path or child URI.
+    query:
+      path: null
+
+  # ============================================================
+  # Single Folder
+  # ============================================================
+  folders-get:
+    path: /folders/folders/{folderId}
+    method: GET
+    description: Returns specific folder.
+
+  folders-check:
+    path: /folders/folders/{folderId}
+    method: HEAD
+    description: Returns folder headers.
+
+  folders-delete:
+    path: /folders/folders/{folderId}
+    method: DELETE
+    description: Deletes folder optionally recursive.
+    safeguard: DELETE FOLDER {folderId}
+    query:
+      recursive: false
+
+  folders-update:
+    path: /folders/folders/{folderId}
+    method: PUT
+    description: Replaces existing folder.
+    body:
+      name*: null
+      description: null
+      type: folder
+      parentFolderUri: null
+
+  folders-patch:
+    path: /folders/folders/{folderId}
+    method: PATCH
+    description: Partially updates folder fields.
+    body:
+      name: null
+      description: null
+      type: null
+      parentFolderUri: null
+
+  # ============================================================
+  # Delegate Folders
+  # ============================================================
+  delegate-folders-list:
+    path: /folders/delegateFolders
+    method: GET
+    description: Lists folders for delegate names.
+
+  delegate-info:
+    path: /folders/delegateInfo
+    method: GET
+    description: Lists known delegate-represented folders.
+
+  # ============================================================
+  # Paths
+  # ============================================================
+  paths-find:
+    path: /folders/paths
+    method: POST
+    description: Finds object by hierarchical path.
+    body:
+      items*: null
+      contentType: null
+      typeDefName: null
+
+  # ============================================================
+  # Ancestors
+  # ============================================================
+  ancestors-list:
+    path: /folders/ancestors
+    method: GET
+    description: Returns resource ancestors as flat list.
+    query:
+      resourceUri: null
+
+  ancestors-batch:
+    path: /folders/ancestors
+    method: POST
+    description: Returns ancestors for multiple resource URIs.
+    body:
+      items:
+        - uri*: null
+
+  # ============================================================
+  # Folder Types
+  # ============================================================
+  folder-types-list:
+    path: /folders/folderTypes
+    method: GET
+    description: Lists acceptable folder types.
+
+  # ============================================================
+  # Catalog
+  # ============================================================
+  catalog-metadata:
+    path: /folders/commons/catalog/folders/{folderId}
+    method: GET
+    description: Returns metadata archive for catalog service.

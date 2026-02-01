@@ -1,0 +1,26 @@
+# SAS Viya Data Quality API - Functions section
+# https://developer.sas.com/rest-apis/dataQuality
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-quality-functions
+
+endpoints:
+  # ============================================================
+  # Functions
+  # ============================================================
+  functions-list:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions
+    method: GET
+    description: Lists supported functions.
+
+  functions-get:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}
+    method: GET
+    description: Returns function details.
+
+  functions-check:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}/functions/{functionName}
+    method: HEAD
+    description: Verifies function availability.

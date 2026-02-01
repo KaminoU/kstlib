@@ -1,0 +1,89 @@
+# SAS Viya CAS Management API - Columns section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-columns
+
+endpoints:
+  # ============================================================
+  # Columns Collection
+  # ============================================================
+  columns-list:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns
+    method: GET
+    description: Returns list of columns.
+    query:
+      start: 0
+      limit: 10
+
+  columns-create:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns
+    method: POST
+    description: Creates a column.
+    body:
+      name*: null
+      type*: null
+      length: null
+      format: null
+      label: null
+
+  # ============================================================
+  # Single Column
+  # ============================================================
+  columns-get:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}
+    method: GET
+    description: Returns column information.
+
+  columns-delete:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}
+    method: DELETE
+    description: Removes a column.
+    safeguard: DELETE COLUMN {columnName}
+
+  # ============================================================
+  # Column Statistics
+  # ============================================================
+  columns-distinct-count:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}/distinctCount
+    method: GET
+    description: Returns distinct count.
+
+  columns-distinct-values:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}/distinctValues
+    method: GET
+    description: Returns distinct values.
+    query:
+      start: 0
+      limit: 10
+
+  columns-frequency:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}/frequency
+    method: GET
+    description: Returns frequency distribution.
+    query:
+      start: 0
+      limit: 10
+
+  columns-frequency-create:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}/frequency
+    method: POST
+    description: Creates a frequency table.
+    body:
+      format: null
+      where: null
+
+  columns-summary:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}/summaryStatistics
+    method: GET
+    description: Returns column summary statistics.
+
+  columns-frequency-job:
+    path: /casManagement/jobs/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/columns/{columnName}/frequency
+    method: POST
+    description: Creates a job to generate frequency table.
+    body:
+      format: null
+      where: null

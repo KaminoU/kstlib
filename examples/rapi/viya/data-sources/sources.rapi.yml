@@ -1,0 +1,65 @@
+# SAS Viya Data Sources API - Sources section
+# https://developer.sas.com/rest-apis/dataSources
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-sources-sources
+
+endpoints:
+  # ============================================================
+  # Sources Collection
+  # ============================================================
+  sources-list:
+    path: /dataSources/providers/{providerId}/sources
+    method: GET
+    description: Lists data sources with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  # ============================================================
+  # Single Source
+  # ============================================================
+  sources-get:
+    path: /dataSources/providers/{providerId}/sources/{sourceId}
+    method: GET
+    description: Returns single data source details.
+
+  sources-children:
+    path: /dataSources/providers/{providerId}/sources/{sourceId}/children
+    method: GET
+    description: Returns child data sources.
+
+  # ============================================================
+  # Sessions
+  # ============================================================
+  sources-session-get:
+    path: /dataSources/providers/{providerId}/sources/{sourceId}/sessions/{sessionId}
+    method: GET
+    description: Returns session information.
+
+  sources-session-delete:
+    path: /dataSources/providers/{providerId}/sources/{sourceId}/sessions/{sessionId}
+    method: DELETE
+    description: Terminates session.
+    safeguard: TERMINATE SESSION {sessionId}
+
+  # ============================================================
+  # Engines
+  # ============================================================
+  sources-engines-list:
+    path: /dataSources/providers/{providerId}/sources/{sourceId}/engines
+    method: GET
+    description: Returns available engines.
+
+  sources-engines-get:
+    path: /dataSources/providers/{providerId}/sources/{sourceId}/engines/{engineName}
+    method: GET
+    description: Returns engine details.
+
+  sources-engines-definition:
+    path: /dataSources/providers/{providerId}/sources/{sourceId}/engines/{engineName}/definition
+    method: GET
+    description: Returns engine schema and options.

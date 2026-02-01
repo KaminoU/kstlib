@@ -1,0 +1,98 @@
+# SAS Viya Batch API - Jobs section
+# https://developer.sas.com/rest-apis/batch
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: batch-jobs
+
+endpoints:
+  # ============================================================
+  # Jobs Collection
+  # ============================================================
+  jobs-list:
+    path: /batch/jobs
+    method: GET
+    description: Returns a collection of batch jobs.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  jobs-check:
+    path: /batch/jobs
+    method: HEAD
+    description: Checks endpoint availability.
+
+  jobs-create:
+    path: /batch/jobs
+    method: POST
+    description: Creates and submits a new SAS batch job.
+    body:
+      name: null
+      description: null
+      contextId: null
+      code: null
+      codeUri: null
+      variables: null
+      arguments: null
+
+  # ============================================================
+  # Single Job
+  # ============================================================
+  jobs-get:
+    path: /batch/jobs/{jobId}
+    method: GET
+    description: Returns job information.
+
+  jobs-head:
+    path: /batch/jobs/{jobId}
+    method: HEAD
+    description: Verifies that a job exists.
+
+  jobs-delete:
+    path: /batch/jobs/{jobId}
+    method: DELETE
+    description: Deletes a batch job.
+    safeguard: DELETE JOB {jobId}
+
+  # ============================================================
+  # Job I/O
+  # ============================================================
+  jobs-input:
+    path: /batch/jobs/{jobId}/input
+    method: POST
+    description: Sends STDIO input text to a running job.
+    headers:
+      Content-Type: text/plain
+    body: null
+
+  jobs-output:
+    path: /batch/jobs/{jobId}/output
+    method: POST
+    description: Retrieves STDIO output from a job.
+    body:
+      type: null
+      start: 0
+      limit: 1000
+
+  # ============================================================
+  # Job State
+  # ============================================================
+  jobs-state-get:
+    path: /batch/jobs/{jobId}/state
+    method: GET
+    description: Returns the current state of a job.
+
+  jobs-state-check:
+    path: /batch/jobs/{jobId}/state
+    method: HEAD
+    description: Verifies job state endpoint exists.
+
+  jobs-state-update:
+    path: /batch/jobs/{jobId}/state
+    method: PUT
+    description: Changes the state of a job (cancel, etc.).
+    query:
+      value: null

@@ -1,0 +1,36 @@
+# SAS Viya CAS REST API - Actions section
+# https://developer.sas.com/rest-apis/cas
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-actions
+
+endpoints:
+  # ============================================================
+  # Actions
+  # ============================================================
+  actions-list:
+    path: /cas/actions
+    method: GET
+    description: Returns parameter definitions for actions.
+
+  actions-get:
+    path: /cas/actions/{actionName}
+    method: GET
+    description: Returns parameter definitions for an action.
+
+  actions-run:
+    path: /cas/actions/{actionName}
+    method: POST
+    description: Runs action in transient session.
+    body:
+      server: null
+      session: null
+      parameters: null
+
+  actions-cancel:
+    path: /cas/sessions/{sessionId}/actions
+    method: DELETE
+    description: Cancels running action.
+    safeguard: CANCEL ACTION

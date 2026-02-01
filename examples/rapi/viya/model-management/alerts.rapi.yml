@@ -1,0 +1,63 @@
+# SAS Viya Model Management API - Alerts section
+# https://developer.sas.com/rest-apis/modelManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-management-alerts
+
+endpoints:
+  # ============================================================
+  # Alert Rules
+  # ============================================================
+  rules-list:
+    path: /modelManagement/projects/{projectId}/alertRules
+    method: GET
+    description: Lists alert rules.
+
+  rules-create:
+    path: /modelManagement/projects/{projectId}/alertRules
+    method: POST
+    description: Creates alert rule.
+    body:
+      name*: null
+      description: null
+      threshold*: null
+      condition*: null
+      metricName*: null
+      alertType: null
+      enabled: true
+
+  rules-get:
+    path: /modelManagement/projects/{projectId}/alertRules/{alertRuleId}
+    method: GET
+    description: Returns rule details.
+
+  rules-delete:
+    path: /modelManagement/projects/{projectId}/alertRules/{alertRuleId}
+    method: DELETE
+    description: Removes rule.
+    safeguard: DELETE ALERT RULE {alertRuleId}
+
+  # ============================================================
+  # Alert Rule History
+  # ============================================================
+  rules-history-list:
+    path: /modelManagement/projects/{projectId}/alertRules/{alertRuleId}/history
+    method: GET
+    description: Returns rule history.
+
+  rules-history-create:
+    path: /modelManagement/projects/{projectId}/alertRules/{alertRuleId}/history
+    method: POST
+    description: Creates historical versions.
+    body:
+      name*: null
+      threshold*: null
+      condition*: null
+      metricName*: null
+
+  rules-history-get:
+    path: /modelManagement/projects/{projectId}/alertRules/{alertRuleId}/history/{historyId}
+    method: GET
+    description: Returns historical version.

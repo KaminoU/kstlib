@@ -8,8 +8,16 @@ from kstlib.rapi.config import (
     ApiConfig,
     EndpointConfig,
     RapiConfigManager,
+    SafeguardConfig,
+    _expand_env_vars,
+    _expand_env_vars_recursive,
 )
-from kstlib.rapi.exceptions import EndpointAmbiguousError, EndpointNotFoundError
+from kstlib.rapi.exceptions import (
+    EndpointAmbiguousError,
+    EndpointNotFoundError,
+    EnvVarError,
+    SafeguardMissingError,
+)
 
 
 class TestEndpointConfig:
@@ -120,6 +128,111 @@ class TestEndpointConfig:
         )
         result = config.build_path(10)
         assert result == "/delay/10"
+
+    def test_safeguard_none_by_default(self) -> None:
+        """Safeguard is None by default."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/test",
+        )
+        assert config.safeguard is None
+
+    def test_safeguard_set(self) -> None:
+        """Set safeguard string on endpoint."""
+        config = EndpointConfig(
+            name="delete",
+            api_name="api",
+            path="/users/{userId}",
+            method="DELETE",
+            safeguard="DELETE USER {userId}",
+        )
+        assert config.safeguard == "DELETE USER {userId}"
+
+    def test_safeguard_too_long_rejected(self) -> None:
+        """Reject safeguard string exceeding max length."""
+        long_safeguard = "X" * 200
+        with pytest.raises(ValueError, match="safeguard too long"):
+            EndpointConfig(
+                name="test",
+                api_name="api",
+                path="/test",
+                safeguard=long_safeguard,
+            )
+
+    def test_safeguard_invalid_chars_rejected(self) -> None:
+        """Reject safeguard with invalid characters."""
+        with pytest.raises(ValueError, match="invalid characters"):
+            EndpointConfig(
+                name="test",
+                api_name="api",
+                path="/test",
+                safeguard="DELETE; DROP TABLE users",
+            )
+
+        with pytest.raises(ValueError, match="invalid characters"):
+            EndpointConfig(
+                name="test",
+                api_name="api",
+                path="/test",
+                safeguard="<script>alert('xss')</script>",
+            )
+
+    def test_safeguard_valid_chars(self) -> None:
+        """Accept safeguard with valid characters."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/test",
+            safeguard="DELETE USER {userId}/account-123_test",
+        )
+        assert config.safeguard == "DELETE USER {userId}/account-123_test"
+
+    def test_build_safeguard_with_kwargs(self) -> None:
+        """Build safeguard with keyword arguments."""
+        config = EndpointConfig(
+            name="delete",
+            api_name="api",
+            path="/users/{userId}",
+            method="DELETE",
+            safeguard="DELETE USER {userId}",
+        )
+        result = config.build_safeguard(userId="abc123")
+        assert result == "DELETE USER abc123"
+
+    def test_build_safeguard_with_positional(self) -> None:
+        """Build safeguard with positional arguments."""
+        config = EndpointConfig(
+            name="delete",
+            api_name="api",
+            path="/users/{0}",
+            method="DELETE",
+            safeguard="DELETE USER {0}",
+        )
+        result = config.build_safeguard("user-456")
+        assert result == "DELETE USER user-456"
+
+    def test_build_safeguard_none_returns_none(self) -> None:
+        """Build safeguard returns None when no safeguard configured."""
+        config = EndpointConfig(
+            name="get",
+            api_name="api",
+            path="/test",
+        )
+        result = config.build_safeguard()
+        assert result is None
+
+    def test_build_safeguard_multiple_params(self) -> None:
+        """Build safeguard with multiple parameters."""
+        config = EndpointConfig(
+            name="delete_item",
+            api_name="api",
+            path="/users/{userId}/items/{itemId}",
+            method="DELETE",
+            safeguard="DELETE ITEM {itemId} FROM USER {userId}",
+        )
+        result = config.build_safeguard(userId="user1", itemId="item2")
+        assert result == "DELETE ITEM item2 FROM USER user1"
 
 
 class TestApiConfig:
@@ -1141,3 +1254,1016 @@ endpoints:
 
         with pytest.raises(ValueError, match="Invalid HMAC algorithm"):
             RapiConfigManager.from_file(str(rapi_file))
+
+
+class TestSafeguardConfig:
+    """Tests for SafeguardConfig dataclass."""
+
+    def test_default_values(self) -> None:
+        """SafeguardConfig uses sensible defaults."""
+        config = SafeguardConfig()
+
+        assert "DELETE" in config.required_methods
+        assert "PUT" in config.required_methods
+        assert "GET" not in config.required_methods
+        assert "POST" not in config.required_methods
+        assert "PATCH" not in config.required_methods
+
+    def test_custom_methods(self) -> None:
+        """Create config with custom required methods."""
+        config = SafeguardConfig(required_methods=frozenset({"DELETE"}))
+
+        assert "DELETE" in config.required_methods
+        assert "PUT" not in config.required_methods
+
+    def test_empty_methods(self) -> None:
+        """Create config with no required methods (opt-out)."""
+        config = SafeguardConfig(required_methods=frozenset())
+
+        assert len(config.required_methods) == 0
+
+    def test_immutable(self) -> None:
+        """SafeguardConfig is immutable (frozen)."""
+        config = SafeguardConfig()
+
+        with pytest.raises(AttributeError):
+            config.required_methods = frozenset()  # type: ignore[misc]
+
+
+class TestSafeguardValidation:
+    """Tests for safeguard validation at config load time."""
+
+    def test_delete_without_safeguard_rejected(self) -> None:
+        """Reject DELETE endpoint without safeguard."""
+        config = {
+            "api": {
+                "admin": {
+                    "base_url": "https://admin.example.com",
+                    "endpoints": {
+                        "delete_user": {
+                            "path": "/users/{userId}",
+                            "method": "DELETE",
+                            # No safeguard!
+                        },
+                    },
+                }
+            }
+        }
+
+        with pytest.raises(SafeguardMissingError) as exc_info:
+            RapiConfigManager(config)
+
+        assert "admin.delete_user" in str(exc_info.value)
+        assert "DELETE" in str(exc_info.value)
+
+    def test_put_without_safeguard_rejected(self) -> None:
+        """Reject PUT endpoint without safeguard."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoints": {
+                        "replace_data": {
+                            "path": "/data/{id}",
+                            "method": "PUT",
+                            # No safeguard!
+                        },
+                    },
+                }
+            }
+        }
+
+        with pytest.raises(SafeguardMissingError) as exc_info:
+            RapiConfigManager(config)
+
+        assert "PUT" in str(exc_info.value)
+
+    def test_delete_with_safeguard_accepted(self) -> None:
+        """Accept DELETE endpoint with safeguard."""
+        config = {
+            "api": {
+                "admin": {
+                    "base_url": "https://admin.example.com",
+                    "endpoints": {
+                        "delete_user": {
+                            "path": "/users/{userId}",
+                            "method": "DELETE",
+                            "safeguard": "DELETE USER {userId}",
+                        },
+                    },
+                }
+            }
+        }
+
+        manager = RapiConfigManager(config)
+
+        _, endpoint = manager.resolve("admin.delete_user")
+        assert endpoint.safeguard == "DELETE USER {userId}"
+
+    def test_get_without_safeguard_accepted(self) -> None:
+        """Accept GET endpoint without safeguard (not dangerous)."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoints": {
+                        "get_data": {"path": "/data", "method": "GET"},
+                    },
+                }
+            }
+        }
+
+        manager = RapiConfigManager(config)
+
+        _, endpoint = manager.resolve("api.get_data")
+        assert endpoint.safeguard is None
+
+    def test_post_without_safeguard_accepted(self) -> None:
+        """Accept POST endpoint without safeguard (not in default list)."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoints": {
+                        "create_data": {"path": "/data", "method": "POST"},
+                    },
+                }
+            }
+        }
+
+        manager = RapiConfigManager(config)
+
+        _, endpoint = manager.resolve("api.create_data")
+        assert endpoint.safeguard is None
+
+    def test_custom_safeguard_config_no_requirements(self) -> None:
+        """Accept DELETE without safeguard when custom config has no requirements."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoints": {
+                        "delete": {"path": "/data", "method": "DELETE"},
+                    },
+                }
+            }
+        }
+
+        # Custom config with no required methods
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager(config, safeguard_config=safeguard_config)
+
+        _, endpoint = manager.resolve("api.delete")
+        assert endpoint.safeguard is None
+
+    def test_safeguard_from_yaml(self, tmp_path: Path) -> None:
+        """Load safeguard from YAML file."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: admin
+base_url: "https://admin.example.com"
+endpoints:
+  delete_user:
+    path: "/users/{userId}"
+    method: DELETE
+    safeguard: "DELETE USER {userId}"
+  get_user:
+    path: "/users/{userId}"
+    method: GET
+"""
+        )
+
+        manager = RapiConfigManager.from_file(str(rapi_file))
+
+        _, delete_ep = manager.resolve("admin.delete_user")
+        _, get_ep = manager.resolve("admin.get_user")
+
+        assert delete_ep.safeguard == "DELETE USER {userId}"
+        assert get_ep.safeguard is None
+
+    def test_safeguard_missing_in_yaml_rejected(self, tmp_path: Path) -> None:
+        """Reject YAML file with DELETE endpoint missing safeguard."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: admin
+base_url: "https://admin.example.com"
+endpoints:
+  delete_user:
+    path: "/users/{userId}"
+    method: DELETE
+"""
+        )
+
+        with pytest.raises(SafeguardMissingError):
+            RapiConfigManager.from_file(str(rapi_file))
+
+
+class TestEnvVarExpansion:
+    """Tests for environment variable expansion in config."""
+
+    def test_expand_simple_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Expand simple ${VAR} syntax."""
+        monkeypatch.setenv("TEST_HOST", "example.com")
+        result = _expand_env_vars("https://${TEST_HOST}/api")
+        assert result == "https://example.com/api"
+
+    def test_expand_var_with_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Expand ${VAR:-default} when var is not set."""
+        monkeypatch.delenv("MISSING_VAR", raising=False)
+        result = _expand_env_vars("https://${MISSING_VAR:-localhost}/api")
+        assert result == "https://localhost/api"
+
+    def test_expand_var_with_default_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Expand ${VAR:-default} when var IS set (use var value)."""
+        monkeypatch.setenv("SET_VAR", "actual-value")
+        result = _expand_env_vars("https://${SET_VAR:-default}/api")
+        assert result == "https://actual-value/api"
+
+    def test_expand_missing_var_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Raise EnvVarError when required var is not set."""
+        monkeypatch.delenv("REQUIRED_VAR", raising=False)
+        with pytest.raises(EnvVarError) as exc_info:
+            _expand_env_vars("https://${REQUIRED_VAR}/api")
+        assert "REQUIRED_VAR" in str(exc_info.value)
+
+    def test_expand_missing_var_with_source(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """EnvVarError includes source file in message."""
+        monkeypatch.delenv("MISSING", raising=False)
+        with pytest.raises(EnvVarError) as exc_info:
+            _expand_env_vars("${MISSING}", source="test.rapi.yml")
+        assert "test.rapi.yml" in str(exc_info.value)
+
+    def test_expand_multiple_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Expand multiple variables in one string."""
+        monkeypatch.setenv("HOST", "api.example.com")
+        monkeypatch.setenv("PORT", "8080")
+        result = _expand_env_vars("https://${HOST}:${PORT}/v1")
+        assert result == "https://api.example.com:8080/v1"
+
+    def test_expand_empty_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Expand ${VAR:-} with empty default."""
+        monkeypatch.delenv("OPTIONAL", raising=False)
+        result = _expand_env_vars("prefix${OPTIONAL:-}suffix")
+        assert result == "prefixsuffix"
+
+    def test_no_expansion_needed(self) -> None:
+        """String without ${} is returned unchanged."""
+        result = _expand_env_vars("https://example.com/api")
+        assert result == "https://example.com/api"
+
+    def test_recursive_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Recursively expand vars in dict values."""
+        monkeypatch.setenv("API_HOST", "api.test.com")
+        monkeypatch.setenv("API_TOKEN", "secret123")
+        data = {
+            "base_url": "https://${API_HOST}",
+            "credentials": {
+                "token": "${API_TOKEN}",
+            },
+            "count": 42,
+        }
+        result = _expand_env_vars_recursive(data)
+        assert result["base_url"] == "https://api.test.com"
+        assert result["credentials"]["token"] == "secret123"
+        assert result["count"] == 42
+
+    def test_recursive_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Recursively expand vars in list items."""
+        monkeypatch.setenv("ITEM", "expanded")
+        data = ["${ITEM}", "static", {"nested": "${ITEM}"}]
+        result = _expand_env_vars_recursive(data)
+        assert result[0] == "expanded"
+        assert result[1] == "static"
+        assert result[2]["nested"] == "expanded"
+
+    def test_recursive_preserves_types(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Non-string types are preserved."""
+        monkeypatch.setenv("VAR", "value")
+        data = {
+            "string": "${VAR}",
+            "int": 123,
+            "float": 3.14,
+            "bool": True,
+            "none": None,
+        }
+        result = _expand_env_vars_recursive(data)
+        assert result["string"] == "value"
+        assert result["int"] == 123
+        assert result["float"] == 3.14
+        assert result["bool"] is True
+        assert result["none"] is None
+
+
+class TestEnvVarExpansionInYaml:
+    """Tests for env var expansion when loading YAML files."""
+
+    def test_base_url_expansion(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Expand env var in base_url from YAML file."""
+        monkeypatch.setenv("VIYA_HOST", "viya.example.com")
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: viya
+base_url: "https://${VIYA_HOST}"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(str(rapi_file), safeguard_config=safeguard_config)
+        api, _ = manager.resolve("viya.root")
+        assert api.base_url == "https://viya.example.com"
+
+    def test_credentials_path_expansion(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Expand env var in credentials path from YAML file."""
+        monkeypatch.setenv("CRED_PATH", "/etc/secrets")
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: secure
+base_url: "https://api.example.com"
+credentials:
+  type: file
+  path: "${CRED_PATH}/token.json"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(str(rapi_file), safeguard_config=safeguard_config)
+        assert manager is not None
+
+    def test_missing_env_var_in_yaml_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Raise EnvVarError when env var is missing in YAML."""
+        monkeypatch.delenv("UNDEFINED_HOST", raising=False)
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: broken
+base_url: "https://${UNDEFINED_HOST}"
+endpoints:
+  root:
+    path: /
+"""
+        )
+
+        with pytest.raises(EnvVarError) as exc_info:
+            RapiConfigManager.from_file(str(rapi_file))
+        assert "UNDEFINED_HOST" in str(exc_info.value)
+        assert str(rapi_file) in str(exc_info.value)
+
+    def test_default_value_in_yaml(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Use default value when env var not set in YAML."""
+        monkeypatch.delenv("OPTIONAL_PORT", raising=False)
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: optional
+base_url: "https://api.example.com:${OPTIONAL_PORT:-443}"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(str(rapi_file), safeguard_config=safeguard_config)
+        api, _ = manager.resolve("optional.root")
+        assert api.base_url == "https://api.example.com:443"
+
+
+class TestDefaultsInheritance:
+    """Tests for defaults inheritance from kstlib.conf.yml to included files."""
+
+    def test_inherit_base_url(self, tmp_path: Path) -> None:
+        """Inherit base_url from defaults."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: myapi
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        defaults = {"base_url": "https://inherited.example.com"}
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api, _ = manager.resolve("myapi.root")
+        assert api.base_url == "https://inherited.example.com"
+
+    def test_override_base_url(self, tmp_path: Path) -> None:
+        """File base_url overrides defaults."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: myapi
+base_url: "https://file-wins.example.com"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        defaults = {"base_url": "https://default.example.com"}
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api, _ = manager.resolve("myapi.root")
+        assert api.base_url == "https://file-wins.example.com"
+
+    def test_inherit_credentials(self, tmp_path: Path) -> None:
+        """Inherit credentials from defaults."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        defaults = {
+            "credentials": {
+                "type": "file",
+                "path": "~/.creds/token.json",
+                "token_path": ".access_token",
+            }
+        }
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api, _ = manager.resolve("myapi.root")
+        assert api.credentials is not None
+
+    def test_inherit_auth(self, tmp_path: Path) -> None:
+        """Inherit auth from defaults."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        defaults = {"auth": "bearer"}
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api, _ = manager.resolve("myapi.root")
+        assert api.auth_type == "bearer"
+
+    def test_merge_headers(self, tmp_path: Path) -> None:
+        """Headers are merged (file overrides default on conflict)."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+headers:
+  Accept: application/vnd.custom+json
+  X-Custom: from-file
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        defaults = {
+            "headers": {
+                "Accept": "application/json",
+                "X-Default": "from-defaults",
+            }
+        }
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api, _ = manager.resolve("myapi.root")
+        assert api.headers["Accept"] == "application/vnd.custom+json"
+        assert api.headers["X-Default"] == "from-defaults"
+        assert api.headers["X-Custom"] == "from-file"
+
+    def test_defaults_with_env_vars(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Environment variables in defaults are expanded."""
+        monkeypatch.setenv("DEFAULT_HOST", "env-host.example.com")
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: myapi
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        defaults = {"base_url": "https://${DEFAULT_HOST}"}
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api, _ = manager.resolve("myapi.root")
+        assert api.base_url == "https://env-host.example.com"
+
+    def test_multiple_files_share_defaults(self, tmp_path: Path) -> None:
+        """Multiple files share the same defaults."""
+        file1 = tmp_path / "api1.rapi.yml"
+        file1.write_text(
+            """
+name: api1
+endpoints:
+  root:
+    path: /api1
+    method: GET
+"""
+        )
+
+        file2 = tmp_path / "api2.rapi.yml"
+        file2.write_text(
+            """
+name: api2
+endpoints:
+  root:
+    path: /api2
+    method: GET
+"""
+        )
+
+        defaults = {"base_url": "https://shared.example.com", "auth": "bearer"}
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_files(
+            [str(file1), str(file2)],
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api1, _ = manager.resolve("api1.root")
+        api2, _ = manager.resolve("api2.root")
+        assert api1.base_url == "https://shared.example.com"
+        assert api2.base_url == "https://shared.example.com"
+        assert api1.auth_type == "bearer"
+        assert api2.auth_type == "bearer"
+
+    def test_no_defaults(self, tmp_path: Path) -> None:
+        """File works without defaults (backward compatible)."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: standalone
+base_url: "https://standalone.example.com"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=None,
+        )
+
+        api, _ = manager.resolve("standalone.root")
+        assert api.base_url == "https://standalone.example.com"
+
+    def test_merge_credentials_partial(self, tmp_path: Path) -> None:
+        """Partial credentials override in file."""
+        rapi_file = tmp_path / "api.rapi.yml"
+        rapi_file.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+credentials:
+  path: ~/.different/token.json
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        defaults = {
+            "credentials": {
+                "type": "file",
+                "path": "~/.default/token.json",
+                "token_path": ".access_token",
+            }
+        }
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(
+            str(rapi_file),
+            safeguard_config=safeguard_config,
+            defaults=defaults,
+        )
+
+        api, _ = manager.resolve("myapi.root")
+        assert api.credentials is not None
+
+
+class TestNestedIncludes:
+    """Tests for nested include support in .rapi.yml files."""
+
+    def test_include_relative_file(self, tmp_path: Path) -> None:
+        """Include a relative file from within a rapi file."""
+        # Create root file with include
+        root_file = tmp_path / "root.rapi.yml"
+        root_file.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+include:
+  - "./endpoints.rapi.yml"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        # Create included file (no base_url needed, endpoints only)
+        endpoints_file = tmp_path / "endpoints.rapi.yml"
+        endpoints_file.write_text(
+            """
+name: ignored
+base_url: "https://ignored.com"
+endpoints:
+  users:
+    path: /users
+    method: GET
+  posts:
+    path: /posts
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(str(root_file), safeguard_config=safeguard_config)
+
+        # Should have root endpoint + included endpoints
+        assert "myapi" in manager.list_apis()
+        endpoints = manager.list_endpoints("myapi")
+        assert "myapi.root" in endpoints
+        assert "myapi.users" in endpoints
+        assert "myapi.posts" in endpoints
+
+    def test_include_multiple_files(self, tmp_path: Path) -> None:
+        """Include multiple files from within a rapi file."""
+        root_file = tmp_path / "root.rapi.yml"
+        root_file.write_text(
+            """
+name: annotations
+base_url: "https://api.example.com"
+include:
+  - "./annotations.rapi.yml"
+  - "./members.rapi.yml"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        (tmp_path / "annotations.rapi.yml").write_text(
+            """
+name: ignored
+base_url: "https://ignored.com"
+endpoints:
+  create:
+    path: /annotations
+    method: POST
+"""
+        )
+
+        (tmp_path / "members.rapi.yml").write_text(
+            """
+name: ignored
+base_url: "https://ignored.com"
+endpoints:
+  list-members:
+    path: /members
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(str(root_file), safeguard_config=safeguard_config)
+
+        endpoints = manager.list_endpoints("annotations")
+        assert "annotations.root" in endpoints
+        assert "annotations.create" in endpoints
+        assert "annotations.list-members" in endpoints
+
+    def test_include_with_glob_pattern(self, tmp_path: Path) -> None:
+        """Include files using glob pattern."""
+        root_file = tmp_path / "root.rapi.yml"
+        root_file.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+include:
+  - "./*.endpoints.rapi.yml"
+endpoints:
+  root:
+    path: /
+    method: GET
+"""
+        )
+
+        (tmp_path / "users.endpoints.rapi.yml").write_text(
+            """
+name: ignored
+base_url: "https://ignored.com"
+endpoints:
+  users:
+    path: /users
+    method: GET
+"""
+        )
+
+        (tmp_path / "posts.endpoints.rapi.yml").write_text(
+            """
+name: ignored
+base_url: "https://ignored.com"
+endpoints:
+  posts:
+    path: /posts
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(str(root_file), safeguard_config=safeguard_config)
+
+        endpoints = manager.list_endpoints("myapi")
+        assert "myapi.root" in endpoints
+        assert "myapi.users" in endpoints
+        assert "myapi.posts" in endpoints
+
+    def test_no_include_backward_compatible(self, tmp_path: Path) -> None:
+        """Files without include work as before."""
+        rapi_file = tmp_path / "simple.rapi.yml"
+        rapi_file.write_text(
+            """
+name: simple
+base_url: "https://api.example.com"
+endpoints:
+  test:
+    path: /test
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_file(str(rapi_file), safeguard_config=safeguard_config)
+
+        assert "simple" in manager.list_apis()
+        assert "simple.test" in manager.list_endpoints()
+
+
+class TestEndpointCollisionDetection:
+    """Tests for endpoint collision detection."""
+
+    def test_collision_warning_non_strict(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        """Warn about endpoint collision in non-strict mode."""
+        import logging
+
+        file1 = tmp_path / "api1.rapi.yml"
+        file1.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  create:
+    path: /create-v1
+    method: GET
+"""
+        )
+
+        file2 = tmp_path / "api2.rapi.yml"
+        file2.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  create:
+    path: /create-v2
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        with caplog.at_level(logging.WARNING):
+            manager = RapiConfigManager.from_files(
+                [str(file1), str(file2)],
+                safeguard_config=safeguard_config,
+                strict=False,
+            )
+
+        assert "myapi.create" in caplog.text
+        assert "redefined" in caplog.text.lower() or "overwriting" in caplog.text.lower()
+        _, endpoint = manager.resolve("myapi.create")
+        assert endpoint.path == "/create-v2"
+
+    def test_collision_error_strict(self, tmp_path: Path) -> None:
+        """Raise error on endpoint collision in strict mode."""
+        from kstlib.rapi.exceptions import EndpointCollisionError
+
+        file1 = tmp_path / "api1.rapi.yml"
+        file1.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  create:
+    path: /create-v1
+    method: GET
+"""
+        )
+
+        file2 = tmp_path / "api2.rapi.yml"
+        file2.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  create:
+    path: /create-v2
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        with pytest.raises(EndpointCollisionError) as exc_info:
+            RapiConfigManager.from_files(
+                [str(file1), str(file2)],
+                safeguard_config=safeguard_config,
+                strict=True,
+            )
+
+        assert "myapi.create" in str(exc_info.value)
+
+    def test_no_collision_different_apis(self, tmp_path: Path) -> None:
+        """No collision when same endpoint name in different APIs."""
+        file1 = tmp_path / "api1.rapi.yml"
+        file1.write_text(
+            """
+name: api1
+base_url: "https://api1.example.com"
+endpoints:
+  create:
+    path: /create
+    method: GET
+"""
+        )
+
+        file2 = tmp_path / "api2.rapi.yml"
+        file2.write_text(
+            """
+name: api2
+base_url: "https://api2.example.com"
+endpoints:
+  create:
+    path: /create
+    method: GET
+"""
+        )
+
+        safeguard_config = SafeguardConfig(required_methods=frozenset())
+        manager = RapiConfigManager.from_files(
+            [str(file1), str(file2)],
+            safeguard_config=safeguard_config,
+            strict=True,
+        )
+
+        assert "api1" in manager.list_apis()
+        assert "api2" in manager.list_apis()
+        _, ep1 = manager.resolve("api1.create")
+        _, ep2 = manager.resolve("api2.create")
+        assert ep1.api_name == "api1"
+        assert ep2.api_name == "api2"
+
+    def test_no_collision_different_endpoints(self, tmp_path: Path) -> None:
+        """No collision when different endpoints in same API across files."""
+        file1 = tmp_path / "api1.rapi.yml"
+        file1.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  create:
+    path: /create
+    method: GET
+"""
+        )
+
+        file2 = tmp_path / "api2.rapi.yml"
+        file2.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  delete:
+    path: /delete
+    method: DELETE
+    safeguard: "DELETE"
+"""
+        )
+
+        manager = RapiConfigManager.from_files(
+            [str(file1), str(file2)],
+            strict=True,
+        )
+
+        _, create_ep = manager.resolve("myapi.create")
+        _, delete_ep = manager.resolve("myapi.delete")
+        assert create_ep.path == "/create"
+        assert delete_ep.path == "/delete"
+
+    def test_strict_mode_from_load_rapi_config(self, tmp_path: Path) -> None:
+        """Strict mode parsed from kstlib.conf.yml."""
+        from unittest import mock
+
+        from kstlib.rapi.config import load_rapi_config
+        from kstlib.rapi.exceptions import EndpointCollisionError
+
+        file1 = tmp_path / "api1.rapi.yml"
+        file1.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  create:
+    path: /create-v1
+    method: GET
+"""
+        )
+
+        file2 = tmp_path / "api2.rapi.yml"
+        file2.write_text(
+            """
+name: myapi
+base_url: "https://api.example.com"
+endpoints:
+  create:
+    path: /create-v2
+    method: GET
+"""
+        )
+
+        mock_config = {
+            "rapi": {
+                "strict": True,
+                "safeguard": {"required_methods": []},
+                "include": [str(tmp_path / "*.rapi.yml")],
+            }
+        }
+
+        with mock.patch("kstlib.config.get_config", return_value=mock_config):
+            with pytest.raises(EndpointCollisionError):
+                load_rapi_config()

@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-02-01
+
+### Added
+
+- **RAPI Safeguards** - Protection for dangerous endpoints
+  - SafeguardConfig: configure which HTTP methods require confirmation
+  - Runtime confirmation via `confirm=` parameter
+  - Config-time validation for DELETE/PUT endpoints
+
+- **RAPI Environment Variables** - Dynamic configuration
+  - `${VAR}` syntax for required env vars
+  - `${VAR:-default}` syntax with fallback values
+  - Recursive expansion in all string values
+
+- **RAPI Nested Includes** - Modular API definitions
+  - Include sub-modules from root `.rapi.yml` files
+  - Defaults inheritance (base_url, credentials, headers)
+  - Endpoint collision detection with strict mode
+
+- **RAPI CLI Improvements**
+  - `--filter` option for endpoint search
+  - `--short-desc` flag for truncated descriptions
+  - Verbose mode shows full descriptions by default
+
+- **SAS Viya POC** - Example with ~1250 endpoints
+  - Validates nested includes architecture at scale
+  - Body schemas approximate (not validated)
+
+## [1.0.2] - 2026-01-31
+
+### Changed
+
+- Upgrade dev dependencies (security fixes)
+
+## [1.0.1] - 2026-01-31
+
+### Fixed
+
+- Use absolute URL for logo in README
+
 ## [1.0.0] - 2026-01-30
 
 First public release of kstlib, a config-driven Python toolkit for building
@@ -135,4 +175,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.1.0]: https://github.com/KaminoU/kstlib/compare/v1.0.2...v1.1.0
+[1.0.2]: https://github.com/KaminoU/kstlib/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/KaminoU/kstlib/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/KaminoU/kstlib/releases/tag/v1.0.0

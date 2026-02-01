@@ -1,0 +1,76 @@
+# SAS Viya Catalog API - Root section
+# https://developer.sas.com/rest-apis/catalog
+#
+# Entry point for the Catalog API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: catalog
+
+include:
+  - "./instances.rapi.yml"
+  - "./types.rapi.yml"
+  - "./indices.rapi.yml"
+  - "./views.rapi.yml"
+  - "./agents.rapi.yml"
+  - "./tags.rapi.yml"
+
+headers:
+  Accept: application/vnd.sas.metadata.catalog+json
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /catalog/
+    method: GET
+    description: Returns top-level resource links.
+
+  root-check:
+    path: /catalog/
+    method: HEAD
+    description: Checks API availability.
+
+  # ============================================================
+  # Search
+  # ============================================================
+  search:
+    path: /catalog/search
+    method: GET
+    description: Searches the catalog.
+    query:
+      q: null
+      start: 0
+      limit: 10
+      filter: null
+
+  search-facets:
+    path: /catalog/search/facets
+    method: GET
+    description: Returns search facets.
+
+  search-suggestions:
+    path: /catalog/search/suggestions
+    method: GET
+    description: Returns search suggestions.
+    query:
+      q: null
+
+  search-favorites:
+    path: /catalog/favorites
+    method: GET
+    description: Returns user favorites.
+
+  # ============================================================
+  # Deletions
+  # ============================================================
+  deletions:
+    path: /catalog/deletions
+    method: POST
+    description: Bulk deletes objects via URI list.
+    safeguard: BULK DELETE
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri*: null

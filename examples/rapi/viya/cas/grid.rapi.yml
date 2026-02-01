@@ -1,0 +1,77 @@
+# SAS Viya CAS REST API - Grid section
+# https://developer.sas.com/rest-apis/cas
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-grid
+
+endpoints:
+  # ============================================================
+  # Grid
+  # ============================================================
+  grid-info:
+    path: /cas/grid
+    method: GET
+    description: Returns grid information.
+
+  grid-node:
+    path: /cas/grid/{name}
+    method: GET
+    description: Returns grid node information.
+
+  grid-processes:
+    path: /cas/grid/{name}/processes
+    method: GET
+    description: Returns grid node processes.
+
+  grid-process-get:
+    path: /cas/grid/{name}/processes/{processId}
+    method: GET
+    description: Returns process from node.
+
+  grid-process-terminate:
+    path: /cas/grid/{name}/processes/{processId}
+    method: DELETE
+    description: Terminates process on node.
+    safeguard: TERMINATE PROCESS {processId} ON {name}
+
+  grid-process-cmd:
+    path: /cas/grid/{name}/processes/{processId}/commandLine
+    method: GET
+    description: Returns command line.
+
+  grid-process-cpu:
+    path: /cas/grid/{name}/processes/{processId}/cpuTime
+    method: GET
+    description: Returns CPU times.
+
+  grid-process-env:
+    path: /cas/grid/{name}/processes/{processId}/environment
+    method: GET
+    description: Returns environment variables.
+
+  grid-process-threads:
+    path: /cas/grid/{name}/processes/{processId}/threads
+    method: GET
+    description: Returns threads list.
+
+  grid-thread-get:
+    path: /cas/grid/{name}/processes/{processId}/threads/{threadId}
+    method: GET
+    description: Returns thread info.
+
+  grid-thread-stack:
+    path: /cas/grid/{name}/processes/{processId}/threads/{threadId}/stack
+    method: GET
+    description: Returns thread stack.
+
+  grid-top:
+    path: /cas/grid/{name}/top
+    method: GET
+    description: Returns system metrics.
+
+  grid-top-user:
+    path: /cas/grid/{name}/top/{user}
+    method: GET
+    description: Returns metrics for user.

@@ -1,0 +1,219 @@
+# SAS Viya CAS REST API - Server section
+# https://developer.sas.com/rest-apis/cas
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-server
+
+endpoints:
+  # ============================================================
+  # Nodes
+  # ============================================================
+  nodes-names:
+    path: /cas/nodeNames
+    method: GET
+    description: Returns list of connected node names.
+
+  nodes-count:
+    path: /cas/nodeCount
+    method: GET
+    description: Returns connected node count.
+
+  nodes-list:
+    path: /cas/nodes
+    method: GET
+    description: Returns node list.
+
+  nodes-add:
+    path: /cas/nodes
+    method: PUT
+    description: Adds nodes to grid.
+    body:
+      nodes*:
+        - name*: null
+          host*: null
+
+  nodes-remove:
+    path: /cas/nodes
+    method: DELETE
+    description: Removes nodes from grid.
+    safeguard: REMOVE NODES
+
+  nodes-get:
+    path: /cas/nodes/{nodeName}
+    method: GET
+    description: Returns node information.
+
+  nodes-metrics:
+    path: /cas/nodes/{nodeName}/metrics
+    method: GET
+    description: Returns node metrics.
+
+  nodes-session-processes:
+    path: /cas/nodes/{nodeName}/sessionProcesses
+    method: GET
+    description: Returns session process identifiers.
+
+  nodes-user-processes:
+    path: /cas/nodes/{nodeName}/sessionProcessesForUser
+    method: GET
+    description: Returns user session processes.
+
+  nodes-all-metrics:
+    path: /cas/nodes/metrics
+    method: GET
+    description: Returns nodes with CPU load.
+
+  nodes-cpu-times:
+    path: /cas/nodes/processCPUTimes
+    method: GET
+    description: Returns CPU time for all nodes.
+
+  nodes-memory:
+    path: /cas/nodes/memoryMetrics
+    method: GET
+    description: Returns memory utilization.
+
+  nodes-process-metrics:
+    path: /cas/nodes/processMetrics
+    method: GET
+    description: Returns main process metrics.
+
+  nodes-cpu-all:
+    path: /cas/nodes/cpuTime
+    method: GET
+    description: Returns CPU times for all nodes.
+
+  # ============================================================
+  # Caslibs
+  # ============================================================
+  caslibs-list:
+    path: /cas/caslibs
+    method: GET
+    description: Returns global caslibs.
+
+  caslibs-add:
+    path: /cas/caslibs
+    method: PUT
+    description: Adds a global caslib.
+    body:
+      name*: null
+      path*: null
+      type: null
+      description: null
+
+  caslibs-remove:
+    path: /cas/caslibs
+    method: DELETE
+    description: Removes a global caslib.
+    safeguard: REMOVE CASLIB
+
+  caslibs-get:
+    path: /cas/caslibs/{caslibName}
+    method: GET
+    description: Returns caslib information.
+
+  caslibs-drop:
+    path: /cas/caslibs/{caslibName}
+    method: DELETE
+    description: Drops a caslib.
+    safeguard: DROP CASLIB {caslibName}
+
+  # ============================================================
+  # Administrators
+  # ============================================================
+  admins-list:
+    path: /cas/administrators
+    method: GET
+    description: Returns list of administrators.
+
+  admins-create:
+    path: /cas/administrators
+    method: PUT
+    description: Creates an administrator.
+    body:
+      name*: null
+      superUser: false
+
+  admins-change:
+    path: /cas/administrators
+    method: POST
+    description: Changes administrator.
+    body:
+      name*: null
+      superUser: null
+
+  admins-remove:
+    path: /cas/administrators
+    method: DELETE
+    description: Removes an administrator.
+    safeguard: REMOVE ADMINISTRATOR
+
+  admins-get:
+    path: /cas/administrators/{adminName}
+    method: GET
+    description: Returns administrator info.
+
+  admins-update:
+    path: /cas/administrators/{adminName}
+    method: POST
+    description: Changes administrator info.
+    body:
+      superUser: null
+
+  admins-delete:
+    path: /cas/administrators/{adminName}
+    method: DELETE
+    description: Removes an administrator.
+    safeguard: DELETE ADMIN {adminName}
+
+  # ============================================================
+  # Loggers
+  # ============================================================
+  loggers-list:
+    path: /cas/loggers
+    method: GET
+    description: Returns loggers list.
+
+  loggers-get:
+    path: /cas/loggers/{loggerName}
+    method: GET
+    description: Returns logger information.
+
+  loggers-add:
+    path: /cas/loggers/{loggerName}
+    method: POST
+    description: Adds a new logger.
+    body:
+      level*: null
+      appenders: null
+
+  loggers-update:
+    path: /cas/loggers/{loggerName}
+    method: PUT
+    description: Changes logging level.
+    body:
+      level*: null
+
+  # ============================================================
+  # Appenders
+  # ============================================================
+  appenders-list:
+    path: /cas/appenders
+    method: GET
+    description: Returns appenders list.
+
+  appenders-get:
+    path: /cas/appenders/{appenderName}
+    method: GET
+    description: Returns appender information.
+
+  appenders-add:
+    path: /cas/appenders/{appenderName}
+    method: PUT
+    description: Adds a new appender.
+    body:
+      type*: null
+      path: null
+      layout: null

@@ -1,0 +1,162 @@
+# SAS Viya Compute API - Results, Listings, and Logs section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-results
+
+endpoints:
+  # ============================================================
+  # Session Results
+  # ============================================================
+  results-session-check:
+    path: /compute/sessions/{sessionId}/results
+    method: HEAD
+    description: Checks for session results.
+
+  results-session:
+    path: /compute/sessions/{sessionId}/results
+    method: GET
+    description: Fetches results for a session.
+
+  # ============================================================
+  # Job Results
+  # ============================================================
+  results-job-check:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/results
+    method: HEAD
+    description: Checks for job results.
+
+  results-job:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/results
+    method: GET
+    description: Fetches the results of a job.
+
+  # ============================================================
+  # Session Listing
+  # ============================================================
+  listing-session-check:
+    path: /compute/sessions/{sessionId}/listing
+    method: HEAD
+    description: Checks for a session listing.
+
+  listing-session:
+    path: /compute/sessions/{sessionId}/listing
+    method: GET
+    description: Retrieves listing information for a session.
+
+  listing-session-upload:
+    path: /compute/sessions/{sessionId}/listing
+    method: POST
+    description: Uploads session listing to Files service.
+
+  listing-session-text-check:
+    path: /compute/sessions/{sessionId}/listing
+    method: HEAD
+    description: Checks for session listing as text.
+    headers:
+      Accept: text/plain
+
+  listing-session-text:
+    path: /compute/sessions/{sessionId}/listing
+    method: GET
+    description: Retrieves listing information as text.
+    headers:
+      Accept: text/plain
+
+  # ============================================================
+  # Job Listing
+  # ============================================================
+  listing-job-check:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/listing
+    method: HEAD
+    description: Checks for a job listing.
+
+  listing-job:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/listing
+    method: GET
+    description: Retrieves listing information for a job.
+
+  listing-job-upload:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/listing
+    method: POST
+    description: Uploads job listing to Files service.
+
+  listing-job-text-check:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/listing
+    method: HEAD
+    description: Checks for job listing as text.
+    headers:
+      Accept: text/plain
+
+  listing-job-text:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/listing
+    method: GET
+    description: Retrieves listing information as text.
+    headers:
+      Accept: text/plain
+
+  # ============================================================
+  # Session Log
+  # ============================================================
+  log-session-check:
+    path: /compute/sessions/{sessionId}/log
+    method: HEAD
+    description: Checks for a session log.
+
+  log-session:
+    path: /compute/sessions/{sessionId}/log
+    method: GET
+    description: Retrieves a session log.
+
+  log-session-upload:
+    path: /compute/sessions/{sessionId}/log
+    method: POST
+    description: Uploads session log to Files service.
+
+  log-session-text-check:
+    path: /compute/sessions/{sessionId}/log
+    method: HEAD
+    description: Checks for session log as text.
+    headers:
+      Accept: text/plain
+
+  log-session-text:
+    path: /compute/sessions/{sessionId}/log
+    method: GET
+    description: Retrieves a session log as text.
+    headers:
+      Accept: text/plain
+
+  # ============================================================
+  # Job Log
+  # ============================================================
+  log-job-check:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/log
+    method: HEAD
+    description: Checks job log availability.
+
+  log-job:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/log
+    method: GET
+    description: Retrieves a job log.
+
+  log-job-upload:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/log
+    method: POST
+    description: Uploads job log to Files service.
+
+  log-job-text-check:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/log
+    method: HEAD
+    description: Checks for job log as text.
+    headers:
+      Accept: text/plain
+
+  log-job-text:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/log
+    method: GET
+    description: Retrieves a job log as text.
+    headers:
+      Accept: text/plain

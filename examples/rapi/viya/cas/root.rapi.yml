@@ -1,0 +1,77 @@
+# SAS Viya CAS REST API - Root section
+# https://developer.sas.com/rest-apis/cas
+#
+# Entry point for the CAS REST API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas
+
+include:
+  - "./actions.rapi.yml"
+  - "./server.rapi.yml"
+  - "./sessions.rapi.yml"
+  - "./system.rapi.yml"
+  - "./grid.rapi.yml"
+
+headers:
+  Accept: application/json
+
+endpoints:
+  # ============================================================
+  # Root / Info
+  # ============================================================
+  root:
+    path: /cas/
+    method: GET
+    description: Returns grid information.
+
+  root-shutdown:
+    path: /cas/
+    method: DELETE
+    description: Shuts down CAS servers.
+    safeguard: SHUTDOWN CAS SERVERS
+
+  config:
+    path: /cas/configuration
+    method: GET
+    description: Returns configuration settings.
+
+  type:
+    path: /cas/type
+    method: GET
+    description: Returns server type.
+
+  state:
+    path: /cas/state
+    method: GET
+    description: Returns CAS server state.
+
+  metrics:
+    path: /cas/metrics
+    method: GET
+    description: Returns system CPU load.
+
+  uptime:
+    path: /cas/uptimeSeconds
+    method: GET
+    description: Returns server uptime in seconds.
+
+  messages:
+    path: /cas/messages
+    method: GET
+    description: Returns server notifications.
+
+  ports:
+    path: /cas/ports
+    method: GET
+    description: Returns CAS port information.
+
+  process:
+    path: /cas/process
+    method: GET
+    description: Returns CAS process information.
+
+  session-list:
+    path: /cas/sessionList
+    method: GET
+    description: Returns active sessions list.

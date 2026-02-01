@@ -1,0 +1,187 @@
+# SAS Viya Machine Learning Pipeline Automation API
+# https://developer.sas.com/rest-apis/mlPipelineAutomation
+#
+# Entry point for the ML Pipeline Automation API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: ml-pipeline-automation
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /mlPipelineAutomation/
+    method: GET
+    description: Returns collection of all usable links.
+
+  # ============================================================
+  # Projects Collection
+  # ============================================================
+  projects-list:
+    path: /mlPipelineAutomation/projects
+    method: GET
+    description: Returns all automation projects.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  projects-create:
+    path: /mlPipelineAutomation/projects
+    method: POST
+    description: Creates an automation project.
+    body:
+      name*: null
+      description: null
+      dataTableUri*: null
+      type: predictive
+      analyticsProjectAttributes:
+        targetVariable*: null
+        targetEventLevel: null
+        intervalSelectionStatistic: ase
+        classSelectionStatistic: ks
+        selectionDepth: 10
+        selectionPartition: default
+        cutoffPercentage: 50
+        maxModelingTime: 60
+        numberOfModels: 5
+        samplingEnabled: false
+        samplingPercentage: 100
+      pipelineSettings:
+        pipelineBuildMethod: default
+        maxPipelinesForBuildMethod: null
+
+  # ============================================================
+  # Single Project
+  # ============================================================
+  projects-check:
+    path: /mlPipelineAutomation/projects/{projectId}
+    method: HEAD
+    description: Returns headers for an automation project.
+
+  projects-get:
+    path: /mlPipelineAutomation/projects/{projectId}
+    method: GET
+    description: Returns an automation project.
+
+  projects-update:
+    path: /mlPipelineAutomation/projects/{projectId}
+    method: PUT
+    description: Updates the specified automation project.
+    body:
+      name*: null
+      description: null
+      dataTableUri*: null
+      type: predictive
+      analyticsProjectAttributes:
+        targetVariable*: null
+
+  projects-delete:
+    path: /mlPipelineAutomation/projects/{projectId}
+    method: DELETE
+    description: Deletes an automation project.
+    safeguard: DELETE PROJECT {projectId}
+
+  # ============================================================
+  # Project Reports
+  # ============================================================
+  projects-reports-check:
+    path: /mlPipelineAutomation/projects/{projectId}/reports
+    method: HEAD
+    description: Returns headers for completed project reports.
+
+  projects-reports:
+    path: /mlPipelineAutomation/projects/{projectId}/reports
+    method: GET
+    description: Returns reports for a completed project.
+
+  # ============================================================
+  # Project State
+  # ============================================================
+  projects-state-check:
+    path: /mlPipelineAutomation/projects/{projectId}/state
+    method: HEAD
+    description: Returns headers for current state.
+
+  projects-state-get:
+    path: /mlPipelineAutomation/projects/{projectId}/state
+    method: GET
+    description: Returns current state of an automation project.
+
+  projects-state-update:
+    path: /mlPipelineAutomation/projects/{projectId}/state
+    method: PUT
+    description: Updates state of the specified project.
+    headers:
+      Content-Type: text/plain
+    body: null
+
+  # ============================================================
+  # Champion Model
+  # ============================================================
+  projects-champion-check:
+    path: /mlPipelineAutomation/projects/{projectId}/models/@championModel
+    method: HEAD
+    description: Returns headers for champion model information.
+
+  projects-champion-get:
+    path: /mlPipelineAutomation/projects/{projectId}/models/@championModel
+    method: GET
+    description: Returns the champion model information.
+
+  projects-champion-publish:
+    path: /mlPipelineAutomation/projects/{projectId}/models/@championModel
+    method: PUT
+    description: Registers or publishes the champion model.
+    body:
+      action*: null
+      destinationName: null
+      modelName: null
+      force: false
+
+  projects-champion-reports-check:
+    path: /mlPipelineAutomation/projects/{projectId}/models/@championModel/reports
+    method: HEAD
+    description: Returns headers for champion model reports.
+
+  projects-champion-reports:
+    path: /mlPipelineAutomation/projects/{projectId}/models/@championModel/reports
+    method: GET
+    description: Returns the champion model reports.
+
+  projects-champion-score:
+    path: /mlPipelineAutomation/projects/{projectId}/models/@championModel/scoreData
+    method: POST
+    description: Scores data with the champion model.
+    body:
+      scoreInputLibraryUri*: null
+      scoreInputTableUri*: null
+      scoreOutputLibraryUri*: null
+      scoreOutputTableName*: null
+
+  # ============================================================
+  # Algorithms
+  # ============================================================
+  algorithms-list:
+    path: /mlPipelineAutomation/algorithms
+    method: GET
+    description: Returns all supervised learning algorithms.
+
+  # ============================================================
+  # Pipeline Templates
+  # ============================================================
+  templates-list:
+    path: /mlPipelineAutomation/pipelineTemplates
+    method: GET
+    description: Returns all ML pipeline templates.
+
+  templates-check:
+    path: /mlPipelineAutomation/pipelineTemplates/{templateId}
+    method: HEAD
+    description: Returns headers for a pipeline template.
+
+  templates-get:
+    path: /mlPipelineAutomation/pipelineTemplates/{templateId}
+    method: GET
+    description: Returns a ML pipeline template.

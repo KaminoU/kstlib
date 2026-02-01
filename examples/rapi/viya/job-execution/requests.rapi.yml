@@ -1,0 +1,101 @@
+# SAS Viya Job Execution API - Job Requests section
+# https://developer.sas.com/rest-apis/jobExecution
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: job-execution-requests
+
+endpoints:
+  # ============================================================
+  # Job Requests Collection
+  # ============================================================
+  requests-list:
+    path: /jobExecution/jobRequests
+    method: GET
+    description: Returns job request collection.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  requests-create:
+    path: /jobExecution/jobRequests
+    method: POST
+    description: Creates new job request.
+    body:
+      name: null
+      description: null
+      jobDefinitionUri*: null
+      arguments:
+        _contextName: null
+      expiresAfter: null
+
+  requests-submit-batch:
+    path: /jobExecution/jobRequests/@selection/jobs
+    method: POST
+    description: Submits multiple jobs from job requests.
+    body:
+      jobRequestIds*: null
+
+  # ============================================================
+  # Single Job Request
+  # ============================================================
+  requests-get:
+    path: /jobExecution/jobRequests/{jobRequestId}
+    method: GET
+    description: Returns full job request details.
+
+  requests-check:
+    path: /jobExecution/jobRequests/{jobRequestId}
+    method: HEAD
+    description: Checks job request existence.
+
+  requests-update:
+    path: /jobExecution/jobRequests/{jobRequestId}
+    method: PUT
+    description: Updates job request via full replacement.
+    body:
+      name: null
+      description: null
+      jobDefinitionUri*: null
+      arguments:
+        _contextName: null
+      expiresAfter: null
+
+  requests-delete:
+    path: /jobExecution/jobRequests/{jobRequestId}
+    method: DELETE
+    description: Deletes job request.
+    safeguard: DELETE JOB REQUEST {jobRequestId}
+
+  # ============================================================
+  # Request Jobs
+  # ============================================================
+  requests-jobs-list:
+    path: /jobExecution/jobRequests/{jobRequestId}/jobs
+    method: GET
+    description: Lists jobs for specific request.
+    query:
+      start: 0
+      limit: 10
+
+  requests-jobs-submit:
+    path: /jobExecution/jobRequests/{jobRequestId}/jobs
+    method: POST
+    description: Submits job from request.
+    body:
+      arguments:
+        _contextName: null
+
+  requests-jobs-filter:
+    path: /jobExecution/jobRequests/{jobRequestId}/jobs
+    method: POST
+    description: Returns filtered job list for request.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      filter: null
+      sortBy: null
+      start: 0
+      limit: 10

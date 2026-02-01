@@ -1,0 +1,144 @@
+# SAS Viya Authorization API - Rules section
+# https://developer.sas.com/rest-apis/authorization
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: authorization-rules
+
+endpoints:
+  # ============================================================
+  # Rules Collection
+  # ============================================================
+  rules-list:
+    path: /authorization/rules
+    method: GET
+    description: Retrieves authorization rules with optional paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  rules-create:
+    path: /authorization/rules
+    method: POST
+    description: Creates a new authorization rule with system-generated ID.
+    body:
+      type: null
+      permissions: null
+      principalType: null
+      principal: null
+      objectUri: null
+      containerUri: null
+      mediaType: null
+      condition: null
+      enabled: true
+      description: null
+
+  rules-patch:
+    path: /authorization/rules
+    method: PATCH
+    description: Performs synchronous, transactional rule management operations.
+    headers:
+      Content-Type: application/vnd.sas.authorization.rules.management.request+json
+    body:
+      entries:
+        - op: null
+          value: null
+
+  # ============================================================
+  # Single Rule
+  # ============================================================
+  rules-get:
+    path: /authorization/rules/{ruleId}
+    method: GET
+    description: Retrieves a specified authorization rule.
+
+  rules-update:
+    path: /authorization/rules/{ruleId}
+    method: PUT
+    description: Updates or creates a rule by complete replacement.
+    body:
+      type: null
+      permissions: null
+      principalType: null
+      principal: null
+      objectUri: null
+      containerUri: null
+      mediaType: null
+      condition: null
+      enabled: true
+      description: null
+
+  rules-delete:
+    path: /authorization/rules/{ruleId}
+    method: DELETE
+    description: Deletes a specified authorization rule.
+    safeguard: DELETE RULE {ruleId}
+
+  # ============================================================
+  # Rule Jobs (Async Operations)
+  # ============================================================
+  rules-jobs-create:
+    path: /authorization/rules/jobs
+    method: POST
+    description: Creates an asynchronous job for rule management actions.
+    body:
+      entries:
+        - op: null
+          value: null
+
+  rules-jobs-get:
+    path: /authorization/rules/jobs/{jobId}
+    method: GET
+    description: Retrieves descriptive information about a rule job.
+
+  rules-jobs-delete:
+    path: /authorization/rules/jobs/{jobId}
+    method: DELETE
+    description: Deletes a specified rule job.
+    safeguard: DELETE JOB {jobId}
+
+  rules-jobs-state:
+    path: /authorization/rules/jobs/{jobId}/state
+    method: GET
+    description: Retrieves status information for a specified rule job.
+
+  # ============================================================
+  # Validations
+  # ============================================================
+  rules-validate-condition:
+    path: /authorization/commons/validations/conditions
+    method: POST
+    description: Validates a Spring Expression Language (SpEL) condition string.
+    body:
+      condition: null
+
+  rules-validate-new:
+    path: /authorization/commons/validations/rules
+    method: POST
+    description: Validates completeness and uniqueness requirements for a new rule.
+    body:
+      type: null
+      permissions: null
+      principalType: null
+      principal: null
+      objectUri: null
+
+  rules-validate-update:
+    path: /authorization/commons/validations/rules/{ruleId}
+    method: PUT
+    description: Validates an updated rule meets requirements.
+    body:
+      type: null
+      permissions: null
+      principalType: null
+      principal: null
+      objectUri: null
+
+  rules-validate-delete:
+    path: /authorization/commons/validations/rules/{ruleId}
+    method: DELETE
+    description: Determines whether a specified authorization rule exists.
+    safeguard: VALIDATE RULE {ruleId} EXISTS

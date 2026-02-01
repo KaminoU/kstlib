@@ -1,0 +1,101 @@
+# SAS Viya Business Rules API - Rules section
+# https://developer.sas.com/rest-apis/businessRules
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: business-rules-rules
+
+endpoints:
+  # ============================================================
+  # Rules in Rule Set
+  # ============================================================
+  rules-list:
+    path: /businessRules/ruleSets/{ruleSetId}/rules
+    method: GET
+    description: Returns all rules for a rule set.
+    query:
+      start: 0
+      limit: 10
+
+  rules-create:
+    path: /businessRules/ruleSets/{ruleSetId}/rules
+    method: POST
+    description: Creates a rule in a rule set.
+    body:
+      name: null
+      conditional: null
+      actions: null
+
+  rules-get:
+    path: /businessRules/ruleSets/{ruleSetId}/rules/{ruleId}
+    method: GET
+    description: Returns rule details.
+
+  rules-check:
+    path: /businessRules/ruleSets/{ruleSetId}/rules/{ruleId}
+    method: HEAD
+    description: Returns rule headers.
+
+  rules-update:
+    path: /businessRules/ruleSets/{ruleSetId}/rules/{ruleId}
+    method: PUT
+    description: Updates a rule.
+    body:
+      name: null
+      conditional: null
+      actions: null
+
+  rules-delete:
+    path: /businessRules/ruleSets/{ruleSetId}/rules/{ruleId}
+    method: DELETE
+    description: Deletes a rule.
+    safeguard: DELETE RULE {ruleId}
+
+  # ============================================================
+  # Rules in Revision
+  # ============================================================
+  rules-revision-list:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/rules
+    method: GET
+    description: Returns rules for a revision.
+    query:
+      start: 0
+      limit: 10
+
+  rules-revision-get:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/rules/{ruleId}
+    method: GET
+    description: Returns revision rule details.
+
+  rules-revision-check:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/rules/{ruleId}
+    method: HEAD
+    description: Returns revision rule headers.
+
+  # ============================================================
+  # All Rules
+  # ============================================================
+  rules-all-list:
+    path: /businessRules/rules
+    method: GET
+    description: Returns all rules across all rule sets.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  rules-export:
+    path: /businessRules/rules
+    method: GET
+    description: Exports rules to CSV.
+    headers:
+      Accept: text/csv
+
+  rules-import:
+    path: /businessRules/rules
+    method: POST
+    description: Imports rules from CSV.
+    headers:
+      Content-Type: text/csv
+    body: null

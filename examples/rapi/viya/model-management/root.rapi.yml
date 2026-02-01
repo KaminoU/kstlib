@@ -1,0 +1,130 @@
+# SAS Viya Model Management API - Root section
+# https://developer.sas.com/rest-apis/modelManagement
+#
+# Entry point for the Model Management API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-management
+
+include:
+  - "./performance.rapi.yml"
+  - "./workflows.rapi.yml"
+  - "./alerts.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /modelManagement/
+    method: GET
+    description: Returns top-level resource links.
+
+  root-check:
+    path: /modelManagement/
+    method: HEAD
+    description: Checks API availability.
+
+  # ============================================================
+  # RSS Feed
+  # ============================================================
+  news:
+    path: /modelManagement/news
+    method: GET
+    description: Returns news feed.
+
+  # ============================================================
+  # Execution
+  # ============================================================
+  execution:
+    path: /modelManagement/execution
+    method: POST
+    description: Executes project file code.
+    body:
+      projectId*: null
+      modelId: null
+      modelVersionId: null
+      codeName*: null
+      codeType: null
+
+  # ============================================================
+  # Code Generation
+  # ============================================================
+  models-mapped-code:
+    path: /modelManagement/models/{modelId}/mappedCode
+    method: POST
+    description: Generates model score code.
+    body:
+      scoreDefinitionId: null
+      hints: null
+
+  models-version-mapped-code:
+    path: /modelManagement/models/{modelId}/versions/{modelVersionIDOrName}/mappedCode
+    method: POST
+    description: Generates version score code.
+    body:
+      scoreDefinitionId: null
+      hints: null
+
+  # ============================================================
+  # Reports
+  # ============================================================
+  reports-comparison:
+    path: /modelManagement/reports
+    method: POST
+    description: Creates comparison report.
+    body:
+      name*: null
+      description: null
+      projectId*: null
+      modelIds*: null
+
+  reports-multivariate:
+    path: /modelManagement/reports/multivariatePredictionSummary
+    method: POST
+    description: Returns variable frequency data.
+    body:
+      projectId*: null
+      modelId*: null
+      dataTableUri*: null
+
+  # ============================================================
+  # Publish
+  # ============================================================
+  publish:
+    path: /modelManagement/publish
+    method: POST
+    description: Publishes to deployment destination.
+    body:
+      name*: null
+      modelId*: null
+      destinationName*: null
+      notes: null
+
+  # ============================================================
+  # KPIs
+  # ============================================================
+  kpis-get:
+    path: /modelManagement/projects/{projectId}/kpis
+    method: GET
+    description: Returns KPIs.
+
+  kpis-create:
+    path: /modelManagement/projects/{projectId}/kpis
+    method: POST
+    description: Creates KPIs.
+    body:
+      items:
+        - name*: null
+          description: null
+          value*: null
+          targetValue: null
+          timePeriod: null
+
+  # ============================================================
+  # Health Metrics
+  # ============================================================
+  health-metrics:
+    path: /modelManagement/projects/{projectId}/models/{modelId}/healthMetrics
+    method: GET
+    description: Returns performance health metrics.

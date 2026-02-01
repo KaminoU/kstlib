@@ -1,0 +1,134 @@
+# SAS Viya Score Execution API
+# https://developer.sas.com/rest-apis/scoreExecution
+#
+# Entry point for the Score Execution API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: score-execution
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /scoreExecution/
+    method: GET
+    description: Returns top-level links.
+
+  root-check:
+    path: /scoreExecution/
+    method: HEAD
+    description: Returns headers for the API.
+
+  # ============================================================
+  # Executions Collection
+  # ============================================================
+  executions-list:
+    path: /scoreExecution/executions
+    method: GET
+    description: Returns list of score executions with paging.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  executions-create:
+    path: /scoreExecution/executions
+    method: POST
+    description: Creates a new score execution.
+    body:
+      name*: null
+      description: null
+      scoreDefinitionId*: null
+      hints: null
+
+  # ============================================================
+  # Single Execution
+  # ============================================================
+  executions-check:
+    path: /scoreExecution/executions/{executionId}
+    method: HEAD
+    description: Returns headers for the specified execution.
+
+  executions-get:
+    path: /scoreExecution/executions/{executionId}
+    method: GET
+    description: Returns full representation of score execution.
+
+  executions-get-summary:
+    path: /scoreExecution/executions/{executionId}
+    method: GET
+    description: Returns summary representation of score execution.
+    headers:
+      Accept: application/vnd.sas.summary+json
+
+  executions-delete:
+    path: /scoreExecution/executions/{executionId}
+    method: DELETE
+    description: Deletes the specified score execution.
+    safeguard: DELETE EXECUTION {executionId}
+
+  executions-state:
+    path: /scoreExecution/executions/{executionId}/state
+    method: GET
+    description: Returns state of the specified execution.
+
+  executions-analysis-code:
+    path: /scoreExecution/executions/{executionId}/analysisCode
+    method: POST
+    description: Generates analysis code for an analysis type.
+    body:
+      analysisType*: null
+      hints: null
+
+  # ============================================================
+  # Analyses Collection
+  # ============================================================
+  analyses-list:
+    path: /scoreExecution/executions/{executionId}/analyses
+    method: GET
+    description: Returns list of score analyses with paging.
+    query:
+      start: 0
+      limit: 10
+
+  analyses-create:
+    path: /scoreExecution/executions/{executionId}/analyses
+    method: POST
+    description: Creates a new score analysis.
+    body:
+      name*: null
+      description: null
+      analysisType*: null
+      hints: null
+
+  # ============================================================
+  # Single Analysis
+  # ============================================================
+  analyses-check:
+    path: /scoreExecution/executions/{executionId}/analyses/{analysisId}
+    method: HEAD
+    description: Returns headers for the specified analysis.
+
+  analyses-get:
+    path: /scoreExecution/executions/{executionId}/analyses/{analysisId}
+    method: GET
+    description: Returns full representation of analysis.
+
+  analyses-get-summary:
+    path: /scoreExecution/executions/{executionId}/analyses/{analysisId}
+    method: GET
+    description: Returns summary representation of analysis.
+    headers:
+      Accept: application/vnd.sas.summary+json
+
+  analyses-delete:
+    path: /scoreExecution/executions/{executionId}/analyses/{analysisId}
+    method: DELETE
+    description: Deletes the specified score analysis.
+    safeguard: DELETE ANALYSIS {analysisId}
+
+  analyses-state:
+    path: /scoreExecution/executions/{executionId}/analyses/{analysisId}/state
+    method: GET
+    description: Returns state of the specified analysis.

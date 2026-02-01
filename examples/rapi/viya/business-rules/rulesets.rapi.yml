@@ -1,0 +1,268 @@
+# SAS Viya Business Rules API - Rule Sets section
+# https://developer.sas.com/rest-apis/businessRules
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: business-rules-rulesets
+
+endpoints:
+  # ============================================================
+  # Rule Sets Collection
+  # ============================================================
+  rulesets-list:
+    path: /businessRules/ruleSets
+    method: GET
+    description: Returns all rule sets.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  rulesets-create:
+    path: /businessRules/ruleSets
+    method: POST
+    description: Creates a new rule set.
+    body:
+      name: null
+      description: null
+      signature: null
+
+  # ============================================================
+  # Single Rule Set
+  # ============================================================
+  rulesets-get:
+    path: /businessRules/ruleSets/{ruleSetId}
+    method: GET
+    description: Returns a rule set.
+
+  rulesets-check:
+    path: /businessRules/ruleSets/{ruleSetId}
+    method: HEAD
+    description: Returns headers for a rule set.
+
+  rulesets-update:
+    path: /businessRules/ruleSets/{ruleSetId}
+    method: PUT
+    description: Updates a rule set.
+    body:
+      name: null
+      description: null
+      signature: null
+
+  rulesets-delete:
+    path: /businessRules/ruleSets/{ruleSetId}
+    method: DELETE
+    description: Deletes a rule set.
+    safeguard: DELETE RULESET {ruleSetId}
+
+  rulesets-get-summary:
+    path: /businessRules/ruleSets/{ruleSetId}
+    method: GET
+    description: Returns decisioning revision summary.
+    headers:
+      Accept: application/vnd.sas.summary+json
+
+  rulesets-get-with-rules:
+    path: /businessRules/ruleSets/{ruleSetId}
+    method: GET
+    description: Returns rule set with all rules.
+    headers:
+      Accept: application/vnd.sas.business.rule.set.withRules+json
+
+  # ============================================================
+  # Rule Set Order
+  # ============================================================
+  rulesets-order-get:
+    path: /businessRules/ruleSets/{ruleSetId}/order
+    method: GET
+    description: Returns execution order of rules.
+
+  rulesets-order-update:
+    path: /businessRules/ruleSets/{ruleSetId}/order
+    method: PUT
+    description: Updates rules execution order.
+    body:
+      ruleIds: null
+
+  # ============================================================
+  # Rule Set Code
+  # ============================================================
+  rulesets-code-get:
+    path: /businessRules/ruleSets/{ruleSetId}/code
+    method: GET
+    description: Returns rule set code.
+
+  rulesets-mapped-code:
+    path: /businessRules/ruleSets/{ruleSetId}/mappedCode
+    method: POST
+    description: Returns mapped code for rule set.
+    body:
+      scoreDefinitionId: null
+
+  rulesets-mapped-code-unbound:
+    path: /businessRules/ruleSets/{ruleSetId}/mappedCode
+    method: POST
+    description: Returns code without score definition.
+    headers:
+      Accept: application/vnd.sas.score.code+json
+    body:
+      mappings: null
+
+  rulesets-analysis-code:
+    path: /businessRules/ruleSets/{ruleSetId}/analysisCode
+    method: POST
+    description: Returns rule set analysis code.
+    body:
+      scoreDefinitionId: null
+
+  rulesets-decision-step-code:
+    path: /businessRules/ruleSets/{ruleSetId}/decisionStepCode
+    method: GET
+    description: Returns decision step code.
+
+  # ============================================================
+  # Rule Set Conversions & Validations
+  # ============================================================
+  rulesets-action-conversion:
+    path: /businessRules/ruleSets/{ruleSetId}/actionConversion
+    method: POST
+    description: Converts rule action.
+    body:
+      actionString: null
+
+  rulesets-condition-conversion:
+    path: /businessRules/ruleSets/{ruleSetId}/conditionConversion
+    method: POST
+    description: Converts rule condition.
+    body:
+      conditionString: null
+
+  rulesets-validations:
+    path: /businessRules/ruleSets/{ruleSetId}/ruleValidations
+    method: POST
+    description: Retrieves validation errors for rules.
+    body:
+      ruleIds*: null
+
+  rulesets-legacy-variables:
+    path: /businessRules/ruleSets/{ruleSetId}/legacyVariables
+    method: GET
+    description: Returns legacy variables.
+
+  rulesets-dependencies:
+    path: /businessRules/ruleSets/{ruleSetId}/dependencies
+    method: GET
+    description: Returns dependent objects.
+
+  # ============================================================
+  # Rule Set Revisions
+  # ============================================================
+  rulesets-revisions-list:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions
+    method: GET
+    description: Returns all revisions.
+    query:
+      start: 0
+      limit: 10
+
+  rulesets-revisions-create:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions
+    method: POST
+    description: Creates a new revision.
+    body:
+      name: null
+      description: null
+
+  rulesets-revisions-create-with-rules:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions
+    method: POST
+    description: Creates revision with rules.
+    headers:
+      Content-Type: application/vnd.sas.business.rule.set.withRules+json
+    body:
+      name: null
+      description: null
+      rules: null
+
+  rulesets-revisions-get:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}
+    method: GET
+    description: Returns a rule set revision.
+
+  rulesets-revisions-check:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}
+    method: HEAD
+    description: Returns revision headers.
+
+  rulesets-revisions-delete:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}
+    method: DELETE
+    description: Deletes a rule set revision.
+    safeguard: DELETE REVISION {revisionId}
+
+  rulesets-revisions-summary:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}
+    method: GET
+    description: Returns revision summary.
+    headers:
+      Accept: application/vnd.sas.summary+json
+
+  rulesets-revisions-export:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}
+    method: GET
+    description: Exports revision as CSV.
+    headers:
+      Accept: text/csv
+
+  rulesets-revisions-order:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/order
+    method: GET
+    description: Returns rule order for revision.
+
+  rulesets-revisions-code:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/code
+    method: GET
+    description: Returns revision code.
+
+  rulesets-revisions-mapped-code:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/mappedCode
+    method: POST
+    description: Returns mapped code for revision.
+    body:
+      scoreDefinitionId: null
+
+  rulesets-revisions-analysis-code:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/analysisCode
+    method: POST
+    description: Returns revision analysis code.
+    body:
+      scoreDefinitionId: null
+
+  rulesets-revisions-decision-step-code:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/decisionStepCode
+    method: GET
+    description: Returns revision decision step code.
+
+  rulesets-revisions-lookups:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/lookups
+    method: GET
+    description: Returns referenced lookups.
+
+  rulesets-revisions-resources:
+    path: /businessRules/ruleSets/{ruleSetId}/revisions/{revisionId}/referencedResources
+    method: GET
+    description: Returns referenced resources.
+
+  # ============================================================
+  # Rule Set Terms
+  # ============================================================
+  rulesets-terms:
+    path: /businessRules/ruleSetTerms
+    method: GET
+    description: Returns terms across all rule sets.
+    query:
+      start: 0
+      limit: 10
+      filter: null

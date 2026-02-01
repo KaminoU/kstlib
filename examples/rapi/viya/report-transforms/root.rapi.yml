@@ -1,0 +1,123 @@
+# SAS Viya Report Transforms API
+# https://developer.sas.com/rest-apis/reportTransforms
+#
+# Entry point for the Report Transforms API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: report-transforms
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /reportTransforms/
+    method: GET
+    description: Returns list of top-level links.
+
+  # ============================================================
+  # Data Mapped Reports
+  # ============================================================
+  data-mapped-create:
+    path: /reportTransforms/dataMappedReports
+    method: POST
+    description: Creates report by swapping data source with column mapping.
+    body:
+      inputReportUri: null
+      resultReportName: null
+      resultParentFolderUri: null
+      dataSources: null
+      reportContent: null
+
+  data-mapped-load:
+    path: /reportTransforms/dataMappedReports/{reportId}
+    method: POST
+    description: Loads saved report and swaps data source with mapping.
+    body:
+      inputReportUri: null
+      resultReportName: null
+      resultParentFolderUri: null
+      dataSources: null
+
+  data-mapped-save:
+    path: /reportTransforms/dataMappedReports/{reportId}
+    method: PUT
+    description: Loads report, swaps data source, maps columns, and saves.
+    body:
+      inputReportUri: null
+      resultReportName: null
+      resultParentFolderUri: null
+      dataSources: null
+
+  # ============================================================
+  # Translation Worksheets
+  # ============================================================
+  translation-worksheet-get:
+    path: /reportTransforms/translationWorksheets/{reportId}/{translationLocale}
+    method: GET
+    description: Extracts translatable strings for human translator.
+
+  translation-worksheet-update:
+    path: /reportTransforms/translationWorksheets/{reportId}/{translationLocale}
+    method: PUT
+    description: Inserts worksheet into report and saves.
+    headers:
+      Content-Type: application/vnd.sas.report.translation.worksheet+json
+    body:
+      locale: null
+      lines*: null
+      version: 1
+
+  translation-worksheet-extract:
+    path: /reportTransforms/translationWorksheets/{translationLocale}
+    method: POST
+    description: Extracts localization worksheet from submitted report.
+    headers:
+      Content-Type: application/vnd.sas.report.content+json
+    body:
+      label: null
+      createdLocale: null
+      createdVersion: null
+
+  translation-worksheet-validate:
+    path: /reportTransforms/commons/validations/translationWorksheets/{reportId}/{translationLocale}
+    method: PUT
+    description: Pre-flight validation for translation updates.
+    headers:
+      Content-Type: application/vnd.sas.report.translation.worksheet+json
+    body:
+      locale: null
+      lines: null
+      version: 1
+
+  # ============================================================
+  # Translated Reports
+  # ============================================================
+  translated-report-get:
+    path: /reportTransforms/translatedReports/{reportId}/{translationLocale}
+    method: GET
+    description: Translates saved report into desired language.
+
+  translated-report-submit:
+    path: /reportTransforms/translatedReports/{translationLocale}
+    method: POST
+    description: Translates submitted report using internal localization.
+    body:
+      inputReportUri: null
+      reportContent: null
+
+  # ============================================================
+  # Themed Reports
+  # ============================================================
+  rethemed-report-get:
+    path: /reportTransforms/rethemedReports/{reportId}/{themeName}
+    method: GET
+    description: Returns rethemed version of saved report.
+
+  rethemed-report-submit:
+    path: /reportTransforms/rethemedReports/{themeName}
+    method: POST
+    description: Changes theme of submitted report.
+    body:
+      inputReportUri: null
+      reportContent: null

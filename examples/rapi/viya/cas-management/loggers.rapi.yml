@@ -1,0 +1,45 @@
+# SAS Viya CAS Management API - Loggers section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-loggers
+
+endpoints:
+  # ============================================================
+  # Loggers
+  # ============================================================
+  loggers-list:
+    path: /casManagement/servers/{serverName}/loggers
+    method: GET
+    description: Returns list of loggers.
+    query:
+      start: 0
+      limit: 10
+
+  loggers-create:
+    path: /casManagement/servers/{serverName}/loggers
+    method: POST
+    description: Adds a logger.
+    body:
+      name: null
+      level: null
+
+  loggers-get:
+    path: /casManagement/servers/{serverName}/loggers/{loggerName}
+    method: GET
+    description: Returns a logger.
+
+  loggers-update:
+    path: /casManagement/servers/{serverName}/loggers/{loggerName}
+    method: PUT
+    description: Updates a logger.
+    body:
+      level: null
+
+  loggers-delete:
+    path: /casManagement/servers/{serverName}/loggers/{loggerName}
+    method: DELETE
+    description: Removes a logger.
+    safeguard: DELETE LOGGER {loggerName}

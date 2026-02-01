@@ -1,0 +1,55 @@
+# SAS Viya Data Sources API - Source Definitions section
+# https://developer.sas.com/rest-apis/dataSources
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-sources-definitions
+
+endpoints:
+  # ============================================================
+  # Source Definitions Collection
+  # ============================================================
+  definitions-list:
+    path: /dataSources/providers/{providerId}/sourceDefinitions
+    method: GET
+    description: Lists source definitions with paging options.
+    query:
+      start: 0
+      limit: 10
+
+  definitions-create:
+    path: /dataSources/providers/{providerId}/sourceDefinitions
+    method: POST
+    description: Creates new source definition.
+    body:
+      name*: null
+      description: null
+      host: null
+      port: null
+      attributes: null
+
+  # ============================================================
+  # Single Source Definition
+  # ============================================================
+  definitions-get:
+    path: /dataSources/providers/{providerId}/sourceDefinitions/{sourceDefinitionId}
+    method: GET
+    description: Returns specific definition.
+
+  definitions-update:
+    path: /dataSources/providers/{providerId}/sourceDefinitions/{sourceDefinitionId}
+    method: PUT
+    description: Updates existing definition.
+    body:
+      name*: null
+      description: null
+      host: null
+      port: null
+      attributes: null
+
+  definitions-delete:
+    path: /dataSources/providers/{providerId}/sourceDefinitions/{sourceDefinitionId}
+    method: DELETE
+    description: Removes definition.
+    safeguard: DELETE SOURCE DEFINITION {sourceDefinitionId}

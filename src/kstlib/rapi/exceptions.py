@@ -203,11 +203,175 @@ class ResponseTooLargeError(RapiError):
         self.max_size = max_size
 
 
+class ConfirmationRequiredError(RapiError):
+    """Raised when a dangerous endpoint requires confirmation.
+
+    This exception is raised at runtime when calling an endpoint
+    that has a safeguard configured but the confirm parameter is
+    missing or incorrect.
+
+    Attributes:
+        endpoint_ref: Full endpoint reference (api.endpoint).
+        expected: Expected confirmation string.
+        actual: Actual confirmation string provided (None if missing).
+
+    Examples:
+        >>> raise ConfirmationRequiredError("api.delete", expected="DELETE X")
+        Traceback (most recent call last):
+        ...
+        kstlib.rapi.exceptions.ConfirmationRequiredError: ... requires confirmation...
+    """
+
+    def __init__(
+        self,
+        endpoint_ref: str,
+        *,
+        expected: str,
+        actual: str | None = None,
+    ) -> None:
+        """Initialize ConfirmationRequiredError.
+
+        Args:
+            endpoint_ref: Full endpoint reference (api.endpoint).
+            expected: Expected confirmation string.
+            actual: Actual confirmation string provided (None if missing).
+        """
+        if actual is None:
+            message = f"Endpoint '{endpoint_ref}' requires confirmation. Pass confirm=\"{expected}\" to proceed."
+        else:
+            message = f'Confirmation mismatch for \'{endpoint_ref}\'. Expected: "{expected}", got: "{actual}"'
+        super().__init__(
+            message,
+            details={
+                "endpoint_ref": endpoint_ref,
+                "expected": expected,
+                "actual": actual,
+            },
+        )
+        self.endpoint_ref = endpoint_ref
+        self.expected = expected
+        self.actual = actual
+
+
+class SafeguardMissingError(RapiError):
+    """Raised when endpoint requires safeguard but none is configured.
+
+    This exception is raised at config load time when an endpoint uses
+    a method that requires a safeguard (e.g., DELETE, PUT) but no
+    safeguard string is provided in the endpoint configuration.
+
+    Attributes:
+        endpoint_ref: Full endpoint reference (api.endpoint).
+        method: HTTP method that requires the safeguard.
+
+    Examples:
+        >>> raise SafeguardMissingError("api.delete", "DELETE")
+        Traceback (most recent call last):
+        ...
+        kstlib.rapi.exceptions.SafeguardMissingError: ... requires a safeguard...
+    """
+
+    def __init__(self, endpoint_ref: str, method: str) -> None:
+        """Initialize SafeguardMissingError.
+
+        Args:
+            endpoint_ref: Full endpoint reference (api.endpoint).
+            method: HTTP method that requires the safeguard.
+        """
+        message = (
+            f"Endpoint '{endpoint_ref}' uses method {method} which requires a safeguard. "
+            f"Add 'safeguard: \"...\"' to the endpoint or remove {method} from "
+            f"rapi.safeguard.required_methods in kstlib.conf.yml."
+        )
+        super().__init__(
+            message,
+            details={"endpoint_ref": endpoint_ref, "method": method},
+        )
+        self.endpoint_ref = endpoint_ref
+        self.method = method
+
+
+class EndpointCollisionError(RapiError):
+    """Raised when endpoints collide in strict mode.
+
+    This exception is raised at config load time when the same endpoint
+    reference is defined in multiple files and strict mode is enabled.
+
+    Attributes:
+        endpoint_ref: Full endpoint reference (api.endpoint).
+        source_files: List of files defining this endpoint.
+
+    Examples:
+        >>> raise EndpointCollisionError("api.create", ["a.rapi.yml", "b.rapi.yml"])
+        Traceback (most recent call last):
+        ...
+        kstlib.rapi.exceptions.EndpointCollisionError: Endpoint 'api.create' defined in multiple files...
+    """
+
+    def __init__(self, endpoint_ref: str, source_files: list[str]) -> None:
+        """Initialize EndpointCollisionError.
+
+        Args:
+            endpoint_ref: Full endpoint reference (api.endpoint).
+            source_files: List of files defining this endpoint.
+        """
+        message = (
+            f"Endpoint '{endpoint_ref}' defined in multiple files: {', '.join(source_files)}. "
+            f"Set rapi.strict: false to allow overwriting (last file wins)."
+        )
+        super().__init__(
+            message,
+            details={"endpoint_ref": endpoint_ref, "source_files": source_files},
+        )
+        self.endpoint_ref = endpoint_ref
+        self.source_files = source_files
+
+
+class EnvVarError(RapiError):
+    """Raised when environment variable substitution fails.
+
+    This exception is raised at config load time when a required
+    environment variable is not set and no default value is provided.
+
+    Attributes:
+        var_name: Name of the missing environment variable.
+        source: Source file or context where the variable was referenced.
+
+    Examples:
+        >>> raise EnvVarError("VIYA_HOST")
+        Traceback (most recent call last):
+        ...
+        kstlib.rapi.exceptions.EnvVarError: Environment variable 'VIYA_HOST' is not set...
+    """
+
+    def __init__(self, var_name: str, source: str | None = None) -> None:
+        """Initialize EnvVarError.
+
+        Args:
+            var_name: Name of the missing environment variable.
+            source: Source file or context where the variable was referenced.
+        """
+        if source:
+            message = f"Environment variable '{var_name}' is not set (required by {source}). Use ${{VAR:-default}} for optional variables."
+        else:
+            message = f"Environment variable '{var_name}' is not set. Use ${{VAR:-default}} for optional variables."
+        super().__init__(
+            message,
+            details={"var_name": var_name, "source": source},
+        )
+        self.var_name = var_name
+        self.source = source
+
+
 __all__ = [
+    "ConfirmationRequiredError",
     "CredentialError",
     "EndpointAmbiguousError",
+    "EndpointCollisionError",
     "EndpointNotFoundError",
+    "EnvVarError",
     "RapiError",
     "RequestError",
     "ResponseTooLargeError",
+    "SafeguardMissingError",
 ]

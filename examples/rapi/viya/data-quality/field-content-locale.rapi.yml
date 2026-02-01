@@ -1,0 +1,52 @@
+# SAS Viya Data Quality API - Field Content Locale section
+# https://developer.sas.com/rest-apis/dataQuality
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-quality-field-content-locale
+
+endpoints:
+  # ============================================================
+  # Field Content Locale
+  # ============================================================
+  field-content-locale-list:
+    path: /dataQuality/fieldContentLocale
+    method: GET
+    description: Returns all available locales with language and country.
+
+  field-content-locale-create:
+    path: /dataQuality/fieldContentLocale
+    method: POST
+    description: Creates a new field content locale.
+    body:
+      locale*: null
+      language: null
+      country: null
+      description: null
+
+  field-content-locale-get:
+    path: /dataQuality/fieldContentLocale/{locale}
+    method: GET
+    description: Returns details for a specific locale.
+
+  field-content-locale-check:
+    path: /dataQuality/fieldContentLocale/{locale}
+    method: HEAD
+    description: Verifies locale existence.
+
+  field-content-locale-update:
+    path: /dataQuality/fieldContentLocale/{locale}
+    method: PUT
+    description: Updates a user-defined field content locale.
+    body:
+      locale*: null
+      language: null
+      country: null
+      description: null
+
+  field-content-locale-delete:
+    path: /dataQuality/fieldContentLocale/{locale}
+    method: DELETE
+    description: Removes a user-defined locale.
+    safeguard: DELETE LOCALE {locale}

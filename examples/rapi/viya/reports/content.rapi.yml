@@ -1,0 +1,104 @@
+# SAS Viya Reports API - Content section
+# https://developer.sas.com/rest-apis/reports
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: reports-content
+
+endpoints:
+  # ============================================================
+  # Report Content
+  # ============================================================
+  content-check:
+    path: /reports/reports/{reportId}/content
+    method: HEAD
+    description: Verifies report content status including ETag.
+
+  content-get:
+    path: /reports/reports/{reportId}/content
+    method: GET
+    description: Returns report content with ETag.
+
+  content-update:
+    path: /reports/reports/{reportId}/content
+    method: PUT
+    description: Saves report content without returning stored version.
+    headers:
+      Content-Type: application/vnd.sas.report.content+json
+    body: null
+
+  content-update-return:
+    path: /reports/reports/{reportId}/content
+    method: PUT
+    description: Saves and returns report content.
+    headers:
+      Content-Type: application/vnd.sas.report.content+json
+      Accept: application/vnd.sas.report.content+json
+    body: null
+
+  # ============================================================
+  # Content Version
+  # ============================================================
+  content-version-check:
+    path: /reports/reports/{reportId}/content/version
+    method: HEAD
+    description: Checks persisted content version existence.
+
+  content-version-get:
+    path: /reports/reports/{reportId}/content/version
+    method: GET
+    description: Returns persisted report content version.
+
+  # ============================================================
+  # Content Validation
+  # ============================================================
+  content-validation:
+    path: /reports/reports/{reportId}/content/validation
+    method: POST
+    description: Validates content against schema.
+    headers:
+      Content-Type: application/vnd.sas.report.content+json
+    body: null
+
+  # ============================================================
+  # Content Elements
+  # ============================================================
+  content-elements-check:
+    path: /reports/reports/{reportId}/content/elements
+    method: HEAD
+    description: Checks content elements status.
+
+  content-elements:
+    path: /reports/reports/{reportId}/content/elements
+    method: GET
+    description: Returns collection of elements.
+
+  # ============================================================
+  # Content Conversion
+  # ============================================================
+  content-to-json:
+    path: /reports/content
+    method: POST
+    description: Converts XML report content to JSON format.
+    headers:
+      Content-Type: application/vnd.sas.report.content+xml
+      Accept: application/vnd.sas.report.content+json
+    body: null
+
+  content-to-xml:
+    path: /reports/content
+    method: POST
+    description: Converts JSON report content to XML format.
+    headers:
+      Content-Type: application/vnd.sas.report.content+json
+      Accept: application/vnd.sas.report.content+xml
+    body: null
+
+  content-validation-global:
+    path: /reports/content/validation
+    method: POST
+    description: Validates content against specified schema.
+    headers:
+      Content-Type: application/vnd.sas.report.content+json
+    body: null

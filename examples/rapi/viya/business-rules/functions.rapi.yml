@@ -1,0 +1,74 @@
+# SAS Viya Business Rules API - Functions section
+# https://developer.sas.com/rest-apis/businessRules
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: business-rules-functions
+
+endpoints:
+  # ============================================================
+  # Functions in Category
+  # ============================================================
+  functions-category-list:
+    path: /businessRules/functionCategories/{categoryId}/functions
+    method: GET
+    description: Returns functions in a category.
+    query:
+      start: 0
+      limit: 10
+
+  functions-category-create:
+    path: /businessRules/functionCategories/{categoryId}/functions
+    method: POST
+    description: Creates a function in a category.
+    body:
+      name: null
+      description: null
+      code: null
+      signature: null
+
+  # ============================================================
+  # All Functions
+  # ============================================================
+  functions-list:
+    path: /businessRules/functions
+    method: GET
+    description: Returns all user-defined functions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  functions-get:
+    path: /businessRules/functions/{functionId}
+    method: GET
+    description: Returns a user-defined function.
+
+  functions-update:
+    path: /businessRules/functions/{functionId}
+    method: PUT
+    description: Updates a function.
+    body:
+      name: null
+      description: null
+      code: null
+      signature: null
+
+  functions-delete:
+    path: /businessRules/functions/{functionId}
+    method: DELETE
+    description: Deletes a function.
+    safeguard: DELETE FUNCTION {functionId}
+
+  # ============================================================
+  # Function Validation
+  # ============================================================
+  functions-validate:
+    path: /businessRules/commons/validations/functions
+    method: POST
+    description: Validates a custom function.
+    body:
+      name: null
+      code: null
+      signature: null

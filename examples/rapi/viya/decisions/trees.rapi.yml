@@ -1,0 +1,136 @@
+# SAS Viya Decisions API - Segmentation Trees section
+# https://developer.sas.com/rest-apis/decisions
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: decisions-trees
+
+endpoints:
+  # ============================================================
+  # Segmentation Trees Collection
+  # ============================================================
+  trees-list:
+    path: /decisions/segmentationTrees
+    method: GET
+    description: Lists all trees.
+    query:
+      start: 0
+      limit: 10
+
+  trees-create:
+    path: /decisions/segmentationTrees
+    method: POST
+    description: Creates tree.
+    body:
+      name*: null
+      description: null
+      signature:
+        - name: null
+          direction: null
+          dataType: null
+      branches:
+        - id: null
+          name: null
+          conditions:
+            - id: null
+              type: null
+              value: null
+          rules:
+            - id: null
+              actions: null
+
+  trees-terms:
+    path: /decisions/segmentationTrees/terms
+    method: GET
+    description: Finds terms across trees.
+    query:
+      term: null
+
+  # ============================================================
+  # Single Tree
+  # ============================================================
+  trees-get:
+    path: /decisions/segmentationTrees/{segmentationTreeId}
+    method: GET
+    description: Returns tree.
+
+  trees-update:
+    path: /decisions/segmentationTrees/{segmentationTreeId}
+    method: PUT
+    description: Updates tree.
+    body:
+      name*: null
+      description: null
+      signature:
+        - name: null
+          direction: null
+          dataType: null
+      branches:
+        - id: null
+          name: null
+          conditions:
+            - id: null
+              type: null
+              value: null
+
+  trees-delete:
+    path: /decisions/segmentationTrees/{segmentationTreeId}
+    method: DELETE
+    description: Deletes tree.
+    safeguard: DELETE TREE {segmentationTreeId}
+
+  trees-code:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/code
+    method: GET
+    description: Returns DS2 code.
+
+  trees-step-code:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/decisionStepCode
+    method: GET
+    description: Returns step code.
+
+  # ============================================================
+  # Tree Revisions
+  # ============================================================
+  trees-revisions-list:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/revisions
+    method: GET
+    description: Lists revisions.
+    query:
+      start: 0
+      limit: 10
+
+  trees-revisions-create:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/revisions
+    method: POST
+    description: Creates revision.
+    body:
+      name: null
+      description: null
+
+  trees-revisions-get:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/revisions/{revisionId}
+    method: GET
+    description: Returns revision.
+
+  trees-revisions-delete:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/revisions/{revisionId}
+    method: DELETE
+    description: Deletes revision.
+    safeguard: DELETE TREE REVISION {revisionId}
+
+  trees-revisions-code:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/revisions/{revisionId}/code
+    method: GET
+    description: Returns revision code.
+
+  trees-revisions-step-code:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/revisions/{revisionId}/decisionStepCode
+    method: GET
+    description: Returns revision step code.
+
+  trees-revisions-checkouts:
+    path: /decisions/segmentationTrees/{segmentationTreeId}/revisions/{revisionId}/checkOuts
+    method: GET
+    description: Lists checkouts.

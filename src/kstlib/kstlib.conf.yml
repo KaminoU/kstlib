@@ -623,6 +623,17 @@ rapi:
     retry_delay: 1.0           # Initial delay between retries (seconds)
     retry_backoff: 2.0         # Exponential backoff multiplier
 
+  # Safeguard configuration for dangerous HTTP methods
+  # Endpoints using these methods MUST define a safeguard string
+  # to prevent accidental destructive operations
+  safeguard:
+    # HTTP methods that require a safeguard to be defined on endpoints
+    # Default: DELETE and PUT (most destructive operations)
+    # Set to empty list [] to disable safeguard requirements
+    required_methods:
+      - DELETE
+      - PUT
+
   # Pretty-print settings for CLI output
   # Controls formatting of JSON and XML responses in terminal
   pretty_render:

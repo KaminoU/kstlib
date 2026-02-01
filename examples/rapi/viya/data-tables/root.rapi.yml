@@ -1,0 +1,90 @@
+# SAS Viya Data Tables API
+# https://developer.sas.com/rest-apis/dataTables
+#
+# Entry point for the Data Tables API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-tables
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /dataTables/
+    method: GET
+    description: Returns top-level collection links.
+
+  # ============================================================
+  # Tables
+  # ============================================================
+  tables-list:
+    path: /dataTables/dataSources/{dataSourceId}/tables
+    method: GET
+    description: Returns available tables from a data source.
+    query:
+      start: 0
+      limit: 10
+
+  tables-create:
+    path: /dataTables/dataSources/{dataSourceId}/tables
+    method: POST
+    description: Creates a new table.
+    body:
+      sourceArguments:
+        casServer*: null
+        caslib*: null
+        tablePath*: null
+        includedColumns: null
+        filter: null
+        encryptionPassword: null
+      targetArguments:
+        tableName*: null
+        label: null
+        replace: null
+      version: null
+
+  tables-upload:
+    path: /dataTables/dataSources/{dataSourceId}/tables
+    method: POST
+    description: Creates a table by uploading a file.
+    headers:
+      Content-Type: multipart/form-data
+    body: null
+
+  tables-get:
+    path: /dataTables/dataSources/{dataSourceId}/tables/{tableId}
+    method: GET
+    description: Returns information about a single table.
+
+  tables-delete:
+    path: /dataTables/dataSources/{dataSourceId}/tables/{tableId}
+    method: DELETE
+    description: Removes a table resource.
+    safeguard: DELETE TABLE {tableId}
+
+  # ============================================================
+  # Jobs
+  # ============================================================
+  jobs-get:
+    path: /dataTables/jobs/{jobId}
+    method: GET
+    description: Returns job tracking asynchronous operations.
+
+  jobs-state:
+    path: /dataTables/jobs/{jobId}/state
+    method: GET
+    description: Returns current state of an asynchronous job.
+
+  # ============================================================
+  # Columns
+  # ============================================================
+  columns-list:
+    path: /dataTables/dataSources/{dataSourceId}/tables/{tableId}/columns
+    method: GET
+    description: Returns collection of column resources.
+
+  columns-get:
+    path: /dataTables/dataSources/{dataSourceId}/tables/{tableId}/columns/{columnId}
+    method: GET
+    description: Returns information about a single column.

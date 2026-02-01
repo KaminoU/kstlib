@@ -1,0 +1,24 @@
+# SAS Viya CAS Management API - Provider section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-provider
+
+endpoints:
+  # ============================================================
+  # Data Provider
+  # ============================================================
+  provider-tables:
+    path: /casManagement/dataSources/{dataTableProviderId}/tables
+    method: GET
+    description: Returns tables collection.
+    query:
+      start: 0
+      limit: 10
+
+  provider-table:
+    path: /casManagement/dataTables/dataSources/{dataTableProviderId}/tables/{tableName}
+    method: GET
+    description: Returns a table.

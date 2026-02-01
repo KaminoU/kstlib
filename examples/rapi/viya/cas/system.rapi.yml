@@ -1,0 +1,72 @@
+# SAS Viya CAS REST API - System section
+# https://developer.sas.com/rest-apis/cas
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-system
+
+endpoints:
+  # ============================================================
+  # System
+  # ============================================================
+  system-info:
+    path: /cas/system
+    method: GET
+    description: Returns system information.
+
+  system-processes:
+    path: /cas/system/processes
+    method: GET
+    description: Returns list of running processes.
+
+  system-process-get:
+    path: /cas/system/processes/{processId}
+    method: GET
+    description: Returns process information.
+
+  system-process-terminate:
+    path: /cas/system/processes/{processId}
+    method: DELETE
+    description: Terminates a process.
+    safeguard: TERMINATE PROCESS {processId}
+
+  system-process-cmd:
+    path: /cas/system/processes/{processId}/commandLine
+    method: GET
+    description: Returns command line.
+
+  system-process-cpu:
+    path: /cas/system/processes/{processId}/cpuTime
+    method: GET
+    description: Returns CPU times.
+
+  system-process-env:
+    path: /cas/system/processes/{processId}/environment
+    method: GET
+    description: Returns environment variables.
+
+  system-process-threads:
+    path: /cas/system/processes/{processId}/threads
+    method: GET
+    description: Returns list of threads.
+
+  system-thread-get:
+    path: /cas/system/processes/{processId}/threads/{threadId}
+    method: GET
+    description: Returns thread info.
+
+  system-thread-stack:
+    path: /cas/system/processes/{processId}/threads/{threadId}/stack
+    method: GET
+    description: Returns thread stack.
+
+  system-top:
+    path: /cas/system/top
+    method: GET
+    description: Returns system metrics.
+
+  system-top-user:
+    path: /cas/system/top/{user}
+    method: GET
+    description: Returns system metrics for user.

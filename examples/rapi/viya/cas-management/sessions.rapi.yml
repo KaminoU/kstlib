@@ -1,0 +1,52 @@
+# SAS Viya CAS Management API - Sessions section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-sessions
+
+endpoints:
+  # ============================================================
+  # Sessions
+  # ============================================================
+  sessions-list:
+    path: /casManagement/servers/{serverName}/sessions
+    method: GET
+    description: Returns list of sessions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  sessions-create:
+    path: /casManagement/servers/{serverName}/sessions
+    method: POST
+    description: Creates a new CAS session.
+    body:
+      name: null
+      locale: null
+      timeZone: null
+
+  sessions-get:
+    path: /casManagement/servers/{serverName}/sessions/{sessionId}
+    method: GET
+    description: Returns a session.
+
+  sessions-delete:
+    path: /casManagement/servers/{serverName}/sessions/{sessionId}
+    method: DELETE
+    description: Ends a session.
+    safeguard: END SESSION {sessionId}
+
+  sessions-transaction:
+    path: /casManagement/servers/{serverName}/sessions/{sessionId}
+    method: POST
+    description: Sets transaction state.
+    body:
+      action*: null
+
+  sessions-state:
+    path: /casManagement/servers/{serverName}/sessions/{sessionId}/state
+    method: GET
+    description: Returns session state.

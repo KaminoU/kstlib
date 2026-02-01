@@ -1,0 +1,42 @@
+# SAS Viya Compute API - Options section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-options
+
+endpoints:
+  # ============================================================
+  # Single Option
+  # ============================================================
+  options-check:
+    path: /compute/sessions/{sessionId}/options/{optionName}
+    method: HEAD
+    description: Verifies that an option exists.
+
+  options-get:
+    path: /compute/sessions/{sessionId}/options/{optionName}
+    method: GET
+    description: Returns an option by name.
+
+  options-set:
+    path: /compute/sessions/{sessionId}/options/{optionName}
+    method: PUT
+    description: Sets or updates option value.
+    body:
+      value*: null
+
+  options-full-check:
+    path: /compute/sessions/{sessionId}/options/{optionName}
+    method: HEAD
+    description: Verifies that an option exists (full).
+    query:
+      format: full
+
+  options-full:
+    path: /compute/sessions/{sessionId}/options/{optionName}
+    method: GET
+    description: Returns an option representation.
+    query:
+      format: full

@@ -1,0 +1,91 @@
+# SAS Viya Reports API - States section
+# https://developer.sas.com/rest-apis/reports
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: reports-states
+
+endpoints:
+  # ============================================================
+  # Report States Collection
+  # ============================================================
+  states-check:
+    path: /reports/reports/{reportId}/states
+    method: HEAD
+    description: Verifies collection of report states.
+
+  states-list:
+    path: /reports/reports/{reportId}/states
+    method: GET
+    description: Returns user's report states with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+
+  states-create:
+    path: /reports/reports/{reportId}/states
+    method: POST
+    description: Creates new report state.
+    body:
+      name*: null
+      description: null
+      label: null
+
+  # ============================================================
+  # Single State
+  # ============================================================
+  states-get-check:
+    path: /reports/reports/{reportId}/states/{stateId}
+    method: HEAD
+    description: Checks report state status.
+
+  states-get:
+    path: /reports/reports/{reportId}/states/{stateId}
+    method: GET
+    description: Returns specified report state.
+
+  states-update:
+    path: /reports/reports/{reportId}/states/{stateId}
+    method: PUT
+    description: Modifies report state (requires conditional header).
+    body:
+      name*: null
+      description: null
+      label: null
+
+  states-delete:
+    path: /reports/reports/{reportId}/states/{stateId}
+    method: DELETE
+    description: Removes specified report state.
+    safeguard: DELETE STATE {stateId}
+
+  # ============================================================
+  # State Content
+  # ============================================================
+  states-content-check:
+    path: /reports/reports/{reportId}/states/{stateId}/content
+    method: HEAD
+    description: Verifies state content status.
+
+  states-content-get:
+    path: /reports/reports/{reportId}/states/{stateId}/content
+    method: GET
+    description: Returns state content with ETag.
+
+  states-content-update:
+    path: /reports/reports/{reportId}/states/{stateId}/content
+    method: PUT
+    description: Saves state content without return.
+    headers:
+      Content-Type: application/vnd.sas.report.state.content+json
+    body: null
+
+  states-content-update-return:
+    path: /reports/reports/{reportId}/states/{stateId}/content
+    method: PUT
+    description: Saves and returns state content.
+    headers:
+      Content-Type: application/vnd.sas.report.state.content+json
+      Accept: application/vnd.sas.report.state.content+json
+    body: null

@@ -1,0 +1,175 @@
+# SAS Viya Visual Analytics API
+# https://developer.sas.com/rest-apis/visualAnalytics
+#
+# Entry point for the Visual Analytics API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: visual-analytics
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /visualAnalytics/
+    method: GET
+    description: Returns primary resource links and basic actions.
+
+  # ============================================================
+  # Report Operations
+  # ============================================================
+  reports-create:
+    path: /visualAnalytics/reports
+    method: POST
+    description: Creates new report with specified operations.
+    body:
+      resultFolder: null
+      resultReportName: null
+      resultNameConflict: rename
+      operations: null
+
+  reports-update:
+    path: /visualAnalytics/reports/{reportId}
+    method: PUT
+    description: Updates report or creates modified version.
+    body:
+      resultFolder: null
+      resultReportName: null
+      resultNameConflict: rename
+      operations: null
+
+  reports-delete:
+    path: /visualAnalytics/reports/{reportId}
+    method: DELETE
+    description: Deletes report and associated content.
+    safeguard: DELETE REPORT {reportId}
+
+  reports-copy:
+    path: /visualAnalytics/reports/{reportId}/copy
+    method: PUT
+    description: Duplicates an existing report.
+    body:
+      resultFolder: null
+      resultReportName: null
+      resultNameConflict: rename
+
+  # ============================================================
+  # Synchronous Export
+  # ============================================================
+  export-pdf:
+    path: /visualAnalytics/reports/{reportId}/pdf
+    method: GET
+    description: Generates PDF export of a report.
+
+  export-svg:
+    path: /visualAnalytics/reports/{reportId}/svg
+    method: GET
+    description: Exports report as Scalable Vector Graphics.
+
+  export-png:
+    path: /visualAnalytics/reports/{reportId}/png
+    method: GET
+    description: Exports report as Portable Network Graphics.
+
+  export-package:
+    path: /visualAnalytics/reports/{reportId}/package
+    method: GET
+    description: Exports report package in ZIP format.
+
+  export-csv:
+    path: /visualAnalytics/reports/{reportId}/csv
+    method: GET
+    description: Exports report object data as CSV.
+
+  export-tsv:
+    path: /visualAnalytics/reports/{reportId}/tsv
+    method: GET
+    description: Exports report object data as TSV.
+
+  export-xlsx:
+    path: /visualAnalytics/reports/{reportId}/xlsx
+    method: GET
+    description: Exports report object data as Excel.
+
+  # ============================================================
+  # Asynchronous Export Jobs
+  # ============================================================
+  jobs-export-package:
+    path: /visualAnalytics/reports/{reportId}/exportPackage
+    method: POST
+    description: Initiates asynchronous package export job.
+    body:
+      version*: 1
+      resultFolder: null
+      resultFilename: null
+      nameConflict: rename
+      reportObjects: null
+      timeout: null
+      wait: null
+
+  jobs-export-pdf:
+    path: /visualAnalytics/reports/{reportId}/exportPdf
+    method: POST
+    description: Initiates asynchronous PDF export job.
+    body:
+      version*: 1
+      resultFolder: null
+      resultFilename: null
+      nameConflict: rename
+      reportObjects: null
+      timeout: null
+      wait: null
+      options:
+        orientation: landscape
+        paperSize: letter
+        margin: null
+        includeTableOfContents: false
+        showPageNumbers: true
+        includeCoverPage: true
+        coverPageText: null
+
+  jobs-export-image:
+    path: /visualAnalytics/reports/{reportId}/exportImage
+    method: POST
+    description: Initiates asynchronous image export job.
+    body:
+      version*: 1
+      resultFolder: null
+      resultFilename: null
+      nameConflict: rename
+      reportObject: null
+      timeout: null
+      wait: null
+      image*:
+        format*: png
+        size*: null
+
+  jobs-export-data:
+    path: /visualAnalytics/reports/{reportId}/exportData
+    method: POST
+    description: Initiates asynchronous data file export job.
+    body:
+      version*: 1
+      format*: xlsx
+      reportObject*: null
+      resultFolder: null
+      resultFilename: null
+      nameConflict: rename
+      timeout: null
+      wait: null
+      options:
+        startRow: 0
+        endRow: -1
+        formattedData: true
+        detailedData: false
+
+  jobs-get:
+    path: /visualAnalytics/jobs/{jobId}
+    method: GET
+    description: Returns job status and result links.
+
+  jobs-delete:
+    path: /visualAnalytics/jobs/{jobId}
+    method: DELETE
+    description: Cancels or deletes job information.
+    safeguard: DELETE JOB {jobId}

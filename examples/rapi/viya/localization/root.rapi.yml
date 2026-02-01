@@ -1,0 +1,48 @@
+# SAS Viya Localization API
+# https://developer.sas.com/rest-apis/localization
+#
+# Entry point for the Localization API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: localization
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /localization/
+    method: GET
+    description: Returns API links for supported endpoints.
+
+  # ============================================================
+  # Message Bundles
+  # ============================================================
+  contents-list:
+    path: /localization/contents
+    method: GET
+    description: Returns a set of namespaces.
+
+  contents-namespace-get:
+    path: /localization/contents/{namespace}
+    method: GET
+    description: Returns type summaries or message bundles.
+
+  contents-namespace-check:
+    path: /localization/contents/{namespace}
+    method: HEAD
+    description: Checks availability for a namespace.
+
+  contents-namespace-update:
+    path: /localization/contents/{namespace}
+    method: POST
+    description: Creates or updates message bundles.
+    headers:
+      Content-Type: multipart/form-data
+    body: null
+
+  contents-namespace-delete:
+    path: /localization/contents/{namespace}
+    method: DELETE
+    description: Removes all message bundles in namespace.
+    safeguard: DELETE NAMESPACE {namespace}

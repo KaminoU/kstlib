@@ -1,0 +1,45 @@
+# SAS Viya Authorization API - Root section
+# https://developer.sas.com/rest-apis/authorization
+#
+# Entry point for the Authorization API.
+# Includes sub-modules: rules, decisions, shares, capabilities.
+#
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: authorization
+
+# Include sub-modules
+include:
+  - "./rules.rapi.yml"
+  - "./decisions.rapi.yml"
+  - "./shares.rapi.yml"
+  - "./capabilities.rapi.yml"
+
+# Override default Accept header for this API
+headers:
+  Accept: application/vnd.sas.authorization+json
+
+endpoints:
+  # ============================================================
+  # Root / Metadata
+  # ============================================================
+  root:
+    path: /authorization/
+    method: GET
+    description: Returns top-level links and API discovery information.
+    auth: false
+
+  localizations-types:
+    path: /authorization/localizations/types
+    method: GET
+    description: Returns localized rule type enumerations.
+
+  localizations-principal-types:
+    path: /authorization/localizations/principalTypes
+    method: GET
+    description: Returns localized principal type enumerations.
+
+  localizations-permissions:
+    path: /authorization/localizations/permissions
+    method: GET
+    description: Returns localized permission enumerations.

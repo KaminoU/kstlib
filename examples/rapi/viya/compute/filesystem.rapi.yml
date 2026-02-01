@@ -1,0 +1,73 @@
+# SAS Viya Compute API - File System section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-filesystem
+
+endpoints:
+  # ============================================================
+  # File/Directory Operations
+  # ============================================================
+  filesystem-check:
+    path: /compute/sessions/{sessionId}/files/{fileOrDirectoryPath}
+    method: HEAD
+    description: Checks for file or directory properties.
+
+  filesystem-get:
+    path: /compute/sessions/{sessionId}/files/{fileOrDirectoryPath}
+    method: GET
+    description: Returns file or directory properties.
+
+  filesystem-rename:
+    path: /compute/sessions/{sessionId}/files/{fileOrDirectoryPath}
+    method: PUT
+    description: Renames a file or directory.
+    body:
+      name*: null
+
+  filesystem-delete:
+    path: /compute/sessions/{sessionId}/files/{fileOrDirectoryPath}
+    method: DELETE
+    description: Deletes a file or directory.
+    safeguard: DELETE FILE/DIRECTORY {fileOrDirectoryPath}
+
+  filesystem-touch:
+    path: /compute/sessions/{sessionId}/files/{fileOrDirectoryPath}
+    method: POST
+    description: Creates an empty file or directory.
+    query:
+      action: touch
+
+  filesystem-copy:
+    path: /compute/sessions/{sessionId}/files/{destinationFileOrDirectoryPath}
+    method: POST
+    description: Copies a file or directory.
+    query:
+      action: copy
+    body:
+      source*: null
+
+  # ============================================================
+  # File Content
+  # ============================================================
+  filesystem-content-download:
+    path: /compute/sessions/{sessionId}/files/{filePath}/content
+    method: GET
+    description: Downloads file contents.
+
+  filesystem-content-upload:
+    path: /compute/sessions/{sessionId}/files/{filePath}/content
+    method: PUT
+    description: Uploads file content.
+    headers:
+      Content-Type: application/octet-stream
+
+  # ============================================================
+  # Directory Members
+  # ============================================================
+  filesystem-members:
+    path: /compute/sessions/{sessionId}/files/{directoryPath}/members
+    method: GET
+    description: Returns directory members.

@@ -1,0 +1,83 @@
+# SAS Viya Batch API - File Sets section
+# https://developer.sas.com/rest-apis/batch
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: batch-filesets
+
+endpoints:
+  # ============================================================
+  # File Sets Collection
+  # ============================================================
+  filesets-list:
+    path: /batch/fileSets
+    method: GET
+    description: Returns a collection of file sets.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  filesets-check:
+    path: /batch/fileSets
+    method: HEAD
+    description: Checks endpoint availability.
+
+  filesets-create:
+    path: /batch/fileSets
+    method: POST
+    description: Creates a new file set.
+    body:
+      name: null
+      description: null
+
+  # ============================================================
+  # Single File Set
+  # ============================================================
+  filesets-get:
+    path: /batch/fileSets/{fileSetId}
+    method: GET
+    description: Returns a specific file set.
+
+  filesets-head:
+    path: /batch/fileSets/{fileSetId}
+    method: HEAD
+    description: Verifies that a file set exists.
+
+  filesets-delete:
+    path: /batch/fileSets/{fileSetId}
+    method: DELETE
+    description: Deletes a file set.
+    safeguard: DELETE FILESET {fileSetId}
+
+  # ============================================================
+  # Files in File Set
+  # ============================================================
+  filesets-files-list:
+    path: /batch/fileSets/{fileSetId}/files
+    method: GET
+    description: Returns the contents of a file set.
+
+  filesets-files-check:
+    path: /batch/fileSets/{fileSetId}/files
+    method: HEAD
+    description: Checks endpoint availability for files.
+
+  filesets-files-get:
+    path: /batch/fileSets/{fileSetId}/files/{fileName}
+    method: GET
+    description: Returns file information from a file set.
+
+  filesets-files-head:
+    path: /batch/fileSets/{fileSetId}/files/{fileName}
+    method: HEAD
+    description: Verifies a file exists in a file set.
+
+  filesets-files-update:
+    path: /batch/fileSets/{fileSetId}/files/{fileName}
+    method: PUT
+    description: Sets or updates file contents in a file set.
+    headers:
+      Content-Type: application/octet-stream

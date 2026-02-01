@@ -1,0 +1,144 @@
+# SAS Viya Subject Contacts API
+# https://developer.sas.com/rest-apis/subjectContacts
+#
+# Entry point for the Subject Contacts API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: subject-contacts
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /subjectContacts/
+    method: GET
+    description: Returns top-level resource links.
+
+  # ============================================================
+  # Contacts Collection
+  # ============================================================
+  contacts-list:
+    path: /subjectContacts/contacts
+    method: GET
+    description: Returns all contacts with presentation and response data.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  contacts-create:
+    path: /subjectContacts/contacts
+    method: POST
+    description: Records new contact and response information.
+    body:
+      subjectId*: null
+      subjectLevel*: null
+      objectUri*: null
+      objectRevisionId: null
+      objectType: null
+      objectVariables:
+        - name: null
+          value: null
+      responseTrackingCode: null
+      responseType: null
+      responseValue: null
+
+  contacts-export:
+    path: /subjectContacts/contacts
+    method: GET
+    description: Exports contacts as comma-separated values.
+    headers:
+      Accept: text/csv
+
+  contacts-import:
+    path: /subjectContacts/contacts
+    method: POST
+    description: Imports contact records from CSV file.
+    headers:
+      Content-Type: text/csv
+    body: null
+
+  # ============================================================
+  # Single Contact
+  # ============================================================
+  contacts-get:
+    path: /subjectContacts/contacts/{contactId}
+    method: GET
+    description: Returns specific contact details.
+
+  contacts-update:
+    path: /subjectContacts/contacts/{contactId}
+    method: PUT
+    description: Replaces entire contact record.
+    body:
+      subjectId*: null
+      subjectLevel*: null
+      objectUri*: null
+      objectRevisionId: null
+      objectType: null
+      objectVariables:
+        - name: null
+          value: null
+      responseTrackingCode: null
+      responseType: null
+      responseValue: null
+
+  contacts-patch:
+    path: /subjectContacts/contacts/{contactId}
+    method: PATCH
+    description: Modifies partial contact information.
+    headers:
+      Content-Type: application/json-patch+json
+    body:
+      - op*: null
+        path*: null
+        value: null
+
+  contacts-delete:
+    path: /subjectContacts/contacts/{contactId}
+    method: DELETE
+    description: Removes contact record.
+    safeguard: DELETE CONTACT {contactId}
+
+  # ============================================================
+  # Aggregations
+  # ============================================================
+  aggregations:
+    path: /subjectContacts/aggregations
+    method: POST
+    description: Executes multiple related aggregation queries.
+    body:
+      queries:
+        - name*: null
+          type*: null
+          filter: null
+          groupBy: null
+
+  # ============================================================
+  # Traces
+  # ============================================================
+  traces-list:
+    path: /subjectContacts/traces
+    method: GET
+    description: Returns decision execution traces.
+
+  traces-update:
+    path: /subjectContacts/traces
+    method: POST
+    description: Adds or updates traces from tab-separated values.
+    headers:
+      Content-Type: text/tab-separated-values
+    body: null
+
+  traces-delete:
+    path: /subjectContacts/traces
+    method: DELETE
+    description: Removes decision execution traces.
+    safeguard: DELETE TRACES
+
+  traces-process:
+    path: /subjectContacts/traces/{traceId}/process
+    method: POST
+    description: Generates and stores trace report file.
+    body: null

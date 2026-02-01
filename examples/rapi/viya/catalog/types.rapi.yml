@@ -1,0 +1,86 @@
+# SAS Viya Catalog API - Type Definitions section
+# https://developer.sas.com/rest-apis/catalog
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: catalog-types
+
+endpoints:
+  # ============================================================
+  # Type Definitions Collection
+  # ============================================================
+  types-list:
+    path: /catalog/definitions
+    method: GET
+    description: Returns a list of type definitions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  types-create:
+    path: /catalog/definitions
+    method: POST
+    description: Creates a type definition.
+    body:
+      name*: null
+      description: null
+      attributes: null
+      relationships: null
+
+  types-archive-get:
+    path: /catalog/definitions
+    method: GET
+    description: Returns an archive of all type definitions.
+    query:
+      format: archive
+
+  types-archive-create:
+    path: /catalog/definitions
+    method: POST
+    description: Creates type definitions from archive.
+    query:
+      format: archive
+    headers:
+      Content-Type: application/zip
+    body: null
+
+  # ============================================================
+  # Single Type Definition
+  # ============================================================
+  types-check:
+    path: /catalog/definitions/{definitionId}
+    method: HEAD
+    description: Checks type definition exists.
+
+  types-get:
+    path: /catalog/definitions/{definitionId}
+    method: GET
+    description: Returns a type definition.
+
+  types-update:
+    path: /catalog/definitions/{definitionId}
+    method: PUT
+    description: Updates a type definition.
+    body:
+      name*: null
+      description: null
+      attributes: null
+      relationships: null
+
+  types-delete:
+    path: /catalog/definitions/{definitionId}
+    method: DELETE
+    description: Deletes a type definition.
+    safeguard: DELETE TYPE DEFINITION {definitionId}
+
+  types-relationships-check:
+    path: /catalog/definitions/{definitionId}/relationships
+    method: HEAD
+    description: Checks type definition relationships.
+
+  types-relationships:
+    path: /catalog/definitions/{definitionId}/relationships
+    method: GET
+    description: Returns type definition relationships.

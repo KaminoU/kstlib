@@ -1,0 +1,56 @@
+# SAS Viya List Data API - Revisions section
+# https://developer.sas.com/rest-apis/listData
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: list-data-revisions
+
+endpoints:
+  # ============================================================
+  # Revisions Collection
+  # ============================================================
+  revisions-list:
+    path: /listData/lists/{listId}/revisions
+    method: GET
+    description: Returns revisions.
+    query:
+      start: 0
+      limit: 10
+
+  revisions-create:
+    path: /listData/lists/{listId}/revisions
+    method: POST
+    description: Creates new revision.
+    body:
+      label: null
+      description: null
+
+  revisions-contents:
+    path: /listData/lists/{listId}/revisions/contents
+    method: GET
+    description: Returns revision contents.
+
+  # ============================================================
+  # Single Revision
+  # ============================================================
+  revisions-get:
+    path: /listData/lists/{listId}/revisions/{revisionId}
+    method: GET
+    description: Returns specific revision.
+
+  revisions-revision-contents:
+    path: /listData/lists/{listId}/revisions/{revisionId}/contents
+    method: GET
+    description: Returns specific revision contents.
+
+  revisions-privileged-contents:
+    path: /listData/lists/{listId}/revisions/{revisionId}/privilegedContents
+    method: GET
+    description: Returns unmasked revision contents.
+
+  revisions-deploy:
+    path: /listData/lists/{listId}/revisions/{revisionId}/deploy
+    method: POST
+    description: Deploys a revision.
+    body: null

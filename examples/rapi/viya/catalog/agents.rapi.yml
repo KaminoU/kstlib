@@ -1,0 +1,178 @@
+# SAS Viya Catalog API - Agents (Bots) section
+# https://developer.sas.com/rest-apis/catalog
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: catalog-agents
+
+endpoints:
+  # ============================================================
+  # Agents Collection
+  # ============================================================
+  agents-list:
+    path: /catalog/bots
+    method: GET
+    description: Returns agents as summary representation.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  agents-create:
+    path: /catalog/bots
+    method: POST
+    description: Creates an agent.
+    body:
+      name*: null
+      description: null
+      schedule: null
+      enabled: true
+
+  agents-history-batch:
+    path: /catalog/bots/history
+    method: POST
+    description: Retrieves execution history for multiple agents.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri*: null
+
+  agents-state-batch:
+    path: /catalog/bots/state
+    method: POST
+    description: Gets execution status for a list of agents.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri*: null
+
+  # ============================================================
+  # Agent History (Global)
+  # ============================================================
+  agents-run-check:
+    path: /catalog/bots/history/{runId}
+    method: HEAD
+    description: Checks agent run history exists.
+
+  agents-run-get:
+    path: /catalog/bots/history/{runId}
+    method: GET
+    description: Returns agent execution history by run ID.
+
+  # ============================================================
+  # Single Agent
+  # ============================================================
+  agents-check:
+    path: /catalog/bots/{agentId}
+    method: HEAD
+    description: Checks agent exists.
+
+  agents-get:
+    path: /catalog/bots/{agentId}
+    method: GET
+    description: Returns an agent.
+
+  agents-update:
+    path: /catalog/bots/{agentId}
+    method: PUT
+    description: Updates an agent.
+    body:
+      name*: null
+      description: null
+      schedule: null
+      enabled: true
+
+  agents-delete:
+    path: /catalog/bots/{agentId}
+    method: DELETE
+    description: Deletes an agent.
+    safeguard: DELETE AGENT {agentId}
+
+  # ============================================================
+  # Agent History
+  # ============================================================
+  agents-history-check:
+    path: /catalog/bots/{agentId}/history
+    method: HEAD
+    description: Checks agent execution history.
+
+  agents-history:
+    path: /catalog/bots/{agentId}/history
+    method: GET
+    description: Returns agent execution history.
+
+  # ============================================================
+  # Agent State
+  # ============================================================
+  agents-state-check:
+    path: /catalog/bots/{agentId}/state
+    method: HEAD
+    description: Checks agent execution status.
+
+  agents-state-get:
+    path: /catalog/bots/{agentId}/state
+    method: GET
+    description: Returns agent execution status.
+
+  agents-state-update:
+    path: /catalog/bots/{agentId}/state
+    method: PUT
+    description: Updates agent run state.
+    body:
+      state*: null
+
+  # ============================================================
+  # Agent Preview
+  # ============================================================
+  agents-preview-run:
+    path: /catalog/bots/{agentId}/preview
+    method: PUT
+    description: Runs an agent preview for insights.
+    body:
+      parameters: null
+
+  agents-preview-check:
+    path: /catalog/bots/{agentId}/preview/{previewId}
+    method: HEAD
+    description: Checks preview results exist.
+
+  agents-preview-get:
+    path: /catalog/bots/{agentId}/preview/{previewId}
+    method: GET
+    description: Returns agent preview results.
+
+  # ============================================================
+  # Adhoc Analysis Jobs
+  # ============================================================
+  agents-analysis-list:
+    path: /catalog/bots/adhocAnalysisJobs
+    method: GET
+    description: Returns a list of adhoc analysis jobs.
+
+  agents-analysis-create:
+    path: /catalog/bots/adhocAnalysisJobs
+    method: POST
+    description: Creates an adhoc analysis job.
+    body:
+      name*: null
+      description: null
+      parameters: null
+
+  agents-analysis-check:
+    path: /catalog/bots/adhocAnalysisJobs/{analysisJobId}
+    method: HEAD
+    description: Checks analysis job exists.
+
+  agents-analysis-get:
+    path: /catalog/bots/adhocAnalysisJobs/{analysisJobId}
+    method: GET
+    description: Returns an adhoc analysis job.
+
+  agents-analysis-delete:
+    path: /catalog/bots/adhocAnalysisJobs/{analysisJobId}
+    method: DELETE
+    description: Deletes an adhoc analysis job.
+    safeguard: DELETE ANALYSIS JOB {analysisJobId}

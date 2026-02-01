@@ -6,11 +6,13 @@ Exceptions for the REST API client module: credential resolution, endpoint confi
 
 ```
 RapiError (base)
-├── CredentialError         # Credential resolution failed
-├── EndpointNotFoundError   # Endpoint not in config
-├── EndpointAmbiguousError  # Short reference matches multiple endpoints
-├── RequestError            # HTTP request failed
-└── ResponseTooLargeError   # Response exceeds max size
+├── CredentialError           # Credential resolution failed
+├── EndpointNotFoundError     # Endpoint not in config
+├── EndpointAmbiguousError    # Short reference matches multiple endpoints
+├── RequestError              # HTTP request failed
+├── ResponseTooLargeError     # Response exceeds max size
+├── ConfirmationRequiredError # Dangerous endpoint called without confirmation
+└── SafeguardMissingError     # Dangerous method without safeguard in config
 ```
 
 ## Common failure modes
@@ -20,6 +22,8 @@ RapiError (base)
 - `EndpointAmbiguousError` indicates a short reference (e.g., `"users"`) matches endpoints in multiple APIs.
 - `RequestError` wraps HTTP failures including timeouts and 5xx errors after retry exhaustion.
 - `ResponseTooLargeError` indicates the response body exceeds the configured `max_response_size` limit.
+- `ConfirmationRequiredError` is raised at runtime when calling a dangerous endpoint (DELETE, PUT) without the required `confirm` parameter.
+- `SafeguardMissingError` is raised at config load time when an endpoint uses a dangerous method but lacks a `safeguard` string.
 
 ## Usage patterns
 
@@ -90,6 +94,24 @@ except ResponseTooLargeError as e:
     logger.warning(f"Response too large: {e.size} bytes")
     logger.warning(f"Max allowed: {e.max_size} bytes")
     # Consider pagination or streaming
+```
+
+### Safeguard confirmation
+
+```python
+from kstlib.rapi import RapiClient
+from kstlib.rapi.exceptions import ConfirmationRequiredError
+
+client = RapiClient()
+
+try:
+    # Dangerous endpoint without confirmation
+    client.call("admin.delete-user", user_id="123")
+except ConfirmationRequiredError as e:
+    logger.warning(f"Confirmation required: {e.expected}")
+    # Ask user for confirmation, then retry
+    if user_confirms():
+        client.call("admin.delete-user", user_id="123", confirm=e.expected)
 ```
 
 ### Safe wrapper pattern

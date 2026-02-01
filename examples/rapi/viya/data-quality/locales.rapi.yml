@@ -1,0 +1,26 @@
+# SAS Viya Data Quality API - Locales section
+# https://developer.sas.com/rest-apis/dataQuality
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-quality-locales
+
+endpoints:
+  # ============================================================
+  # QKB Locales
+  # ============================================================
+  locales-list:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales
+    method: GET
+    description: Lists locales in a QKB.
+
+  locales-get:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}
+    method: GET
+    description: Returns locale details.
+
+  locales-check:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}/locales/{localeName}
+    method: HEAD
+    description: Verifies locale existence.

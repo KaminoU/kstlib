@@ -1,0 +1,42 @@
+# SAS Viya Model Repository API - Root section
+# https://developer.sas.com/rest-apis/modelRepository
+#
+# Entry point for the Model Repository API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-repository
+
+include:
+  - "./models.rapi.yml"
+  - "./projects.rapi.yml"
+  - "./repositories.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /modelRepository/
+    method: GET
+    description: Returns top-level resource links.
+
+  root-check:
+    path: /modelRepository/
+    method: HEAD
+    description: Verifies service availability.
+
+  # ============================================================
+  # User-Defined Tags
+  # ============================================================
+  tags-list:
+    path: /modelRepository/userDefinedTags
+    method: GET
+    description: Lists tags.
+
+  # ============================================================
+  # Table Info
+  # ============================================================
+  table-info:
+    path: /modelRepository/commons/tableInfo
+    method: GET
+    description: Returns table information.

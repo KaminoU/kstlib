@@ -1,0 +1,45 @@
+# SAS Viya Batch API - Servers section
+# https://developer.sas.com/rest-apis/batch
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: batch-servers
+
+endpoints:
+  # ============================================================
+  # Servers Collection
+  # ============================================================
+  servers-list:
+    path: /batch/servers
+    method: GET
+    description: Returns a collection of reusable batch servers.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  servers-check:
+    path: /batch/servers
+    method: HEAD
+    description: Checks endpoint availability.
+
+  # ============================================================
+  # Single Server
+  # ============================================================
+  servers-get:
+    path: /batch/servers/{serverId}
+    method: GET
+    description: Returns reusable batch server information.
+
+  servers-head:
+    path: /batch/servers/{serverId}
+    method: HEAD
+    description: Verifies that a reusable batch server exists.
+
+  servers-delete:
+    path: /batch/servers/{serverId}
+    method: DELETE
+    description: Deletes a reusable batch server.
+    safeguard: DELETE SERVER {serverId}

@@ -1,0 +1,73 @@
+# SAS Viya Authorization API - Capabilities section
+# https://developer.sas.com/rest-apis/authorization
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: authorization-capabilities
+
+endpoints:
+  # ============================================================
+  # Capabilities Collection
+  # ============================================================
+  capabilities-list:
+    path: /authorization/capabilities
+    method: GET
+    description: Returns a summary list of capabilities defined in the system.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  capabilities-create:
+    path: /authorization/capabilities
+    method: POST
+    description: Creates a new capability.
+    body:
+      name: null
+      description: null
+
+  capabilities-delete-group:
+    path: /authorization/capabilities
+    method: DELETE
+    description: Removes all capabilities assigned to a specified group.
+    query:
+      groupId: null
+    safeguard: DELETE ALL CAPABILITIES FOR GROUP
+
+  # ============================================================
+  # Single Capability
+  # ============================================================
+  capabilities-get:
+    path: /authorization/capabilities/{capabilityName}
+    method: GET
+    description: Retrieves full details for a capability.
+
+  capabilities-patch:
+    path: /authorization/capabilities/{capabilityName}
+    method: PATCH
+    description: Patches the specified capability.
+    body:
+      description: null
+
+  # ============================================================
+  # Capability Groups
+  # ============================================================
+  capabilities-groups-list:
+    path: /authorization/capabilities/{capabilityName}/groups
+    method: GET
+    description: Retrieves groups assigned to a capability.
+
+  capabilities-groups-add:
+    path: /authorization/capabilities/{capabilityName}/groups
+    method: POST
+    description: Assigns the capability to a group principal.
+    body:
+      groupId: null
+
+  capabilities-groups-remove:
+    path: /authorization/capabilities/{capabilityName}/groups/{groupId}
+    method: DELETE
+    description: Removes a group from the capability authorization list.
+    safeguard: REMOVE GROUP {groupId} FROM CAPABILITY {capabilityName}

@@ -1,0 +1,135 @@
+# SAS Viya Model Management API - Performance section
+# https://developer.sas.com/rest-apis/modelManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-management-performance
+
+endpoints:
+  # ============================================================
+  # Performance Tasks Collection
+  # ============================================================
+  tasks-list:
+    path: /modelManagement/performanceTasks
+    method: GET
+    description: Lists all performance tasks.
+    query:
+      start: 0
+      limit: 10
+
+  tasks-create:
+    path: /modelManagement/performanceTasks
+    method: POST
+    description: Creates task definition.
+    body:
+      name*: null
+      description: null
+      projectId*: null
+      modelId: null
+      dataTableUri*: null
+      scoreOutputLibraryUri: null
+      scoreOutputTableName: null
+      performanceResultSaved: true
+
+  tasks-default-job:
+    path: /modelManagement/performanceTasks/@defaultTask/performanceJobs
+    method: POST
+    description: Creates job history.
+    body:
+      projectId*: null
+      modelId*: null
+      dataTableUri*: null
+
+  # ============================================================
+  # Single Performance Task
+  # ============================================================
+  tasks-get:
+    path: /modelManagement/performanceTasks/{taskId}
+    method: GET
+    description: Returns task definition.
+
+  tasks-execute:
+    path: /modelManagement/performanceTasks/{taskId}
+    method: POST
+    description: Executes a task job.
+    body: null
+
+  tasks-update:
+    path: /modelManagement/performanceTasks/{taskId}
+    method: PUT
+    description: Updates task definition.
+    body:
+      name*: null
+      description: null
+      projectId*: null
+      modelId: null
+      dataTableUri*: null
+      scoreOutputLibraryUri: null
+      scoreOutputTableName: null
+      performanceResultSaved: true
+
+  tasks-delete:
+    path: /modelManagement/performanceTasks/{taskId}
+    method: DELETE
+    description: Removes task definition.
+    safeguard: DELETE TASK {taskId}
+
+  tasks-summary:
+    path: /modelManagement/performanceTasks/{taskId}/summary
+    method: GET
+    description: Returns execution summary.
+
+  tasks-state:
+    path: /modelManagement/performanceTasks/{taskId}/state
+    method: GET
+    description: Returns execution state.
+
+  tasks-report-data:
+    path: /modelManagement/performanceTasks/{taskId}/performanceReportData
+    method: GET
+    description: Returns monitoring report data.
+
+  tasks-plot-data:
+    path: /modelManagement/performanceTasks/{taskId}/resultPlotData
+    method: GET
+    description: Returns result data for visualization.
+
+  tasks-time-sk:
+    path: /modelManagement/performanceTasks/{taskId}/timeSK
+    method: GET
+    description: Returns time period data.
+
+  # ============================================================
+  # Performance Jobs
+  # ============================================================
+  jobs-list:
+    path: /modelManagement/performanceTasks/{taskId}/performanceJobs
+    method: GET
+    description: Returns jobs and results for a task.
+
+  jobs-get:
+    path: /modelManagement/performanceTasks/{taskId}/performanceJobs/{jobId}
+    method: GET
+    description: Returns performance results.
+
+  jobs-delete:
+    path: /modelManagement/performanceTasks/{taskId}/performanceJobs/{jobId}
+    method: DELETE
+    description: Removes a performance job.
+    safeguard: DELETE PERFORMANCE JOB {jobId}
+
+  jobs-code:
+    path: /modelManagement/performanceTasks/{taskId}/performanceJobs/{jobId}/code
+    method: GET
+    description: Returns job execution code.
+
+  jobs-log:
+    path: /modelManagement/performanceTasks/{taskId}/performanceJobs/{jobId}/log
+    method: GET
+    description: Returns execution log.
+
+  jobs-latest:
+    path: /modelManagement/performanceTasks/performanceJobs/latestJob
+    method: GET
+    description: Returns latest job for model.

@@ -1,0 +1,75 @@
+# SAS Viya CAS Management API - Servers section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-servers
+
+endpoints:
+  # ============================================================
+  # Servers Collection
+  # ============================================================
+  servers-list:
+    path: /casManagement/servers
+    method: GET
+    description: Returns list of CAS servers.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  servers-get:
+    path: /casManagement/servers/{serverName}
+    method: GET
+    description: Returns a specific CAS server.
+
+  servers-connection:
+    path: /casManagement/servers/{serverName}/connection
+    method: GET
+    description: Returns server connection information.
+
+  servers-metrics:
+    path: /casManagement/servers/{serverName}/metrics
+    method: GET
+    description: Returns server metrics.
+
+  servers-state-get:
+    path: /casManagement/servers/{serverName}/state
+    method: GET
+    description: Returns server state.
+
+  servers-state-update:
+    path: /casManagement/servers/{serverName}/state
+    method: PUT
+    description: Changes server state.
+    query:
+      value: null
+
+  # ============================================================
+  # Data Connectors
+  # ============================================================
+  servers-connectors-list:
+    path: /casManagement/servers/{serverName}/dataConnectors
+    method: GET
+    description: Returns list of data connectors.
+
+  servers-connectors-get:
+    path: /casManagement/servers/{serverName}/dataConnectors/{dataConnectorName}
+    method: GET
+    description: Returns a data connector.
+
+  servers-connectors-check:
+    path: /casManagement/servers/{serverName}/dataConnectors/{dataConnectorName}
+    method: HEAD
+    description: Checks connector availability.
+
+  servers-connectors-definition:
+    path: /casManagement/servers/{serverName}/dataConnectors/{dataConnectorName}/definition
+    method: GET
+    description: Returns connector definition.
+
+  servers-connectors-definition-check:
+    path: /casManagement/servers/{serverName}/dataConnectors/{dataConnectorName}/definition
+    method: HEAD
+    description: Checks definition availability.

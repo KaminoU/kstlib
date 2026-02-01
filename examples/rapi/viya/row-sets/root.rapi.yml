@@ -1,0 +1,63 @@
+# SAS Viya Row Sets API
+# https://developer.sas.com/rest-apis/rowSets
+#
+# Entry point for the Row Sets API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: row-sets
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /rowSets/
+    method: GET
+    description: Returns top-level collection links.
+
+  root-check:
+    path: /rowSets/
+    method: HEAD
+    description: Returns header information and status.
+
+  # ============================================================
+  # Row Set
+  # ============================================================
+  rowset-get:
+    path: /rowSets/tables/{tableId}/rowSet
+    method: GET
+    description: Returns paginated collection of rows and columns.
+    query:
+      start: 0
+      limit: 100
+
+  rowset-filter:
+    path: /rowSets/tables/{tableId}/rowSet
+    method: POST
+    description: Returns row sets using filter criteria.
+    headers:
+      Content-Type: application/vnd.sas.data.row.set.criteria+json
+    body:
+      filter: null
+      sortBy: null
+
+  # ============================================================
+  # Rows
+  # ============================================================
+  rows-list:
+    path: /rowSets/tables/{tableId}/rows
+    method: GET
+    description: Returns collection of rows with paging.
+    query:
+      start: 0
+      limit: 100
+
+  rows-filter:
+    path: /rowSets/tables/{tableId}/rows
+    method: POST
+    description: Returns rows when filter criteria are specified.
+    headers:
+      Content-Type: application/vnd.sas.data.row.set.criteria+json
+    body:
+      filter: null
+      sortBy: null

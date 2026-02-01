@@ -1,0 +1,44 @@
+# SAS Viya Data Quality API - Environments section
+# https://developer.sas.com/rest-apis/dataQuality
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-quality-environments
+
+endpoints:
+  # ============================================================
+  # Environments
+  # ============================================================
+  environments-list:
+    path: /dataQuality/environments
+    method: GET
+    description: Lists all available execution environments.
+
+  environments-get:
+    path: /dataQuality/environments/{environmentName}
+    method: GET
+    description: Returns environment details.
+
+  environments-check:
+    path: /dataQuality/environments/{environmentName}
+    method: HEAD
+    description: Verifies environment existence.
+
+  # ============================================================
+  # Contexts
+  # ============================================================
+  contexts-list:
+    path: /dataQuality/environments/{environmentName}/contexts
+    method: GET
+    description: Lists available execution contexts.
+
+  contexts-get:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}
+    method: GET
+    description: Returns context information.
+
+  contexts-check:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}
+    method: HEAD
+    description: Verifies context existence.

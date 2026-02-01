@@ -1,0 +1,21 @@
+# SAS Viya Data Sources API - Root section
+# https://developer.sas.com/rest-apis/dataSources
+#
+# Entry point for the Data Sources API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-sources
+
+include:
+  - "./providers.rapi.yml"
+  - "./sources.rapi.yml"
+  - "./definitions.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /dataSources/
+    method: GET
+    description: Returns top-level API collection links.

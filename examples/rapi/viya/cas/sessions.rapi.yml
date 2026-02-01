@@ -1,0 +1,105 @@
+# SAS Viya CAS REST API - Sessions section
+# https://developer.sas.com/rest-apis/cas
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-sessions
+
+endpoints:
+  # ============================================================
+  # Sessions Collection
+  # ============================================================
+  sessions-list:
+    path: /cas/sessions
+    method: GET
+    description: Returns CAS sessions information.
+
+  sessions-create:
+    path: /cas/sessions
+    method: POST
+    description: Creates a new session.
+    body:
+      server: null
+      sessionName: null
+      locale: null
+      timeZone: null
+
+  sessions-terminate-all:
+    path: /cas/sessions/terminate
+    method: POST
+    description: Terminates all user sessions.
+    body: null
+    safeguard: TERMINATE ALL SESSIONS
+
+  # ============================================================
+  # Single Session
+  # ============================================================
+  sessions-get:
+    path: /cas/sessions/{sessionId}
+    method: GET
+    description: Returns session information.
+
+  sessions-destroy:
+    path: /cas/sessions/{sessionId}
+    method: DELETE
+    description: Destroys a session.
+    safeguard: DESTROY SESSION {sessionId}
+
+  sessions-upload:
+    path: /cas/sessions/{sessionId}/actions/{actionName}
+    method: PUT
+    description: Uploads a table.
+    headers:
+      Content-Type: application/octet-stream
+
+  sessions-action:
+    path: /cas/sessions/{sessionId}/actions/{actionName}
+    method: POST
+    description: Runs an action in session.
+    body:
+      parameters: null
+
+  sessions-idle:
+    path: /cas/sessions/{sessionId}/isIdle
+    method: GET
+    description: Reports session idle status.
+
+  sessions-nodes:
+    path: /cas/sessions/{sessionId}/nodes
+    method: GET
+    description: Returns session nodes.
+
+  sessions-nodes-metrics:
+    path: /cas/sessions/{sessionId}/nodes/metrics
+    method: GET
+    description: Returns session nodes with metrics.
+
+  sessions-idle-time:
+    path: /cas/sessions/{sessionId}/idleTime
+    method: GET
+    description: Returns session idle time.
+
+  sessions-idle-seconds:
+    path: /cas/sessions/{sessionId}/idleSeconds
+    method: GET
+    description: Returns idle seconds.
+
+  sessions-terminate:
+    path: /cas/sessions/{sessionId}/terminate
+    method: POST
+    description: Terminates a session.
+    body: null
+    safeguard: TERMINATE SESSION {sessionId}
+
+  sessions-cancel:
+    path: /cas/sessions/{sessionId}/cancel
+    method: POST
+    description: Ends a session.
+    body: null
+    safeguard: CANCEL SESSION {sessionId}
+
+  sessions-user:
+    path: /cas/sessions/{sessionId}/user
+    method: GET
+    description: Returns session owner.

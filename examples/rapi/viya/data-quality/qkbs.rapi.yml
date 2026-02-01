@@ -1,0 +1,34 @@
+# SAS Viya Data Quality API - QKBs (Quality Knowledge Bases) section
+# https://developer.sas.com/rest-apis/dataQuality
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-quality-qkbs
+
+endpoints:
+  # ============================================================
+  # Global QKBs
+  # ============================================================
+  qkbs-list-all:
+    path: /dataQuality/qkbs
+    method: GET
+    description: Lists all QKBs across all contexts.
+
+  # ============================================================
+  # Context-specific QKBs
+  # ============================================================
+  qkbs-list:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs
+    method: GET
+    description: Lists QKBs in a specified environment.
+
+  qkbs-get:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}
+    method: GET
+    description: Returns specific QKB information.
+
+  qkbs-check:
+    path: /dataQuality/environments/{environmentName}/contexts/{contextName}/qkbs/{qkbName}
+    method: HEAD
+    description: Verifies QKB existence.

@@ -18,7 +18,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kstlib.rapi.exceptions import EndpointAmbiguousError, EndpointNotFoundError
+from kstlib.rapi.exceptions import (
+    EndpointAmbiguousError,
+    EndpointCollisionError,
+    EndpointNotFoundError,
+    EnvVarError,
+    SafeguardMissingError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -34,6 +40,86 @@ _ALLOWED_HMAC_ALGORITHMS = frozenset({"sha256", "sha512"})
 _ALLOWED_SIGNATURE_FORMATS = frozenset({"hex", "base64"})
 _MAX_FIELD_NAME_LENGTH = 64  # Max length for field names (timestamp_field, etc.)
 _MAX_HEADER_NAME_LENGTH = 128  # Max length for header names
+
+# Deep defense: safeguard validation
+_MAX_SAFEGUARD_LENGTH = 128
+_SAFEGUARD_PATTERN = re.compile(r"^[A-Za-z0-9_\-\s\{\}/]+$")
+
+# Default HTTP methods that require safeguard
+_DEFAULT_SAFEGUARD_METHODS = frozenset({"DELETE", "PUT"})
+
+# Pattern for environment variable substitution: ${VAR} or ${VAR:-default}
+_ENV_VAR_PATTERN = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?\}")
+
+
+def _expand_env_vars(value: str, source: str | None = None) -> str:
+    """Expand environment variables in a string value.
+
+    Supports two syntaxes:
+    - ``${VAR}`` - required variable, raises EnvVarError if not set
+    - ``${VAR:-default}`` - optional variable with default value
+
+    Args:
+        value: String potentially containing ${VAR} patterns.
+        source: Source file for error messages.
+
+    Returns:
+        String with environment variables expanded.
+
+    Raises:
+        EnvVarError: If required variable is not set.
+
+    Examples:
+        >>> import os
+        >>> os.environ["TEST_VAR"] = "hello"
+        >>> _expand_env_vars("${TEST_VAR} world")
+        'hello world'
+        >>> _expand_env_vars("${MISSING:-default}")
+        'default'
+    """
+    import os
+
+    def replacer(match: re.Match[str]) -> str:
+        var_name = match.group(1)
+        default_value = match.group(2)
+
+        env_value = os.environ.get(var_name)
+        if env_value is not None:
+            return env_value
+
+        if default_value is not None:
+            return default_value
+
+        raise EnvVarError(var_name, source)
+
+    return _ENV_VAR_PATTERN.sub(replacer, value)
+
+
+def _expand_env_vars_recursive(data: Any, source: str | None = None) -> Any:
+    """Recursively expand environment variables in config data.
+
+    Applies ``_expand_env_vars`` to all string values in dicts and lists.
+
+    Args:
+        data: Configuration data (dict, list, or scalar).
+        source: Source file for error messages.
+
+    Returns:
+        Data with all environment variables expanded.
+
+    Examples:
+        >>> import os
+        >>> os.environ["HOST"] = "example.com"
+        >>> _expand_env_vars_recursive({"url": "https://${HOST}"})
+        {'url': 'https://example.com'}
+    """
+    if isinstance(data, dict):
+        return {k: _expand_env_vars_recursive(v, source) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_expand_env_vars_recursive(item, source) for item in data]
+    if isinstance(data, str):
+        return _expand_env_vars(data, source)
+    return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +172,29 @@ class HmacConfig:
             raise ValueError(f"nonce_field too long: {len(self.nonce_field)} > {_MAX_FIELD_NAME_LENGTH}")
         if self.key_header and len(self.key_header) > _MAX_HEADER_NAME_LENGTH:
             raise ValueError(f"key_header too long: {len(self.key_header)} > {_MAX_HEADER_NAME_LENGTH}")
+
+
+@dataclass(frozen=True, slots=True)
+class SafeguardConfig:
+    """Global safeguard configuration for dangerous HTTP methods.
+
+    Configures which HTTP methods require a safeguard (confirmation string)
+    to be defined on endpoints. This is a safety mechanism to prevent
+    accidental calls to destructive endpoints.
+
+    Attributes:
+        required_methods: HTTP methods that must have a safeguard configured.
+
+    Examples:
+        >>> config = SafeguardConfig()
+        >>> "DELETE" in config.required_methods
+        True
+        >>> config = SafeguardConfig(required_methods=frozenset({"DELETE"}))
+        >>> "PUT" in config.required_methods
+        False
+    """
+
+    required_methods: frozenset[str] = field(default_factory=lambda: _DEFAULT_SAFEGUARD_METHODS)
 
 
 def _extract_credentials_from_rapi(
@@ -169,7 +278,40 @@ def _extract_auth_config(
     return auth_type, hmac_config
 
 
-def _parse_rapi_file(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def _merge_with_defaults(data: dict[str, Any], defaults: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge file data with defaults (file wins on conflict).
+
+    Args:
+        data: Configuration data from the file.
+        defaults: Default values to apply.
+
+    Returns:
+        Merged configuration with file values taking precedence.
+    """
+    if not defaults:
+        return data
+
+    # Start with defaults, then overlay file data
+    merged = dict(defaults)
+
+    for key, value in data.items():
+        if key == "headers" and isinstance(value, dict) and isinstance(merged.get("headers"), dict):
+            # Merge headers dicts (file headers override default headers)
+            merged["headers"] = {**merged["headers"], **value}
+        elif key == "credentials" and isinstance(value, dict) and isinstance(merged.get("credentials"), dict):
+            # Merge credentials dicts (file credentials override default credentials)
+            merged["credentials"] = {**merged["credentials"], **value}
+        else:
+            # File value takes precedence
+            merged[key] = value
+
+    return merged
+
+
+def _parse_rapi_file(
+    path: Path,
+    defaults: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Parse a ``*.rapi.yml`` file into internal config format.
 
     Converts the simplified format:
@@ -200,8 +342,17 @@ def _parse_rapi_file(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     }
     ```
 
+    With defaults support, a minimal file can inherit from kstlib.conf.yml:
+    ```yaml
+    name: github
+    endpoints:
+      user:
+        path: "/user"
+    ```
+
     Args:
         path: Path to the ``*.rapi.yml`` file.
+        defaults: Default values inherited from kstlib.conf.yml rapi.defaults section.
 
     Returns:
         Tuple of (api_config, credentials_config).
@@ -217,6 +368,12 @@ def _parse_rapi_file(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
     if not isinstance(data, dict):
         raise TypeError(f"Invalid RAPI config format in {path}: expected dict")
+
+    # Merge with defaults first (file wins on conflict)
+    data = _merge_with_defaults(data, defaults)
+
+    # Expand environment variables in all string values (after merge so defaults can use env vars too)
+    data = _expand_env_vars_recursive(data, source=str(path))
 
     # Extract API name (or derive from filename)
     api_name = data.get("name")
@@ -255,7 +412,147 @@ def _parse_rapi_file(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "inline" if credentials_ref and credentials_ref.startswith("_rapi_") else credentials_ref,
     )
 
+    # Handle nested includes (relative to this file)
+    include_patterns = data.get("include")
+    if include_patterns:
+        included_endpoints, included_creds = _resolve_rapi_includes(include_patterns, path.parent, defaults)
+        # Merge included endpoints into this API
+        api_config["api"][api_name]["endpoints"].update(included_endpoints)
+        credentials_config.update(included_creds)
+        log.debug(
+            "Merged %d endpoints from includes into %s",
+            len(included_endpoints),
+            api_name,
+        )
+
     return api_config, credentials_config
+
+
+def _resolve_rapi_includes(
+    patterns: list[str] | str,
+    base_dir: Path,
+    defaults: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Resolve include patterns relative to a rapi file.
+
+    Args:
+        patterns: Include pattern(s) relative to base_dir.
+        base_dir: Directory containing the parent rapi file.
+        defaults: Default values to pass to included files.
+
+    Returns:
+        Tuple of (merged_endpoints, merged_credentials).
+    """
+    if isinstance(patterns, str):
+        patterns = [patterns]
+
+    merged_endpoints: dict[str, Any] = {}
+    merged_credentials: dict[str, Any] = {}
+
+    for pattern in patterns:
+        # Resolve relative path (remove leading ./)
+        clean_pattern = pattern.removeprefix("./")
+        resolved_path = base_dir / clean_pattern
+
+        # Support glob patterns or single file
+        matches = (
+            list(base_dir.glob(clean_pattern))
+            if "*" in clean_pattern
+            else ([resolved_path] if resolved_path.exists() else [])
+        )
+
+        for file_path in matches:
+            if not file_path.exists():
+                log.warning("Include file not found: %s", file_path)
+                continue
+
+            log.debug("Including nested file: %s", file_path.name)
+            api_config, creds = _parse_rapi_file(file_path, defaults=defaults)
+
+            # Extract endpoints from the included file (ignore API name)
+            for api_data in api_config.get("api", {}).values():
+                endpoints = api_data.get("endpoints", {})
+                merged_endpoints.update(endpoints)
+
+            merged_credentials.update(creds)
+
+    return merged_endpoints, merged_credentials
+
+
+def _check_endpoint_collisions(
+    api_name: str,
+    existing_api: dict[str, Any],
+    api_data: dict[str, Any],
+    path: Path,
+    ctx: tuple[dict[str, list[str]], bool],
+) -> None:
+    """Check for endpoint collisions and warn or raise.
+
+    Args:
+        api_name: Name of the API.
+        existing_api: Existing API data from previous files.
+        api_data: New API data from current file.
+        path: Current file path.
+        ctx: Tuple of (endpoint_sources dict, strict flag).
+    """
+    endpoint_sources, strict = ctx
+    existing_endpoints = set(existing_api.get("endpoints", {}).keys())
+    new_endpoints = set(api_data.get("endpoints", {}).keys())
+    collisions = existing_endpoints & new_endpoints
+
+    for ep_name in collisions:
+        full_ref = f"{api_name}.{ep_name}"
+        if full_ref not in endpoint_sources:
+            endpoint_sources[full_ref] = []
+        endpoint_sources[full_ref].append(str(path))
+        if strict:
+            raise EndpointCollisionError(full_ref, endpoint_sources[full_ref])
+        log.warning(
+            "Endpoint '%s' redefined in %s, overwriting (use rapi.strict: true to error)",
+            full_ref,
+            path.name,
+        )
+
+
+def _merge_api_endpoints(
+    api_name: str,
+    existing_api: dict[str, Any],
+    api_data: dict[str, Any],
+    path: Path,
+) -> None:
+    """Merge endpoints from existing API with new API data.
+
+    Args:
+        api_name: Name of the API.
+        existing_api: Existing API data from previous files.
+        api_data: New API data from current file (modified in place).
+        path: Current file path (for logging).
+    """
+    merged_endpoints = {**existing_api.get("endpoints", {}), **api_data.get("endpoints", {})}
+    api_data["endpoints"] = merged_endpoints
+    log.warning("API '%s' redefined in %s, merging endpoints", api_name, path.name)
+
+
+def _track_endpoint_sources(
+    api_name: str,
+    api_data: dict[str, Any],
+    path: Path,
+    endpoint_sources: dict[str, list[str]],
+) -> None:
+    """Track endpoint sources for debugging.
+
+    Args:
+        api_name: Name of the API.
+        api_data: API data from current file.
+        path: Current file path.
+        endpoint_sources: Tracking dict for endpoint sources.
+    """
+    for ep_name in api_data.get("endpoints", {}):
+        full_ref = f"{api_name}.{ep_name}"
+        if full_ref not in endpoint_sources:
+            endpoint_sources[full_ref] = []
+        if str(path) not in endpoint_sources[full_ref]:
+            endpoint_sources[full_ref].append(str(path))
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +569,7 @@ class EndpointConfig:
         body_template: Default body template for POST/PUT.
         auth: Whether to apply API-level authentication to this endpoint.
             Set to False for public endpoints that don't require auth.
+        description: Human-readable description of the endpoint.
 
     Examples:
         >>> config = EndpointConfig(
@@ -292,6 +590,19 @@ class EndpointConfig:
     headers: dict[str, str] = field(default_factory=dict)
     body_template: dict[str, Any] | None = None
     auth: bool = True
+    safeguard: str | None = None
+    description: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate safeguard field (deep defense)."""
+        if self.safeguard is not None:
+            if len(self.safeguard) > _MAX_SAFEGUARD_LENGTH:
+                raise ValueError(f"safeguard too long: {len(self.safeguard)} > {_MAX_SAFEGUARD_LENGTH}")
+            if not _SAFEGUARD_PATTERN.match(self.safeguard):
+                raise ValueError(
+                    f"safeguard contains invalid characters: {self.safeguard!r}. "
+                    f"Allowed: A-Z, a-z, 0-9, _, -, space, {'{}'}, /"
+                )
 
     @property
     def full_ref(self) -> str:
@@ -346,6 +657,49 @@ class EndpointConfig:
                 raise ValueError(f"Missing parameter '{placeholder}' for path {self.path}")
 
         return path
+
+    def build_safeguard(self, *args: Any, **kwargs: Any) -> str | None:
+        """Build safeguard string with variable substitution.
+
+        Substitutes ``{param}`` placeholders in the safeguard string with
+        provided arguments, similar to ``build_path``.
+
+        Args:
+            *args: Positional arguments for {0}, {1}, etc.
+            **kwargs: Keyword arguments for {name} placeholders.
+
+        Returns:
+            Substituted safeguard string, or None if no safeguard configured.
+
+        Examples:
+            >>> config = EndpointConfig(
+            ...     name="delete",
+            ...     api_name="test",
+            ...     path="/users/{userId}",
+            ...     method="DELETE",
+            ...     safeguard="DELETE USER {userId}",
+            ... )
+            >>> config.build_safeguard(userId="abc123")
+            'DELETE USER abc123'
+        """
+        if self.safeguard is None:
+            return None
+
+        result = self.safeguard
+        placeholders = _PATH_PARAM_PATTERN.findall(result)
+
+        for placeholder in placeholders:
+            if placeholder.isdigit():
+                idx = int(placeholder)
+                if idx < len(args):
+                    result = result.replace(f"{{{placeholder}}}", str(args[idx]))
+            elif placeholder in kwargs:
+                result = result.replace(f"{{{placeholder}}}", str(kwargs[placeholder]))
+            elif len(args) > 0:
+                result = result.replace(f"{{{placeholder}}}", str(args[0]))
+                args = args[1:]
+
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,17 +760,24 @@ class RapiConfigManager:
         self,
         rapi_config: Mapping[str, Any] | None = None,
         credentials_config: Mapping[str, Any] | None = None,
+        safeguard_config: SafeguardConfig | None = None,
+        strict: bool = False,
     ) -> None:
         """Initialize RapiConfigManager.
 
         Args:
             rapi_config: The 'rapi' section from configuration.
             credentials_config: Inline credentials from ``*.rapi.yml`` files.
+            safeguard_config: Safeguard configuration (default: DELETE and PUT require safeguard).
+            strict: If True, raise error on endpoint collisions. If False, warn and overwrite.
         """
         self._config = rapi_config or {}
         self._credentials_config = dict(credentials_config) if credentials_config else {}
+        self._safeguard_config = safeguard_config or SafeguardConfig()
+        self._strict = strict
         self._apis: dict[str, ApiConfig] = {}
         self._endpoint_index: dict[str, list[str]] = {}  # endpoint_name -> [api_names]
+        self._endpoint_sources: dict[str, str] = {}  # full_ref -> source file
         self._source_files: list[Path] = []  # Track loaded files for debugging
 
         self._load_apis()
@@ -426,6 +787,9 @@ class RapiConfigManager:
         cls,
         path: str | Path,
         base_dir: Path | None = None,
+        safeguard_config: SafeguardConfig | None = None,
+        defaults: dict[str, Any] | None = None,
+        strict: bool = False,
     ) -> RapiConfigManager:
         """Load configuration from a single ``*.rapi.yml`` file.
 
@@ -435,6 +799,9 @@ class RapiConfigManager:
         Args:
             path: Path to the ``*.rapi.yml`` file.
             base_dir: Base directory for resolving relative paths in credentials.
+            safeguard_config: Safeguard configuration (default: DELETE and PUT require safeguard).
+            defaults: Default values inherited from kstlib.conf.yml rapi.defaults section.
+            strict: If True, raise error on endpoint collisions. If False, warn and overwrite.
 
         Returns:
             Configured RapiConfigManager instance.
@@ -446,19 +813,28 @@ class RapiConfigManager:
         Examples:
             >>> manager = RapiConfigManager.from_file("github.rapi.yml")  # doctest: +SKIP
         """
-        return cls.from_files([path], base_dir=base_dir)
+        return cls.from_files(
+            [path], base_dir=base_dir, safeguard_config=safeguard_config, defaults=defaults, strict=strict
+        )
 
     @classmethod
     def from_files(
         cls,
         paths: Sequence[str | Path],
         base_dir: Path | None = None,
+        safeguard_config: SafeguardConfig | None = None,
+        defaults: dict[str, Any] | None = None,
+        strict: bool = False,
     ) -> RapiConfigManager:
         """Load configuration from multiple ``*.rapi.yml`` files.
 
         Args:
             paths: List of paths to ``*.rapi.yml`` files.
             base_dir: Base directory for resolving relative paths.
+            safeguard_config: Safeguard configuration (default: DELETE and PUT require safeguard).
+            defaults: Default values inherited from kstlib.conf.yml rapi.defaults section.
+                Supports: base_url, credentials, auth, headers.
+            strict: If True, raise error on endpoint collisions. If False, warn and overwrite.
 
         Returns:
             Configured RapiConfigManager instance with merged configs.
@@ -466,6 +842,7 @@ class RapiConfigManager:
         Raises:
             FileNotFoundError: If any file does not exist.
             ValueError: If any file format is invalid.
+            EndpointCollisionError: If strict=True and endpoints collide.
 
         Examples:
             >>> manager = RapiConfigManager.from_files([
@@ -476,6 +853,8 @@ class RapiConfigManager:
         merged_api_config: dict[str, Any] = {"api": {}}
         merged_credentials: dict[str, Any] = {}
         source_files: list[Path] = []
+        # Track endpoint sources: full_ref -> [source_files]
+        endpoint_sources: dict[str, list[str]] = {}
 
         for file_path in paths:
             path = Path(file_path)
@@ -486,20 +865,29 @@ class RapiConfigManager:
                 raise FileNotFoundError(f"RAPI config file not found: {path}")
 
             log.debug("Loading RAPI config from: %s", path)
-            api_config, credentials = _parse_rapi_file(path)
+            api_config, credentials = _parse_rapi_file(path, defaults=defaults)
 
-            # Merge API config
+            # Merge API config with collision detection
+            collision_ctx = (endpoint_sources, strict)
             for api_name, api_data in api_config.get("api", {}).items():
-                if api_name in merged_api_config["api"]:
-                    log.warning("API '%s' redefined in %s, overwriting", api_name, path)
+                existing_api = merged_api_config["api"].get(api_name)
+                if existing_api:
+                    _check_endpoint_collisions(api_name, existing_api, api_data, path, collision_ctx)
+                    _merge_api_endpoints(api_name, existing_api, api_data, path)
+
+                _track_endpoint_sources(api_name, api_data, path, endpoint_sources)
                 merged_api_config["api"][api_name] = api_data
 
             # Merge credentials
             merged_credentials.update(credentials)
             source_files.append(path)
 
-        manager = cls(merged_api_config, merged_credentials)
+        manager = cls(merged_api_config, merged_credentials, safeguard_config, strict=strict)
         manager._source_files = source_files
+        # Store endpoint sources for debugging
+        for full_ref, sources in endpoint_sources.items():
+            if sources:
+                manager._endpoint_sources[full_ref] = sources[0]
         return manager
 
     @classmethod
@@ -562,6 +950,15 @@ class RapiConfigManager:
         """
         return self._source_files
 
+    @property
+    def safeguard_config(self) -> SafeguardConfig:
+        """Get safeguard configuration.
+
+        Returns:
+            SafeguardConfig instance.
+        """
+        return self._safeguard_config
+
     def _load_apis(self) -> None:
         """Load API configurations from config."""
         api_section = self._config.get("api", {})
@@ -585,16 +982,26 @@ class RapiConfigManager:
                     log.warning("Skipping invalid endpoint: %s.%s", api_name, ep_name)
                     continue
 
+                method = ep_data.get("method", "GET").upper()
+                safeguard = ep_data.get("safeguard")
+
                 endpoint = EndpointConfig(
                     name=ep_name,
                     api_name=api_name,
                     path=ep_data.get("path", f"/{ep_name}"),
-                    method=ep_data.get("method", "GET").upper(),
+                    method=method,
                     query=dict(ep_data.get("query", {})),
                     headers=dict(ep_data.get("headers", {})),
                     body_template=ep_data.get("body"),
                     auth=ep_data.get("auth", True),
+                    safeguard=safeguard,
+                    description=ep_data.get("description"),
                 )
+
+                # Validate safeguard requirement
+                if method in self._safeguard_config.required_methods and safeguard is None:
+                    raise SafeguardMissingError(endpoint.full_ref, method)
+
                 endpoints[ep_name] = endpoint
 
                 # Index for short reference lookup
@@ -631,25 +1038,82 @@ class RapiConfigManager:
         """
         for api_name, api_config in other.apis.items():
             if api_name in self._apis and not overwrite:
-                log.warning(
-                    "API '%s' in include conflicts with inline config, keeping inline",
-                    api_name,
-                )
+                self._handle_api_conflict(api_name, api_config, other)
                 continue
 
             self._apis[api_name] = api_config
-
-            # Update endpoint index
-            for ep_name in api_config.endpoints:
-                if ep_name not in self._endpoint_index:
-                    self._endpoint_index[ep_name] = []
-                if api_name not in self._endpoint_index[ep_name]:
-                    self._endpoint_index[ep_name].append(api_name)
+            self._update_endpoint_index(api_name, api_config)
+            self._copy_endpoint_sources(api_name, api_config, other)
 
         # Merge credentials
         for cred_name, cred_config in other.credentials_config.items():
             if cred_name not in self._credentials_config:
                 self._credentials_config[cred_name] = cred_config
+
+    def _handle_api_conflict(
+        self,
+        api_name: str,
+        api_config: ApiConfig,
+        other: RapiConfigManager,
+    ) -> None:
+        """Handle API name conflict during merge.
+
+        Args:
+            api_name: Name of the conflicting API.
+            api_config: The incoming API config.
+            other: Source manager to merge from.
+        """
+        existing_endpoints = set(self._apis[api_name].endpoints.keys())
+        new_endpoints = set(api_config.endpoints.keys())
+        collisions = existing_endpoints & new_endpoints
+
+        for ep_name in collisions:
+            full_ref = f"{api_name}.{ep_name}"
+            sources = ["inline config"]
+            if full_ref in other._endpoint_sources:
+                sources.append(other._endpoint_sources[full_ref])
+            if self._strict:
+                raise EndpointCollisionError(full_ref, sources)
+            log.warning(
+                "Endpoint '%s' in include conflicts with inline config, keeping inline",
+                full_ref,
+            )
+
+        log.warning(
+            "API '%s' in include conflicts with inline config, keeping inline",
+            api_name,
+        )
+
+    def _update_endpoint_index(self, api_name: str, api_config: ApiConfig) -> None:
+        """Update endpoint index for an API.
+
+        Args:
+            api_name: Name of the API.
+            api_config: The API configuration.
+        """
+        for ep_name in api_config.endpoints:
+            if ep_name not in self._endpoint_index:
+                self._endpoint_index[ep_name] = []
+            if api_name not in self._endpoint_index[ep_name]:
+                self._endpoint_index[ep_name].append(api_name)
+
+    def _copy_endpoint_sources(
+        self,
+        api_name: str,
+        api_config: ApiConfig,
+        other: RapiConfigManager,
+    ) -> None:
+        """Copy endpoint source tracking from another manager.
+
+        Args:
+            api_name: Name of the API.
+            api_config: The API configuration.
+            other: Source manager to copy from.
+        """
+        for ep_name in api_config.endpoints:
+            full_ref = f"{api_name}.{ep_name}"
+            if full_ref in other._endpoint_sources:
+                self._endpoint_sources[full_ref] = other._endpoint_sources[full_ref]
 
     def resolve(self, endpoint_ref: str) -> tuple[ApiConfig, EndpointConfig]:
         """Resolve endpoint reference to configuration.
@@ -781,21 +1245,76 @@ class RapiConfigManager:
         return result
 
 
+def _parse_safeguard_config(rapi_section: dict[str, Any]) -> SafeguardConfig:
+    """Parse safeguard configuration from rapi section.
+
+    Args:
+        rapi_section: The 'rapi' section from configuration.
+
+    Returns:
+        SafeguardConfig instance.
+    """
+    safeguard_data = rapi_section.get("safeguard", {})
+    if not safeguard_data:
+        return SafeguardConfig()
+
+    required_methods = safeguard_data.get("required_methods")
+    if required_methods is None:
+        return SafeguardConfig()
+
+    # Convert list to frozenset, uppercase all methods
+    methods = frozenset(m.upper() for m in required_methods)
+    return SafeguardConfig(required_methods=methods)
+
+
 def load_rapi_config() -> RapiConfigManager:
     """Load RAPI configuration from kstlib.conf.yml with include support.
 
-    Supports including external ``*.rapi.yml`` files via glob patterns:
+    Supports including external ``*.rapi.yml`` files via glob patterns,
+    and a ``defaults`` section that is inherited by included files:
 
     .. code-block:: yaml
 
         rapi:
+          # Strict mode: error on endpoint collisions (default: false = warn only)
+          strict: true
+
+          # Defaults inherited by all included *.rapi.yml files
+          defaults:
+            base_url: "https://${VIYA_HOST}"
+            credentials:
+              type: file
+              path: ~/.sas/credentials.json
+              token_path: ".Default['access-token']"
+            auth: bearer
+            headers:
+              Accept: application/json
+
           include:
-            - "./apis/``*.rapi.yml``"
-            - "~/.config/kstlib/``*.rapi.yml``"
+            - "./apis/*.rapi.yml"
+            - "~/.config/kstlib/*.rapi.yml"
+
+          safeguard:
+            required_methods:
+              - DELETE
+
           api:
             httpbin:
               base_url: "https://httpbin.org"
               # ...
+
+    With defaults, included files can be minimal:
+
+    .. code-block:: yaml
+
+        # annotations.rapi.yml
+        name: annotations
+        headers:
+          Accept: application/vnd.sas.annotation+json
+        endpoints:
+          root:
+            path: /annotations/
+            method: GET
 
     Returns:
         Configured RapiConfigManager instance with merged configs.
@@ -810,18 +1329,36 @@ def load_rapi_config() -> RapiConfigManager:
 
     log.debug("Loading RAPI config from kstlib.conf.yml")
 
+    # Extract strict mode (default: False = warn on collisions)
+    strict = rapi_section.pop("strict", False)
+    if strict:
+        log.debug("Strict mode enabled: endpoint collisions will raise errors")
+
+    # Extract defaults for included files
+    defaults = rapi_section.pop("defaults", None)
+    if defaults:
+        log.debug("Found rapi.defaults section with keys: %s", list(defaults.keys()))
+
     # Process includes if present
     include_patterns = rapi_section.pop("include", None)
 
+    # Parse safeguard config
+    safeguard_config = _parse_safeguard_config(rapi_section)
+
     # Create manager for inline config first
-    manager = RapiConfigManager(rapi_section)
+    manager = RapiConfigManager(rapi_section, safeguard_config=safeguard_config, strict=strict)
 
     # Merge included files if any
     if include_patterns:
         included_files = _resolve_include_patterns(include_patterns)
         if included_files:
             log.info("Including %d external RAPI config file(s)", len(included_files))
-            included_manager = RapiConfigManager.from_files(included_files)
+            included_manager = RapiConfigManager.from_files(
+                included_files,
+                safeguard_config=safeguard_config,
+                defaults=defaults,
+                strict=strict,
+            )
             # Merge included APIs (inline config takes precedence)
             manager._merge_apis(included_manager, overwrite=False)
 
@@ -857,5 +1394,6 @@ __all__ = [
     "EndpointConfig",
     "HmacConfig",
     "RapiConfigManager",
+    "SafeguardConfig",
     "load_rapi_config",
 ]

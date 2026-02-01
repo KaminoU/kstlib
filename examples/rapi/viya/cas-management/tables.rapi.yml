@@ -1,0 +1,102 @@
+# SAS Viya CAS Management API - Tables section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-tables
+
+endpoints:
+  # ============================================================
+  # Tables Collection
+  # ============================================================
+  tables-list:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables
+    method: GET
+    description: Returns list of tables.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      state: null
+
+  tables-upload:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables
+    method: POST
+    description: Uploads a data file.
+    headers:
+      Content-Type: application/octet-stream
+
+  tables-create:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables
+    method: POST
+    description: Creates an in-memory table.
+    headers:
+      Content-Type: application/vnd.sas.cas.table.create+json
+    body:
+      tableName*: null
+      columns*:
+        - name*: null
+          type*: null
+          length: null
+          format: null
+
+  # ============================================================
+  # Single Table
+  # ============================================================
+  tables-get:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}
+    method: GET
+    description: Returns a table.
+
+  tables-delete:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}
+    method: DELETE
+    description: Deletes a table.
+    safeguard: DELETE TABLE {tableName}
+
+  tables-save:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}
+    method: POST
+    description: Saves a table.
+    query:
+      action: save
+    body:
+      caslibName: null
+      tableName: null
+      replace: false
+
+  tables-append:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}
+    method: PATCH
+    description: Appends data to a table.
+    headers:
+      Content-Type: application/octet-stream
+    body: null
+
+  tables-scope:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/scope
+    method: PUT
+    description: Changes table scope.
+    query:
+      value: null
+
+  tables-state:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/state
+    method: PUT
+    description: Loads or unloads a table.
+    query:
+      value: null
+
+  # ============================================================
+  # Table Statistics
+  # ============================================================
+  tables-summary:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/summaryStatistics
+    method: GET
+    description: Returns numeric summaries.
+
+  tables-distinct-counts:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/tables/{tableName}/distinctCounts
+    method: GET
+    description: Returns distinct counts.

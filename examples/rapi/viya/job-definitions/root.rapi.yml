@@ -1,0 +1,99 @@
+# SAS Viya Job Definitions API
+# https://developer.sas.com/rest-apis/jobDefinitions
+#
+# Entry point for the Job Definitions API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: job-definitions
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /jobDefinitions/
+    method: GET
+    description: Returns top-level resource links.
+
+  root-check:
+    path: /jobDefinitions/
+    method: HEAD
+    description: Checks service availability.
+
+  # ============================================================
+  # Definitions Collection
+  # ============================================================
+  definitions-list:
+    path: /jobDefinitions/definitions
+    method: GET
+    description: Returns collection of job definitions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  definitions-create:
+    path: /jobDefinitions/definitions
+    method: POST
+    description: Creates a job definition.
+    body:
+      name: null
+      description: null
+      type: null
+      code: null
+      parameters:
+        - name: null
+          type: null
+          defaultValue: null
+      properties:
+        - name: null
+          value: null
+
+  definitions-create-batch:
+    path: /jobDefinitions/definitions
+    method: POST
+    description: Creates job definitions in batch.
+    headers:
+      Content-Type: application/vnd.sas.collection+json
+    body:
+      items:
+        - name: null
+          description: null
+          type: null
+          code: null
+
+  # ============================================================
+  # Single Definition
+  # ============================================================
+  definitions-check:
+    path: /jobDefinitions/definitions/{definitionId}
+    method: HEAD
+    description: Checks if a job definition exists.
+
+  definitions-get:
+    path: /jobDefinitions/definitions/{definitionId}
+    method: GET
+    description: Returns a job definition.
+
+  definitions-update:
+    path: /jobDefinitions/definitions/{definitionId}
+    method: PUT
+    description: Updates a job definition.
+    body:
+      name: null
+      description: null
+      type: null
+      code: null
+      parameters:
+        - name: null
+          type: null
+          defaultValue: null
+      properties:
+        - name: null
+          value: null
+
+  definitions-delete:
+    path: /jobDefinitions/definitions/{definitionId}
+    method: DELETE
+    description: Deletes a job definition.
+    safeguard: DELETE JOB DEFINITION {definitionId}

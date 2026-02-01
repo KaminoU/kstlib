@@ -1,0 +1,59 @@
+# SAS Viya Catalog API - Views section
+# https://developer.sas.com/rest-apis/catalog
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: catalog-views
+
+endpoints:
+  # ============================================================
+  # Views Collection
+  # ============================================================
+  views-list:
+    path: /catalog/views
+    method: GET
+    description: Returns a list of view definitions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  views-create:
+    path: /catalog/views
+    method: POST
+    description: Creates a view definition.
+    body:
+      name*: null
+      description: null
+      filter: null
+      types: null
+
+  # ============================================================
+  # Single View
+  # ============================================================
+  views-check:
+    path: /catalog/views/{viewId}
+    method: HEAD
+    description: Checks view definition exists.
+
+  views-get:
+    path: /catalog/views/{viewId}
+    method: GET
+    description: Returns a view definition.
+
+  views-update:
+    path: /catalog/views/{viewId}
+    method: PUT
+    description: Updates a view definition.
+    body:
+      name*: null
+      description: null
+      filter: null
+      types: null
+
+  views-delete:
+    path: /catalog/views/{viewId}
+    method: DELETE
+    description: Deletes a view definition.
+    safeguard: DELETE VIEW {viewId}

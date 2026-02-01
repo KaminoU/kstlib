@@ -1,0 +1,165 @@
+# SAS Viya Projects API
+# https://developer.sas.com/rest-apis/projects
+#
+# Entry point for the Projects API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: projects
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /projects/
+    method: GET
+    description: Returns top-level API links.
+
+  # ============================================================
+  # Projects Collection
+  # ============================================================
+  projects-list:
+    path: /projects/projects
+    method: GET
+    description: Returns list of projects with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  projects-create:
+    path: /projects/projects
+    method: POST
+    description: Creates new empty project.
+    body:
+      name*: null
+      description: null
+      parentFolderUri: null
+
+  # ============================================================
+  # Single Project
+  # ============================================================
+  projects-get:
+    path: /projects/projects/{projectId}
+    method: GET
+    description: Returns specified project.
+
+  projects-update:
+    path: /projects/projects/{projectId}
+    method: PUT
+    description: Replaces existing project.
+    body:
+      name*: null
+      description: null
+
+  projects-delete:
+    path: /projects/projects/{projectId}
+    method: DELETE
+    description: Deletes project and associated resources.
+    safeguard: DELETE PROJECT {projectId}
+
+  # ============================================================
+  # Resources
+  # ============================================================
+  resources-list:
+    path: /projects/projects/{projectId}/resources
+    method: GET
+    description: Returns list of project resources.
+
+  resources-add:
+    path: /projects/projects/{projectId}/resources
+    method: POST
+    description: Adds resource reference to project.
+    body:
+      name*: null
+      description: null
+      uri*: null
+      type: null
+
+  resources-get:
+    path: /projects/projects/{projectId}/resources/{resourceId}
+    method: GET
+    description: Returns specified resource.
+
+  resources-update:
+    path: /projects/projects/{projectId}/resources/{resourceId}
+    method: PUT
+    description: Replaces existing project resource.
+    body:
+      name*: null
+      description: null
+      uri*: null
+      type: null
+
+  resources-delete:
+    path: /projects/projects/{projectId}/resources/{resourceId}
+    method: DELETE
+    description: Removes resource from project.
+    safeguard: DELETE RESOURCE {resourceId}
+
+  # ============================================================
+  # Participants
+  # ============================================================
+  participants-list:
+    path: /projects/projects/{projectId}/participants
+    method: GET
+    description: Returns list of project participants.
+
+  participants-add:
+    path: /projects/projects/{projectId}/participants
+    method: POST
+    description: Adds participant to project.
+    body:
+      identityId*: null
+      identityType*: null
+      role: null
+
+  participants-get:
+    path: /projects/projects/{projectId}/participants/{participantId}
+    method: GET
+    description: Returns specified participant.
+
+  participants-update:
+    path: /projects/projects/{projectId}/participants/{participantId}
+    method: PUT
+    description: Replaces existing participant.
+    body:
+      identityId*: null
+      identityType*: null
+      role: null
+
+  participants-delete:
+    path: /projects/projects/{projectId}/participants/{participantId}
+    method: DELETE
+    description: Removes participant from project.
+    safeguard: DELETE PARTICIPANT {participantId}
+
+  # ============================================================
+  # Activities
+  # ============================================================
+  activities-project:
+    path: /projects/projects/{projectId}/activities
+    method: GET
+    description: Returns activities for specific project.
+
+  activities-all:
+    path: /projects/activities
+    method: GET
+    description: Returns activities across all projects.
+
+  # ============================================================
+  # Roles
+  # ============================================================
+  roles-list:
+    path: /projects/roles
+    method: GET
+    description: Returns valid roles for project participants.
+
+  # ============================================================
+  # FixUp
+  # ============================================================
+  fixup:
+    path: /projects/projects/@root
+    method: PUT
+    description: Synchronizes projects database with folders.
+    body: null

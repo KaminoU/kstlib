@@ -1,0 +1,43 @@
+# SAS Viya Job Execution API - Root section
+# https://developer.sas.com/rest-apis/jobExecution
+#
+# Entry point for the Job Execution API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: job-execution
+
+include:
+  - "./jobs.rapi.yml"
+  - "./requests.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /jobExecution/
+    method: GET
+    description: Returns top-level API links.
+
+  root-check:
+    path: /jobExecution/
+    method: HEAD
+    description: Checks API availability.
+
+  # ============================================================
+  # Providers
+  # ============================================================
+  providers-list:
+    path: /jobExecution/providers
+    method: GET
+    description: Returns provider collection.
+
+  providers-get:
+    path: /jobExecution/providers/{providerId}
+    method: GET
+    description: Returns specific provider information.
+
+  providers-check:
+    path: /jobExecution/providers/{providerId}
+    method: HEAD
+    description: Checks provider existence.

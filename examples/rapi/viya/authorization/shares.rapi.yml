@@ -1,0 +1,76 @@
+# SAS Viya Authorization API - Shares section
+# https://developer.sas.com/rest-apis/authorization
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: authorization-shares
+
+endpoints:
+  # ============================================================
+  # Shares Collection
+  # ============================================================
+  shares-list:
+    path: /authorization/shares
+    method: GET
+    description: Retrieves shares with optional paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+      sortBy: null
+
+  shares-create:
+    path: /authorization/shares
+    method: POST
+    description: Creates a new share with system-generated ID.
+    body:
+      sharedWith: null
+      sharedWithType: null
+      resourceUri: null
+      name: null
+      enabled: true
+
+  shares-patch:
+    path: /authorization/shares
+    method: PATCH
+    description: Performs synchronous, transactional share management operations.
+    headers:
+      Content-Type: application/vnd.sas.authorization.shares.management.request+json
+    body:
+      entries:
+        - op: null
+          value: null
+
+  # ============================================================
+  # Single Share
+  # ============================================================
+  shares-get:
+    path: /authorization/shares/{shareId}
+    method: GET
+    description: Retrieves a specified share.
+
+  shares-update:
+    path: /authorization/shares/{shareId}
+    method: PUT
+    description: Updates a share by completely replacing it.
+    body:
+      sharedWith: null
+      sharedWithType: null
+      resourceUri: null
+      name: null
+      enabled: true
+
+  shares-delete:
+    path: /authorization/shares/{shareId}
+    method: DELETE
+    description: Deletes a specified share.
+    safeguard: DELETE SHARE {shareId}
+
+  # ============================================================
+  # Configuration
+  # ============================================================
+  shares-config:
+    path: /authorization/shares/configuration
+    method: GET
+    description: Gets property values for sharing configuration.

@@ -1,0 +1,239 @@
+# SAS Viya Relationships API
+# https://developer.sas.com/rest-apis/relationships
+#
+# Entry point for the Relationships API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: relationships
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /relationships/
+    method: GET
+    description: Returns top-level collection links.
+
+  # ============================================================
+  # Relationships
+  # ============================================================
+  relationships-list:
+    path: /relationships/relationships
+    method: GET
+    description: Returns paginated relationships by resourceUri or referenceId.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  relationships-create:
+    path: /relationships/relationships
+    method: POST
+    description: Creates a new relationship.
+    body:
+      resourceUri*: null
+      type*: null
+      relatedResourceUri*: null
+      referenceId: null
+      relatedReferenceId: null
+      source: null
+
+  relationships-patch:
+    path: /relationships/relationships
+    method: PATCH
+    description: Removes relationships using JSON Patch operations.
+    headers:
+      Content-Type: application/json-patch+json
+    body:
+      - op*: remove
+        path*: null
+
+  relationships-upsert:
+    path: /relationships/relationships
+    method: POST
+    description: Upserts multiple relationships with conflict handling.
+    query:
+      onConflict: update
+    headers:
+      Content-Type: application/vnd.sas.collection+json
+    body:
+      items:
+        - resourceUri*: null
+          type*: null
+          relatedResourceUri*: null
+          source: null
+
+  relationships-query:
+    path: /relationships/relationships
+    method: POST
+    description: Queries relationships via request body.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri*: null
+
+  # ============================================================
+  # Single Relationship
+  # ============================================================
+  relationships-check:
+    path: /relationships/relationships/{relationshipId}
+    method: HEAD
+    description: Checks relationship existence.
+
+  relationships-get:
+    path: /relationships/relationships/{relationshipId}
+    method: GET
+    description: Returns an existing relationship.
+
+  relationships-update:
+    path: /relationships/relationships/{relationshipId}
+    method: PUT
+    description: Modifies relationship type field only.
+    body:
+      type*: null
+
+  relationships-delete:
+    path: /relationships/relationships/{relationshipId}
+    method: DELETE
+    description: Removes a specific relationship.
+    safeguard: DELETE RELATIONSHIP {relationshipId}
+
+  # ============================================================
+  # Relationship Types
+  # ============================================================
+  types-list:
+    path: /relationships/types
+    method: GET
+    description: Returns collection of relationships types.
+
+  types-get:
+    path: /relationships/types/{typeName}
+    method: GET
+    description: Returns information on a specific type.
+
+  # ============================================================
+  # References
+  # ============================================================
+  references-list:
+    path: /relationships/references
+    method: GET
+    description: Lists references with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  references-create:
+    path: /relationships/references
+    method: POST
+    description: Creates reference with unique resource URI.
+    body:
+      resourceUri*: null
+      contentType: null
+      source: null
+      name: null
+      createdBy: null
+      modifiedBy: null
+
+  references-patch:
+    path: /relationships/references
+    method: PATCH
+    description: Deletes references via JSON Patch.
+    headers:
+      Content-Type: application/json-patch+json
+    body:
+      - op*: remove
+        path*: null
+
+  references-upsert:
+    path: /relationships/references
+    method: POST
+    description: Upserts references with conflict options.
+    query:
+      onConflict: update
+    headers:
+      Content-Type: application/vnd.sas.collection+json
+    body:
+      items:
+        - resourceUri*: null
+          contentType: null
+          source: null
+          name: null
+
+  references-query:
+    path: /relationships/references
+    method: POST
+    description: Queries references via request body.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri*: null
+
+  references-sources:
+    path: /relationships/references/referenceSources
+    method: GET
+    description: Lists distinct reference source values.
+
+  # ============================================================
+  # Single Reference
+  # ============================================================
+  references-check:
+    path: /relationships/references/{referenceId}
+    method: HEAD
+    description: Verifies reference existence.
+
+  references-get:
+    path: /relationships/references/{referenceId}
+    method: GET
+    description: Returns single reference details.
+
+  references-update:
+    path: /relationships/references/{referenceId}
+    method: PUT
+    description: Updates reference (excluding resourceUri).
+    body:
+      contentType: null
+      source: null
+      name: null
+      createdBy: null
+      modifiedBy: null
+
+  references-delete:
+    path: /relationships/references/{referenceId}
+    method: DELETE
+    description: Removes reference and dependent relationships.
+    safeguard: DELETE REFERENCE {referenceId}
+
+  # ============================================================
+  # Jobs
+  # ============================================================
+  jobs-get:
+    path: /relationships/jobs/{jobId}
+    method: GET
+    description: Returns job details.
+
+  jobs-check:
+    path: /relationships/jobs/{jobId}
+    method: HEAD
+    description: Checks job existence.
+
+  jobs-delete:
+    path: /relationships/jobs/{jobId}
+    method: DELETE
+    description: Stops and removes a job.
+    safeguard: DELETE JOB {jobId}
+
+  jobs-state:
+    path: /relationships/jobs/{jobId}/state
+    method: GET
+    description: Returns job state (running, completed, failed).
+
+  jobs-create:
+    path: /relationships/jobs
+    method: POST
+    description: Loads metadata for relationship types.
+    body:
+      types*: null

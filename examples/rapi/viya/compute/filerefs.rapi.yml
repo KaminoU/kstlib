@@ -1,0 +1,100 @@
+# SAS Viya Compute API - Filerefs section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-filerefs
+
+endpoints:
+  # ============================================================
+  # Filerefs Collection
+  # ============================================================
+  filerefs-check:
+    path: /compute/sessions/{sessionId}/filerefs
+    method: HEAD
+    description: Checks endpoint availability.
+
+  filerefs-list:
+    path: /compute/sessions/{sessionId}/filerefs
+    method: GET
+    description: Lists filerefs in a session.
+    query:
+      start: 0
+      limit: 10
+
+  filerefs-assign:
+    path: /compute/sessions/{sessionId}/filerefs
+    method: POST
+    description: Assigns a fileref.
+    body:
+      fileref*: null
+      path*: null
+      device: null
+      options: null
+
+  # ============================================================
+  # Single Fileref
+  # ============================================================
+  filerefs-get-check:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}
+    method: HEAD
+    description: Checks for a fileref.
+
+  filerefs-get:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}
+    method: GET
+    description: Returns fileref information.
+
+  filerefs-deassign:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}
+    method: DELETE
+    description: Deassigns a fileref.
+    safeguard: DEASSIGN FILEREF {fileref}
+
+  filerefs-summary:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}
+    method: GET
+    description: Returns fileref summary information.
+    query:
+      format: summary
+
+  filerefs-directory:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}
+    method: GET
+    description: Returns a directory member.
+    query:
+      format: directory
+
+  # ============================================================
+  # Fileref Content
+  # ============================================================
+  filerefs-content-check:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}/content
+    method: HEAD
+    description: Checks file availability.
+
+  filerefs-content-download:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}/content
+    method: GET
+    description: Downloads a file.
+
+  filerefs-content-upload:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}/content
+    method: PUT
+    description: Uploads a file.
+    headers:
+      Content-Type: application/octet-stream
+
+  filerefs-content-delete:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}/content
+    method: DELETE
+    description: Deletes a file.
+    safeguard: DELETE FILEREF CONTENT {fileref}
+
+  filerefs-content-directory:
+    path: /compute/sessions/{sessionId}/filerefs/{fileref}/content
+    method: GET
+    description: Returns directory contents.
+    query:
+      format: directory

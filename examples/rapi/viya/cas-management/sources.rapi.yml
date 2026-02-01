@@ -1,0 +1,25 @@
+# SAS Viya CAS Management API - Sources section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-sources
+
+endpoints:
+  # ============================================================
+  # Sources
+  # ============================================================
+  sources-list:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/sources
+    method: GET
+    description: Returns source files and tables.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  sources-get:
+    path: /casManagement/servers/{serverName}/caslibs/{caslibName}/sources/{sourceName}
+    method: GET
+    description: Returns a single source.

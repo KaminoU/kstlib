@@ -1,0 +1,68 @@
+# SAS Viya Catalog API - Tags section
+# https://developer.sas.com/rest-apis/catalog
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: catalog-tags
+
+endpoints:
+  # ============================================================
+  # Tags Collection
+  # ============================================================
+  tags-list:
+    path: /catalog/tags
+    method: GET
+    description: Returns a list of tags.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  tags-create:
+    path: /catalog/tags
+    method: POST
+    description: Creates a tag.
+    body:
+      name*: null
+      description: null
+      color: null
+
+  tags-batch:
+    path: /catalog/tags
+    method: PATCH
+    description: Performs batch actions on tags.
+    headers:
+      Content-Type: application/json-patch+json
+    body:
+      - op*: null
+        path*: null
+        value: null
+
+  # ============================================================
+  # Single Tag
+  # ============================================================
+  tags-check:
+    path: /catalog/tags/{tagId}
+    method: HEAD
+    description: Checks tag exists.
+
+  tags-get:
+    path: /catalog/tags/{tagId}
+    method: GET
+    description: Returns a tag.
+
+  tags-update:
+    path: /catalog/tags/{tagId}
+    method: PUT
+    description: Updates a tag.
+    body:
+      name*: null
+      description: null
+      color: null
+
+  tags-delete:
+    path: /catalog/tags/{tagId}
+    method: DELETE
+    description: Deletes a tag.
+    safeguard: DELETE TAG {tagId}

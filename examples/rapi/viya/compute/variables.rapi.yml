@@ -1,0 +1,37 @@
+# SAS Viya Compute API - Variables section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-variables
+
+endpoints:
+  # ============================================================
+  # Variables Collection
+  # ============================================================
+  variables-check:
+    path: /compute/sessions/{sessionId}/variables
+    method: HEAD
+    description: Checks variable availability for a session.
+
+  variables-list:
+    path: /compute/sessions/{sessionId}/variables
+    method: GET
+    description: Returns session variables.
+    query:
+      start: 0
+      limit: 10
+
+  # ============================================================
+  # Single Variable
+  # ============================================================
+  variables-get-check:
+    path: /compute/sessions/{sessionId}/variables/{variableName}
+    method: HEAD
+    description: Determines whether a variable exists.
+
+  variables-get:
+    path: /compute/sessions/{sessionId}/variables/{variableName}
+    method: GET
+    description: Returns a variable from the session.

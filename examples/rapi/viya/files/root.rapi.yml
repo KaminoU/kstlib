@@ -1,0 +1,221 @@
+# SAS Viya Files API
+# https://developer.sas.com/rest-apis/files
+#
+# Entry point for the Files API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: files
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /files/
+    method: GET
+    description: Returns links to top-level resources.
+
+  root-check:
+    path: /files/
+    method: HEAD
+    description: Checks service availability.
+
+  # ============================================================
+  # Files Collection
+  # ============================================================
+  files-list:
+    path: /files/files
+    method: GET
+    description: Returns file resources with paging and filtering.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  files-delete-by-parent:
+    path: /files/files
+    method: DELETE
+    description: Removes file resources for specified parentUri.
+    safeguard: DELETE FILES BY PARENT
+    query:
+      parentUri: null
+
+  files-schema:
+    path: /files/files
+    method: GET
+    description: Returns schema fields for search indexing.
+    headers:
+      Accept: application/vnd.sas.collection+json
+
+  files-upload-raw:
+    path: /files/files
+    method: POST
+    description: Creates file resource from request body.
+    headers:
+      Content-Type: application/octet-stream
+    body: null
+
+  files-upload-multipart:
+    path: /files/files
+    method: POST
+    description: Creates file resource via multipart request.
+    headers:
+      Content-Type: multipart/form-data
+    body: null
+
+  files-fetch-multiple:
+    path: /files/files
+    method: POST
+    description: Returns files for multiple parentUris.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri*: null
+
+  # ============================================================
+  # Single File
+  # ============================================================
+  files-check:
+    path: /files/files/{fileId}
+    method: HEAD
+    description: Checks if file resource exists.
+
+  files-get:
+    path: /files/files/{fileId}
+    method: GET
+    description: Returns specific file resource.
+
+  files-update:
+    path: /files/files/{fileId}
+    method: PUT
+    description: Updates file metadata.
+    body:
+      name*: null
+      searchable*: true
+      parentUri: null
+      description: null
+      documentType: null
+      contentDisposition: null
+      typeDefName: null
+      properties: null
+      expirationTimeStamp: null
+
+  files-patch:
+    path: /files/files/{fileId}
+    method: PATCH
+    description: Partially updates file metadata.
+    body:
+      name: null
+      searchable: null
+      parentUri: null
+      description: null
+      documentType: null
+      contentDisposition: null
+      typeDefName: null
+      properties: null
+      expirationTimeStamp: null
+
+  files-delete:
+    path: /files/files/{fileId}
+    method: DELETE
+    description: Removes file resource.
+    safeguard: DELETE FILE {fileId}
+
+  files-copy:
+    path: /files/files/{fileId}/copy
+    method: POST
+    description: Duplicates existing file.
+    query:
+      parentFolderUri: null
+    body: null
+
+  # ============================================================
+  # File Content
+  # ============================================================
+  files-content-get:
+    path: /files/files/{fileId}/content
+    method: GET
+    description: Returns file content.
+
+  files-content-update:
+    path: /files/files/{fileId}/content
+    method: PUT
+    description: Updates file content.
+    headers:
+      Content-Type: application/octet-stream
+
+  # ============================================================
+  # File Versions
+  # ============================================================
+  files-versions-list:
+    path: /files/files/{fileId}/versions
+    method: GET
+    description: Lists all versions of a file.
+
+  files-version-check:
+    path: /files/files/{fileId}/version/{fileVersion}
+    method: HEAD
+    description: Checks versioned file existence.
+
+  files-version-get:
+    path: /files/files/{fileId}/version/{fileVersion}
+    method: GET
+    description: Returns specific file version.
+
+  files-version-content:
+    path: /files/files/{fileId}/version/{fileVersion}/content
+    method: GET
+    description: Returns versioned file content.
+
+  # ============================================================
+  # Indexing
+  # ============================================================
+  files-index-multiple:
+    path: /files/files
+    method: POST
+    description: Returns indexable representations for multiple parentUris.
+    headers:
+      Accept: application/vnd.sas.collection+json
+    body: null
+
+  files-index-collection:
+    path: /files/files
+    method: GET
+    description: Returns indexable file representations.
+
+  files-index-get:
+    path: /files/files/{fileId}
+    method: GET
+    description: Returns indexable representation for specific file.
+
+  # ============================================================
+  # Summary
+  # ============================================================
+  files-summary-collection:
+    path: /files/files
+    method: GET
+    description: Returns summary representations with paging.
+
+  files-summary-get:
+    path: /files/files/{fileId}
+    method: GET
+    description: Returns summary representation for file.
+
+  # ============================================================
+  # Security
+  # ============================================================
+  files-quarantine:
+    path: /files/files/{fileId}/quarantine
+    method: PATCH
+    description: Updates quarantine status (admins only).
+    body:
+      quarantined*: true
+
+  # ============================================================
+  # Settings
+  # ============================================================
+  settings:
+    path: /files/commons/settings
+    method: GET
+    description: Returns API configuration settings.

@@ -1,0 +1,59 @@
+# SAS Viya Authorization API - Decisions section
+# https://developer.sas.com/rest-apis/authorization
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: authorization-decisions
+
+endpoints:
+  # ============================================================
+  # Authorization Decisions
+  # ============================================================
+  decisions-create:
+    path: /authorization/decisions
+    method: POST
+    description: Determines if a principal is authorized for a specified action.
+    body:
+      principal: null
+      principalType: null
+      uri: null
+      permission: null
+
+  decisions-explain:
+    path: /authorization/decisions
+    method: POST
+    description: Provides authorization decision with detailed explanations.
+    headers:
+      Accept: application/vnd.sas.authorization.explanation+json
+    body:
+      principal: null
+      principalType: null
+      uri: null
+      permission: null
+
+  decisions-hypothetical:
+    path: /authorization/decisions
+    method: POST
+    description: Provides decisions reflecting unsaved rule changes.
+    headers:
+      Accept: application/vnd.sas.authorization.hypothetical.explanation+json
+    body:
+      principal: null
+      principalType: null
+      uri: null
+      permission: null
+      hypotheticalRules:
+        - op: null
+          value: null
+
+  decisions-bulk:
+    path: /authorization/decisions
+    method: POST
+    description: Determines which actions a principal is authorized to perform.
+    headers:
+      Content-Type: application/vnd.sas.selection+json
+    body:
+      resources:
+        - uri: null
+          permissions: null

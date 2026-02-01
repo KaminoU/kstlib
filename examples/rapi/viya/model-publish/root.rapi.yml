@@ -1,0 +1,204 @@
+# SAS Viya Model Publish API
+# https://developer.sas.com/rest-apis/modelPublish
+#
+# Entry point for the Model Publish API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-publish
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /modelPublish/
+    method: GET
+    description: Returns top-level resource links.
+
+  root-check:
+    path: /modelPublish/
+    method: HEAD
+    description: Checks service availability.
+
+  # ============================================================
+  # Published Models Collection
+  # ============================================================
+  models-check:
+    path: /modelPublish/models
+    method: HEAD
+    description: Returns header for published models list.
+
+  models-list:
+    path: /modelPublish/models
+    method: GET
+    description: Returns a list of published models.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  models-publish:
+    path: /modelPublish/models
+    method: POST
+    description: Publishes to CAS, Hadoop, MAS, Teradata, or cloud.
+    body:
+      name*: null
+      description: null
+      modelId*: null
+      modelVersionId: null
+      destinationName*: null
+      notes: null
+      codeType: null
+
+  # ============================================================
+  # Single Published Model
+  # ============================================================
+  models-get-check:
+    path: /modelPublish/models/{publishId}
+    method: HEAD
+    description: Checks if published model exists.
+
+  models-get:
+    path: /modelPublish/models/{publishId}
+    method: GET
+    description: Returns published model.
+
+  models-delete:
+    path: /modelPublish/models/{publishId}
+    method: DELETE
+    description: Deletes a published model by ID.
+    safeguard: DELETE PUBLISHED MODEL {publishId}
+
+  models-mapped-code:
+    path: /modelPublish/models/{publishId}/mappedCode
+    method: POST
+    description: Returns code to run the model.
+    body:
+      scoreDefinitionId: null
+      hints: null
+
+  models-log:
+    path: /modelPublish/models/{publishId}/log
+    method: GET
+    description: Returns a published model log.
+
+  # ============================================================
+  # Container Artifacts
+  # ============================================================
+  models-dockerfile:
+    path: /modelPublish/models/{publishId}/dockerfile
+    method: GET
+    description: Returns Dockerfile metadata.
+
+  models-dockerfile-content:
+    path: /modelPublish/models/{publishId}/dockerfile/content
+    method: GET
+    description: Returns Dockerfile content.
+
+  models-manifest:
+    path: /modelPublish/models/{publishId}/modelManifest
+    method: GET
+    description: Returns manifest for published container.
+
+  models-descriptor:
+    path: /modelPublish/models/{publishId}/deploymentDescriptor
+    method: GET
+    description: Returns deployment descriptor.
+
+  models-descriptor-content:
+    path: /modelPublish/models/{publishId}/deploymentDescriptor/{descriptorName}
+    method: GET
+    description: Returns deployment descriptor content.
+
+  # ============================================================
+  # Destinations Collection
+  # ============================================================
+  destinations-check:
+    path: /modelPublish/destinations
+    method: HEAD
+    description: Returns header for destinations list.
+
+  destinations-list:
+    path: /modelPublish/destinations
+    method: GET
+    description: Returns list of publishing destinations.
+
+  destinations-create:
+    path: /modelPublish/destinations
+    method: POST
+    description: Creates a publishing destination.
+    body:
+      name*: null
+      description: null
+      destinationType*: null
+      casServerName: null
+      casLibrary: null
+      masUri: null
+      credentialDomainId: null
+      properties:
+        - name: null
+          value: null
+
+  # ============================================================
+  # Single Destination
+  # ============================================================
+  destinations-get-check:
+    path: /modelPublish/destinations/{destinationName}
+    method: HEAD
+    description: Checks publishing destination by name.
+
+  destinations-get:
+    path: /modelPublish/destinations/{destinationName}
+    method: GET
+    description: Returns publishing destination by name.
+
+  destinations-update:
+    path: /modelPublish/destinations/{destinationName}
+    method: PUT
+    description: Updates a publishing destination.
+    body:
+      name*: null
+      description: null
+      destinationType*: null
+      casServerName: null
+      casLibrary: null
+      masUri: null
+      credentialDomainId: null
+      properties:
+        - name: null
+          value: null
+
+  destinations-delete:
+    path: /modelPublish/destinations/{destinationName}
+    method: DELETE
+    description: Deletes publishing destination by name.
+    safeguard: DELETE DESTINATION {destinationName}
+
+  # ============================================================
+  # Git Folders
+  # ============================================================
+  git-folders-list:
+    path: /modelPublish/destinations/{destinationName}/gitFolders
+    method: GET
+    description: Returns Git repository folders.
+
+  git-folders-create:
+    path: /modelPublish/destinations/{destinationName}/gitFolders
+    method: POST
+    description: Creates a Git repository folder.
+    body:
+      folderPath*: null
+
+  git-folders-rename:
+    path: /modelPublish/destinations/{destinationName}/gitFolders
+    method: PUT
+    description: Renames a Git repository folder.
+    body:
+      folderPath*: null
+      newFolderPath*: null
+
+  git-folders-delete:
+    path: /modelPublish/destinations/{destinationName}/gitFolders/{gitFolderName}
+    method: DELETE
+    description: Deletes specified Git repository folder.
+    safeguard: DELETE GIT FOLDER {gitFolderName}

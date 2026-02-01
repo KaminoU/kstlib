@@ -1,0 +1,78 @@
+# SAS Viya Compute API - Contexts section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-contexts
+
+endpoints:
+  # ============================================================
+  # Contexts Collection
+  # ============================================================
+  contexts-check:
+    path: /compute/contexts
+    method: HEAD
+    description: Checks endpoint availability.
+
+  contexts-list:
+    path: /compute/contexts
+    method: GET
+    description: Returns context definitions.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  contexts-create:
+    path: /compute/contexts
+    method: POST
+    description: Creates a context definition.
+    body:
+      name*: null
+      description: null
+      launchContext: null
+      launchType: null
+      authorizedUsers: null
+      authorizedGroups: null
+      environment: null
+
+  # ============================================================
+  # Single Context
+  # ============================================================
+  contexts-get-check:
+    path: /compute/contexts/{contextId}
+    method: HEAD
+    description: Verifies that a context exists.
+
+  contexts-get:
+    path: /compute/contexts/{contextId}
+    method: GET
+    description: Returns a context definition.
+
+  contexts-update:
+    path: /compute/contexts/{contextId}
+    method: PUT
+    description: Updates a context definition.
+    body:
+      name*: null
+      description: null
+      launchContext: null
+      launchType: null
+      authorizedUsers: null
+      authorizedGroups: null
+      environment: null
+
+  contexts-delete:
+    path: /compute/contexts/{contextId}
+    method: DELETE
+    description: Deletes a context definition.
+    safeguard: DELETE CONTEXT {contextId}
+
+  contexts-session-create:
+    path: /compute/contexts/{contextId}/sessions
+    method: POST
+    description: Requests a new session.
+    body:
+      serverId: null
+      environment: null

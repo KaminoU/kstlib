@@ -1,0 +1,70 @@
+# SAS Viya Compute API - Jobs section
+# https://developer.sas.com/rest-apis/compute
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: compute-jobs
+
+endpoints:
+  # ============================================================
+  # Jobs Collection
+  # ============================================================
+  jobs-check:
+    path: /compute/sessions/{sessionId}/jobs
+    method: HEAD
+    description: Checks endpoint availability.
+
+  jobs-list:
+    path: /compute/sessions/{sessionId}/jobs
+    method: GET
+    description: Returns current jobs for a session.
+    query:
+      start: 0
+      limit: 10
+
+  jobs-execute:
+    path: /compute/sessions/{sessionId}/jobs
+    method: POST
+    description: Executes SAS code in a session.
+    body:
+      code*: null
+      variables: null
+      environment: null
+
+  # ============================================================
+  # Single Job
+  # ============================================================
+  jobs-get-check:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}
+    method: HEAD
+    description: Verifies that a job exists.
+
+  jobs-get:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}
+    method: GET
+    description: Returns information about a job.
+
+  jobs-delete:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}
+    method: DELETE
+    description: Deletes a job.
+    safeguard: DELETE JOB {jobId}
+
+  jobs-state-check:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/state
+    method: HEAD
+    description: Checks endpoint availability.
+
+  jobs-state-get:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/state
+    method: GET
+    description: Returns current state of a job.
+
+  jobs-state-set:
+    path: /compute/sessions/{sessionId}/jobs/{jobId}/state
+    method: PUT
+    description: Sets current state of a job.
+    headers:
+      Content-Type: text/plain
+    body: null

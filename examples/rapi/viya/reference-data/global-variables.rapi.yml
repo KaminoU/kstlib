@@ -1,0 +1,94 @@
+# SAS Viya Reference Data API - Global Variables section
+# https://developer.sas.com/rest-apis/referenceData
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: reference-data-global-variables
+
+endpoints:
+  # ============================================================
+  # Global Variables Collection
+  # ============================================================
+  global-vars-list:
+    path: /referenceData/globalVariables
+    method: GET
+    description: Lists all variables.
+    query:
+      start: 0
+      limit: 10
+
+  global-vars-create:
+    path: /referenceData/globalVariables
+    method: POST
+    description: Creates new variable.
+    body:
+      name*: null
+      description: null
+      defaultValue*: null
+      dataType*: string
+
+  # ============================================================
+  # Single Global Variable
+  # ============================================================
+  global-vars-get:
+    path: /referenceData/globalVariables/{globalVariableId}
+    method: GET
+    description: Returns variable.
+
+  global-vars-update:
+    path: /referenceData/globalVariables/{globalVariableId}
+    method: PUT
+    description: Updates variable.
+    body:
+      name*: null
+      description: null
+      defaultValue*: null
+      dataType*: string
+
+  global-vars-delete:
+    path: /referenceData/globalVariables/{globalVariableId}
+    method: DELETE
+    description: Removes variable.
+    safeguard: DELETE GLOBAL VARIABLE {globalVariableId}
+
+  global-vars-dependencies:
+    path: /referenceData/globalVariables/{globalVariableId}/dependencies
+    method: GET
+    description: Returns dependencies.
+
+  # ============================================================
+  # Global Variable Revisions
+  # ============================================================
+  global-vars-revisions-list:
+    path: /referenceData/globalVariables/{globalVariableId}/revisions
+    method: GET
+    description: Lists revisions.
+
+  global-vars-revisions-create:
+    path: /referenceData/globalVariables/{globalVariableId}/revisions
+    method: POST
+    description: Creates revision.
+    body:
+      name*: null
+      description: null
+      defaultValue*: null
+      dataType*: string
+
+  global-vars-revisions-activate:
+    path: /referenceData/globalVariables/{globalVariableId}/active
+    method: PUT
+    description: Activates revision.
+    body:
+      revisionId*: null
+
+  global-vars-revisions-get:
+    path: /referenceData/globalVariables/{globalVariableId}/revisions/{globalVariableRevisionId}
+    method: GET
+    description: Returns revision.
+
+  global-vars-revisions-delete:
+    path: /referenceData/globalVariables/{globalVariableId}/revisions/{globalVariableRevisionId}
+    method: DELETE
+    description: Removes revision.
+    safeguard: DELETE REVISION {globalVariableRevisionId}

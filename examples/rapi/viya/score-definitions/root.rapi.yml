@@ -1,0 +1,104 @@
+# SAS Viya Score Definitions API
+# https://developer.sas.com/rest-apis/scoreDefinitions
+#
+# Entry point for the Score Definitions API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: score-definitions
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /scoreDefinitions/
+    method: GET
+    description: Returns top-level resource links.
+
+  root-check:
+    path: /scoreDefinitions/
+    method: HEAD
+    description: Checks API availability.
+
+  # ============================================================
+  # Definitions Collection
+  # ============================================================
+  definitions-list:
+    path: /scoreDefinitions/definitions
+    method: GET
+    description: Returns list of score definitions with paging.
+    query:
+      start: 0
+      limit: 10
+      filter: null
+
+  definitions-create:
+    path: /scoreDefinitions/definitions
+    method: POST
+    description: Creates a new score definition.
+    body:
+      name*: null
+      description: null
+      objectDescriptor:
+        uri*: null
+        name: null
+        type: null
+      inputData:
+        libraryUri*: null
+        tableUri*: null
+      outputData:
+        libraryUri*: null
+        tableName*: null
+      mappings:
+        - variableName: null
+          mappingValue: null
+
+  # ============================================================
+  # Single Definition
+  # ============================================================
+  definitions-check:
+    path: /scoreDefinitions/definitions/{definitionId}
+    method: HEAD
+    description: Checks if score definition exists.
+
+  definitions-get:
+    path: /scoreDefinitions/definitions/{definitionId}
+    method: GET
+    description: Returns the specified score definition.
+
+  definitions-update:
+    path: /scoreDefinitions/definitions/{definitionId}
+    method: PUT
+    description: Updates the specified score definition.
+    body:
+      name*: null
+      description: null
+      objectDescriptor:
+        uri*: null
+        name: null
+        type: null
+      inputData:
+        libraryUri*: null
+        tableUri*: null
+      outputData:
+        libraryUri*: null
+        tableName*: null
+      mappings:
+        - variableName: null
+          mappingValue: null
+
+  definitions-delete:
+    path: /scoreDefinitions/definitions/{definitionId}
+    method: DELETE
+    description: Deletes the specified score definition.
+    safeguard: DELETE SCORE DEFINITION {definitionId}
+
+  # ============================================================
+  # Code Generation
+  # ============================================================
+  definitions-mapped-code:
+    path: /scoreDefinitions/definitions/{definitionId}/mappedCode
+    method: POST
+    description: Generates mapped code from score definition.
+    body:
+      hints: null

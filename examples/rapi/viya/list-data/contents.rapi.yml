@@ -1,0 +1,82 @@
+# SAS Viya List Data API - Contents section
+# https://developer.sas.com/rest-apis/listData
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: list-data-contents
+
+endpoints:
+  # ============================================================
+  # List Contents
+  # ============================================================
+  contents-check:
+    path: /listData/lists/{listId}/contents
+    method: HEAD
+    description: Checks for list contents.
+
+  contents-get:
+    path: /listData/lists/{listId}/contents
+    method: GET
+    description: Returns list contents.
+
+  contents-update:
+    path: /listData/lists/{listId}/contents
+    method: PUT
+    description: Updates list contents.
+    body:
+      rows:
+        - key*: null
+          values: null
+
+  contents-privileged:
+    path: /listData/lists/{listId}/privilegedContents
+    method: GET
+    description: Returns unmasked contents.
+
+  contents-export:
+    path: /listData/lists/{listId}/contents/export
+    method: GET
+    description: Exports contents to CSV.
+    headers:
+      Accept: text/csv
+
+  # ============================================================
+  # Content State
+  # ============================================================
+  contents-state-update:
+    path: /listData/lists/{listId}/contents/state
+    method: PUT
+    description: Updates row state.
+    body:
+      keys*: null
+      state*: null
+
+  # ============================================================
+  # Row Expiry
+  # ============================================================
+  contents-expiry-update:
+    path: /listData/lists/{listId}/contents/expiry
+    method: PUT
+    description: Updates row expiry.
+    body:
+      keys*: null
+      expirationDate*: null
+
+  contents-expiry-delete:
+    path: /listData/lists/{listId}/contents/expiry/deletions
+    method: POST
+    description: Deletes row expiry.
+    body:
+      keys*: null
+
+  # ============================================================
+  # Privileged Memberships
+  # ============================================================
+  memberships-query:
+    path: /listData/query/privilegedMemberships
+    method: POST
+    description: Queries privileged memberships.
+    body:
+      listId*: null
+      keys*: null

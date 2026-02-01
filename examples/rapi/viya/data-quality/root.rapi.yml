@@ -1,0 +1,29 @@
+# SAS Viya Data Quality API - Root section
+# https://developer.sas.com/rest-apis/dataQuality
+#
+# Entry point for the Data Quality API.
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: data-quality
+
+include:
+  - "./environments.rapi.yml"
+  - "./qkbs.rapi.yml"
+  - "./locales.rapi.yml"
+  - "./functions.rapi.yml"
+  - "./definitions.rapi.yml"
+  - "./field-content-locale.rapi.yml"
+
+endpoints:
+  # ============================================================
+  # Root
+  # ============================================================
+  root:
+    path: /dataQuality/
+    method: GET
+    description: Returns top-level resource links.
+
+  root-check:
+    path: /dataQuality/
+    method: HEAD
+    description: Verifies that Data Quality API is running.

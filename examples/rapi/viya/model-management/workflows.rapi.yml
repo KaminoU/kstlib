@@ -1,0 +1,150 @@
+# SAS Viya Model Management API - Workflows section
+# https://developer.sas.com/rest-apis/modelManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: model-management-workflows
+
+endpoints:
+  # ============================================================
+  # Workflow Associations
+  # ============================================================
+  associations-list:
+    path: /modelManagement/workflowAssociations
+    method: GET
+    description: Lists all associations.
+
+  associations-create:
+    path: /modelManagement/workflowAssociations
+    method: POST
+    description: Creates workflow-object association.
+    body:
+      workflowId*: null
+      objectId*: null
+      objectType*: null
+
+  associations-get:
+    path: /modelManagement/workflowAssociations/{associationId}
+    method: GET
+    description: Returns specific association.
+
+  # ============================================================
+  # Workflow Processes
+  # ============================================================
+  processes-list:
+    path: /modelManagement/workflowProcesses
+    method: GET
+    description: Lists all processes.
+
+  processes-get:
+    path: /modelManagement/workflowProcesses/{processId}
+    method: GET
+    description: Returns specific process.
+
+  processes-create:
+    path: /modelManagement/workflow/processes
+    method: POST
+    description: Creates process and association.
+    body:
+      processDefinitionId*: null
+      objectId*: null
+      objectType*: null
+      variables:
+        - name: null
+          value: null
+
+  # ============================================================
+  # Process Variables
+  # ============================================================
+  process-vars-list:
+    path: /modelManagement/workflow/processes/{processId}/variables
+    method: GET
+    description: Lists process variables.
+
+  process-vars-update:
+    path: /modelManagement/workflow/processes/{processId}/variables
+    method: PATCH
+    description: Updates process variables.
+    headers:
+      Content-Type: application/json-patch+json
+    body:
+      - op*: null
+        path*: null
+        value: null
+
+  process-var-get:
+    path: /modelManagement/workflow/processes/{processId}/variables/{variableName}
+    method: GET
+    description: Returns named variable.
+
+  process-var-update:
+    path: /modelManagement/workflow/processes/{processId}/variables/{variableName}
+    method: PUT
+    description: Updates named variable.
+    body:
+      value*: null
+
+  process-messages:
+    path: /modelManagement/workflow/processes/{processId}/receivedMessages
+    method: POST
+    description: Notifies of received messages.
+    body:
+      messageName*: null
+      correlationKeys:
+        - name: null
+          value: null
+
+  # ============================================================
+  # Subprocess Variables
+  # ============================================================
+  subprocess-vars-list:
+    path: /modelManagement/workflow/processes/{processId}/subprocesses/{subprocessId}/variables
+    method: GET
+    description: Lists subprocess variables.
+
+  subprocess-vars-update:
+    path: /modelManagement/workflow/processes/{processId}/subprocesses/{subprocessId}/variables
+    method: PATCH
+    description: Updates subprocess variables.
+    headers:
+      Content-Type: application/json-patch+json
+    body:
+      - op*: null
+        path*: null
+        value: null
+
+  subprocess-var-get:
+    path: /modelManagement/workflow/processes/{processId}/subprocesses/{subprocessId}/variables/{variableName}
+    method: GET
+    description: Returns subprocess variable.
+
+  subprocess-var-update:
+    path: /modelManagement/workflow/processes/{processId}/subprocesses/{subprocessId}/variables/{variableName}
+    method: PUT
+    description: Updates subprocess variable.
+    body:
+      value*: null
+
+  # ============================================================
+  # Workflow Tasks
+  # ============================================================
+  tasks-list:
+    path: /modelManagement/workflowTasks
+    method: GET
+    description: Lists active tasks.
+
+  tasks-get:
+    path: /modelManagement/workflowTasks/{taskId}
+    method: GET
+    description: Returns specific task.
+
+  tasks-prompts-list:
+    path: /modelManagement/workflowTasks/{taskId}/prompts
+    method: GET
+    description: Lists task prompts.
+
+  tasks-prompt-get:
+    path: /modelManagement/workflowTasks/{taskId}/prompts/{promptId}
+    method: GET
+    description: Returns specific prompt.

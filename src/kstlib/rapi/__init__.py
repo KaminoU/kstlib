@@ -85,26 +85,32 @@ from kstlib.rapi.config import (
     EndpointConfig,
     HmacConfig,
     RapiConfigManager,
+    SafeguardConfig,
     load_rapi_config,
 )
 from kstlib.rapi.credentials import CredentialRecord, CredentialResolver
 from kstlib.rapi.exceptions import (
+    ConfirmationRequiredError,
     CredentialError,
     EndpointAmbiguousError,
     EndpointNotFoundError,
+    EnvVarError,
     RapiError,
     RequestError,
     ResponseTooLargeError,
+    SafeguardMissingError,
 )
 
 __all__ = [
     "ApiConfig",
+    "ConfirmationRequiredError",
     "CredentialError",
     "CredentialRecord",
     "CredentialResolver",
     "EndpointAmbiguousError",
     "EndpointConfig",
     "EndpointNotFoundError",
+    "EnvVarError",
     "HmacConfig",
     "RapiClient",
     "RapiConfigManager",
@@ -112,6 +118,8 @@ __all__ = [
     "RapiResponse",
     "RequestError",
     "ResponseTooLargeError",
+    "SafeguardConfig",
+    "SafeguardMissingError",
     "call",
     "call_async",
     "load_rapi_config",

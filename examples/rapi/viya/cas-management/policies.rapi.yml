@@ -1,0 +1,50 @@
+# SAS Viya CAS Management API - Policies section
+# https://developer.sas.com/rest-apis/casManagement
+#
+# Sub-module included by root.rapi.yml
+# Inherits: base_url, credentials, auth, headers from kstlib.conf.yml defaults
+
+name: cas-management-policies
+
+endpoints:
+  # ============================================================
+  # Policies
+  # ============================================================
+  policies-list:
+    path: /casManagement/servers/{serverName}/policies
+    method: GET
+    description: Returns list of policies.
+    query:
+      start: 0
+      limit: 10
+
+  policies-create:
+    path: /casManagement/servers/{serverName}/policies
+    method: POST
+    description: Adds a policy.
+    body:
+      name*: null
+      priority: null
+      type: null
+      rules: null
+
+  policies-get:
+    path: /casManagement/servers/{serverName}/policies/{policyName}
+    method: GET
+    description: Returns a policy.
+
+  policies-update:
+    path: /casManagement/servers/{serverName}/policies/{policyName}
+    method: PUT
+    description: Updates a policy.
+    body:
+      name*: null
+      priority: null
+      type: null
+      rules: null
+
+  policies-delete:
+    path: /casManagement/servers/{serverName}/policies/{policyName}
+    method: DELETE
+    description: Removes a policy.
+    safeguard: DELETE POLICY {policyName}
