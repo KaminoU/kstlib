@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-02-04
+
+### Fixed
+
+- **SOPS cascading search** - Fix `.sops.yaml` discovery from source file directory
+  - Previously only checked `~/.sops.yaml`, ignoring local configs
+  - Now walks up directory tree from source file, then falls back to home
+
 ## [1.1.0] - 2026-02-01
 
 ### Added
@@ -175,6 +183,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.1.1]: https://github.com/KaminoU/kstlib/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/KaminoU/kstlib/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/KaminoU/kstlib/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/KaminoU/kstlib/compare/v1.0.0...v1.0.1

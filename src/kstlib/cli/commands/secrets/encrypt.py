@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
@@ -31,7 +30,9 @@ from .common import (
     SHRED_PASSES_OPTION,
     SHRED_ZERO_LAST_OPTION,
     EncryptCommandOptions,
+    Path,
     SecureDeleteCLIOptions,
+    find_sops_config,
     format_arguments,
     resolve_sops_binary,
     run_sops_command,
@@ -213,9 +214,8 @@ def encrypt(
     binary = resolve_sops_binary()
     effective_config = config
     if effective_config is None:
-        default_config = Path.home() / ".sops.yaml"
-        if default_config.exists():
-            effective_config = default_config
+        # Search for .sops.yaml from source file directory up to root, then home
+        effective_config = find_sops_config(source)
 
     options = EncryptCommandOptions(
         out=out,

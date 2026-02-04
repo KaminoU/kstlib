@@ -222,6 +222,48 @@ def run_sops_command(binary: str, arguments: list[str]) -> CompletedProcess[str]
     )
 
 
+def find_sops_config(start_path: Path | None = None) -> Path | None:
+    """Find .sops.yaml by searching from start_path up to root, then home.
+
+    This mimics the native sops behavior which searches for configuration
+    files starting from the current directory and walking up to the root,
+    then falling back to the user home directory.
+
+    Args:
+        start_path: Directory to start searching from. If None, uses cwd.
+
+    Returns:
+        Path to .sops.yaml if found, None otherwise.
+    """
+    config_name = ".sops.yaml"
+
+    # Start from provided path or current working directory
+    if start_path is not None:
+        current = start_path.resolve()
+        if current.is_file():
+            current = current.parent
+    else:
+        current = Path.cwd()
+
+    # Walk up the directory tree
+    while True:
+        candidate = current / config_name
+        if candidate.is_file():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            # Reached root
+            break
+        current = parent
+
+    # Fallback to home directory
+    home_config = Path.home() / config_name
+    if home_config.is_file():
+        return home_config
+
+    return None
+
+
 def resolve_sops_binary() -> str:
     """Return the configured sops binary name if set, otherwise the default."""
     default_binary = "sops"
@@ -418,6 +460,7 @@ __all__ = [
     "Path",
     "SecureDeleteCLIOptions",
     "ShredCommandOptions",
+    "find_sops_config",
     "format_arguments",
     "resolve_sops_binary",
     "run_sops_command",
