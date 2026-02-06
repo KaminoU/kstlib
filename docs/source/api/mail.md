@@ -13,8 +13,8 @@ Pair this reference with {doc}`../features/mail/index` for the feature guide.
 - `MailBuilder` validates addresses, merges HTML/plain bodies, and exposes a fluent API for attachments.
 - `MailFilesystemGuards` wraps `PathGuardrails` so templates, attachments, and inline assets stay within allowed
 	roots.
-- `MailTransport` defines the delivery contract; `SMTPTransport` is the first concrete backend and filesystem
-	export transport is planned next.
+- `MailTransport` defines the delivery contract; concrete backends include `SMTPTransport`, `SesTransport`,
+	`ResendTransport`, and `GmailTransport`.
 - Exceptions distinguish validation (`MailValidationError`), configuration (`MailConfigurationError`), and
 	delivery failures (`MailTransportError`).
 
@@ -166,6 +166,56 @@ mistakes (directory traversal, missing roots) before interacting with the transp
 
 ```{eval-rst}
 .. autoclass:: kstlib.mail.transports.smtp.SMTPCredentials
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### SesTransport
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.transports.ses.SesTransport
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### SesResponse
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.transports.ses.SesResponse
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### ResendTransport
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.transports.resend.ResendTransport
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### ResendResponse
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.transports.resend.ResendResponse
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### GmailTransport
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.transports.gmail.GmailTransport
    :members:
    :undoc-members:
    :show-inheritance:

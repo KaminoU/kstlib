@@ -25,7 +25,7 @@ message = (
 - **Templates**: Jinja2 template rendering with placeholders
 - **Attachments**: File attachments and inline images
 - **Guardrails**: Filesystem sandboxing for templates and attachments
-- **Transports**: SMTP delivery (more planned)
+- **Transports**: SMTP, AWS SES, Resend, Gmail API
 
 ## Quick Start
 
@@ -144,6 +144,34 @@ mail:
     allow_external_attachments: false
     allow_external_templates: false
 ```
+
+### AWS SES Transport
+
+Send emails via AWS Simple Email Service using raw MIME. Requires the `ses` extra:
+
+```bash
+pip install "kstlib[ses]"
+```
+
+```python
+from kstlib.mail.transports import SesTransport
+
+# Using the default credential chain (recommended on EC2 / ECS / Lambda)
+ses = SesTransport(region="eu-west-3")
+
+# With explicit credentials
+ses = SesTransport(
+    region="us-east-1",
+    aws_access_key_id="AKIA...",
+    aws_secret_access_key="secret...",
+)
+
+# Send
+MailBuilder().transport(ses).sender("alerts@example.com").to("ops@example.com").message("Hello").send()
+```
+
+`SesTransport` passes the full MIME message to `send_raw_email`, so HTML,
+attachments, and all headers are preserved without conversion.
 
 ### SMTP Transport
 
@@ -441,3 +469,6 @@ Full autodoc: {doc}`../../api/mail`
 | `MailFilesystemGuards` | Path sandboxing for templates/attachments |
 | `SMTPTransport` | SMTP delivery backend |
 | `SMTPCredentials` | SMTP authentication dataclass |
+| `SesTransport` | AWS SES delivery backend (`pip install kstlib[ses]`) |
+| `ResendTransport` | Resend.com API delivery backend |
+| `GmailTransport` | Gmail API delivery backend (OAuth2) |

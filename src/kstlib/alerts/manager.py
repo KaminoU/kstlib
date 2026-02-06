@@ -601,6 +601,24 @@ def _create_email_transport(
 
         return ResendTransport(api_key=api_key)
 
+    if transport_type == "ses":
+        from kstlib.mail.transports import SesTransport
+
+        aws_access_key_id = transport_config.get("aws_access_key_id")
+        aws_secret_access_key = transport_config.get("aws_secret_access_key")
+
+        if credential_resolver:
+            cred_name = transport_config.get("credentials")
+            if cred_name:
+                record = credential_resolver.resolve(cred_name)
+                aws_access_key_id = aws_access_key_id or record.value
+
+        return SesTransport(
+            region=transport_config.get("region", "eu-west-3"),
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
+
     raise AlertConfigurationError(f"Unknown transport type '{transport_type}' for email channel '{name}'")
 
 

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-02-06
+
+### Added
+
+- **SesTransport** - AWS SES email delivery via `send_raw_email`
+  - Async transport using `run_in_executor` for boto3 compatibility
+  - Raw MIME passthrough (preserves HTML, attachments, all headers)
+  - Default credential chain support (EC2 instance profiles, env vars)
+  - Explicit credentials option (`aws_access_key_id` / `aws_secret_access_key`)
+  - Deep validation: region, credential pairs, timeout
+  - TRACE-level logging for request metadata
+  - Error mapping: `ClientError`, `NoCredentialsError`, `EndpointConnectionError`
+
+- **`[ses]` extras** - `pip install kstlib[ses]` installs boto3
+
+- **Alert manager integration** - `type: "ses"` in transport factory
+
+### Fixed
+
+- **Sphinx docs** - `'re_'` in ResendTransport docstring caused reST warning
+
+### Documentation
+
+- Sphinx features/mail: AWS SES Transport section with install + examples
+- Sphinx api/mail: autodoc for SesTransport, ResendTransport, GmailTransport
+- Installation guide: `[ses]` extra in bundles list
+
 ## [1.1.1] - 2026-02-04
 
 ### Fixed

@@ -69,7 +69,7 @@ class ResendTransport(AsyncMailTransport):
     and sends them asynchronously using httpx.
 
     Args:
-        api_key: Resend API key (starts with 're_').
+        api_key: Resend API key (starts with ``re_``).
         base_url: API base URL (default: https://api.resend.com/emails).
         timeout: Request timeout in seconds (default: 30.0).
 

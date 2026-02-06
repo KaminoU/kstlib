@@ -837,6 +837,13 @@ sdist = { url = "https://files.pythonhosted.org/packages/ea/5d/38b681d3fce7a266d
 wheels = [{ url = "https://files.pythonhosted.org/packages/a4/8e/469e5a4a2f5855992e425f3cb33804cc07bf18d48f2db061aec61ce50270/more_itertools-10.8.0-py3-none-any.whl", upload-time = 2025-09-02T15:23:09Z, size = 69667, hashes = { sha256 = "52d4362373dcf7c52546bc4af9a86ee7c4579df9a8dc268be0a2f949d376cc9b" } }]
 
 [[packages]]
+name = "moto"
+version = "5.1.20"
+index = "https://pypi.org/simple"
+sdist = { url = "https://files.pythonhosted.org/packages/b4/93/6b696aab5174721696a17716a488086e21f7b2547b4c9517f799a9b25e9e/moto-5.1.20.tar.gz", upload-time = 2026-01-17T21:49:00Z, size = 8318716, hashes = { sha256 = "6d12d781e26a550d80e4b7e01d5538178e3adec6efbdec870e06e84750f13ec0" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/7f/2f/f50892fdb28097917b87d358a5fcefd30976289884ff142893edcb0243ba/moto-5.1.20-py3-none-any.whl", upload-time = 2026-01-17T21:48:57Z, size = 6392751, hashes = { sha256 = "58c82c8e6b2ef659ef3a562fa415dce14da84bc7a797943245d9a338496ea0ea" } }]
+
+[[packages]]
 name = "mypy"
 version = "1.19.1"
 index = "https://pypi.org/simple"
@@ -1199,6 +1206,13 @@ version = "1.0.0"
 index = "https://pypi.org/simple"
 sdist = { url = "https://files.pythonhosted.org/packages/f3/61/d7545dafb7ac2230c70d38d31cbfe4cc64f7144dc41f6e4e4b78ecd9f5bb/requests-toolbelt-1.0.0.tar.gz", upload-time = 2023-05-01T04:11:33Z, size = 206888, hashes = { sha256 = "7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6" } }
 wheels = [{ url = "https://files.pythonhosted.org/packages/3f/51/d4db610ef29373b879047326cbf6fa98b6c1969d6f6dc423279de2b1be2c/requests_toolbelt-1.0.0-py2.py3-none-any.whl", upload-time = 2023-05-01T04:11:28Z, size = 54481, hashes = { sha256 = "cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06" } }]
+
+[[packages]]
+name = "responses"
+version = "0.25.8"
+index = "https://pypi.org/simple"
+sdist = { url = "https://files.pythonhosted.org/packages/0e/95/89c054ad70bfef6da605338b009b2e283485835351a9935c7bfbfaca7ffc/responses-0.25.8.tar.gz", upload-time = 2025-08-08T19:01:46Z, size = 79320, hashes = { sha256 = "9374d047a575c8f781b94454db5cab590b6029505f488d12899ddb10a4af1cf4" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/1c/4c/cc276ce57e572c102d9542d383b2cfd551276581dc60004cb94fe8774c11/responses-0.25.8-py3-none-any.whl", upload-time = 2025-08-08T19:01:45Z, size = 34769, hashes = { sha256 = "0c710af92def29c8352ceadff0c3fe340ace27cf5af1bbe46fb71275bcd2831c" } }]
 
 [[packages]]
 name = "rfc3986"
@@ -1673,11 +1687,25 @@ wheels = [
 ]
 
 [[packages]]
+name = "werkzeug"
+version = "3.1.5"
+index = "https://pypi.org/simple"
+sdist = { url = "https://files.pythonhosted.org/packages/5a/70/1469ef1d3542ae7c2c7b72bd5e3a4e6ee69d7978fa8a3af05a38eca5becf/werkzeug-3.1.5.tar.gz", upload-time = 2026-01-08T17:49:23Z, size = 864754, hashes = { sha256 = "6a548b0e88955dd07ccb25539d7d0cc97417ee9e179677d22c7041c8f078ce67" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/ad/e4/8d97cca767bcc1be76d16fb76951608305561c6e056811587f36cb1316a8/werkzeug-3.1.5-py3-none-any.whl", upload-time = 2026-01-08T17:49:21Z, size = 225025, hashes = { sha256 = "5111e36e91086ece91f93268bb39b4a35c1e6f1feac762c9c822ded0a4e322dc" } }]
+
+[[packages]]
 name = "wheel"
 version = "0.46.3"
 index = "https://pypi.org/simple"
 sdist = { url = "https://files.pythonhosted.org/packages/89/24/a2eb353a6edac9a0303977c4cb048134959dd2a51b48a269dfc9dde00c8a/wheel-0.46.3.tar.gz", upload-time = 2026-01-22T12:39:49Z, size = 60605, hashes = { sha256 = "e3e79874b07d776c40bd6033f8ddf76a7dad46a7b8aa1b2787a83083519a1803" } }
 wheels = [{ url = "https://files.pythonhosted.org/packages/87/22/b76d483683216dde3d67cba61fb2444be8d5be289bf628c13fc0fd90e5f9/wheel-0.46.3-py3-none-any.whl", upload-time = 2026-01-22T12:39:48Z, size = 30557, hashes = { sha256 = "4b399d56c9d9338230118d705d9737a2a468ccca63d5e813e2a4fc7815d8bc4d" } }]
+
+[[packages]]
+name = "xmltodict"
+version = "1.0.2"
+index = "https://pypi.org/simple"
+sdist = { url = "https://files.pythonhosted.org/packages/6a/aa/917ceeed4dbb80d2f04dbd0c784b7ee7bba8ae5a54837ef0e5e062cd3cfb/xmltodict-1.0.2.tar.gz", upload-time = 2025-09-17T21:59:26Z, size = 25725, hashes = { sha256 = "54306780b7c2175a3967cad1db92f218207e5bc1aba697d887807c0fb68b7649" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/c0/20/69a0e6058bc5ea74892d089d64dfc3a62ba78917ec5e2cfa70f7c92ba3a5/xmltodict-1.0.2-py3-none-any.whl", upload-time = 2025-09-17T21:59:24Z, size = 13893, hashes = { sha256 = "62d0fddb0dcbc9f642745d8bbf4d81fd17d6dfaec5a15b5c1876300aad92af0d" } }]
 
 [[packages]]
 name = "zipp"

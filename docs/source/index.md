@@ -76,11 +76,13 @@ reproducible installs out of the box.
 
 ```bash
 pip install "kstlib[dev]"
+pip install "kstlib[ses]"
 pip install "kstlib[docs]"
 pip install "kstlib[all]"
 ```
 
 - `dev` installs linting, testing, and typing helpers for contributors.
+- `ses` installs **boto3** for sending emails via AWS SES (`SesTransport`).
 - `docs` installs the Sphinx toolchain for building the documentation locally.
 - `all` pulls every optional dependency so a workstation mirrors the maintainer toolkit.
 

@@ -119,10 +119,6 @@ pylock.body*.tmp
 # Local infrastructure config
 infra/.env
 
-# Old config/doc files (cleaned up)
-/.*.md
-/.*.log
-
 # Coverage reports
 coverage.xml
 
