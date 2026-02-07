@@ -35,7 +35,7 @@ The focus has always been on building **resilient, secure, and performant** syst
 | **secrets** | Multi-provider resolver (env, keyring, SOPS, KMS) with guardrails |
 | **logging** | Rich console, rotating files, TRACE level, structlog integration |
 | **auth** | OIDC/OAuth2 with PKCE, token storage, auto-refresh |
-| **mail** | Jinja templates, transports (SMTP, Gmail API, Resend) |
+| **mail** | Jinja templates, transports (SMTP, Gmail API, Resend, AWS SES) |
 | **alerts** | Multi-channel (Slack, Email), throttling, severity levels |
 | **websocket** | Resilient connections, auto-reconnect, heartbeat, watchdog |
 | **rapi** | Config-driven REST client with HMAC signing |

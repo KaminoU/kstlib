@@ -383,7 +383,7 @@ sudo systemctl start binance-resilience binance-watchdog
 ### WebSocket Connection Failed
 
 - Check internet connectivity
-- Verify testnet URL is accessible: `wss://testnet.binance.vision/ws`
+- Verify testnet URL is accessible: `wss://stream.testnet.binance.vision/ws`
 - Check firewall settings
 
 ### State File Not Found

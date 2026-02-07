@@ -185,7 +185,7 @@ class TestWebSocketBinanceTestnet:
 
     async def test_real_connection(self) -> None:
         """Connect to real Binance testnet."""
-        ws = WebSocketManager(url="wss://testnet.binance.vision/ws")
+        ws = WebSocketManager(url="wss://stream.testnet.binance.vision/ws")
         async with ws:
             msg = await ws.receive()
             assert msg is not None
