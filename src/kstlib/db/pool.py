@@ -136,6 +136,17 @@ class ConnectionPool:
 
             conn = await aiosqlite.connect(self.db_path)
 
+        # Enable incremental auto-vacuum on new databases only.
+        # auto_vacuum must be set before any write operation (including journal_mode).
+        if self.db_path != ":memory:":
+            cursor = await conn.execute("PRAGMA auto_vacuum")
+            row = await cursor.fetchone()
+            if row and row[0] == 0:  # NONE
+                cursor2 = await conn.execute("SELECT count(*) FROM sqlite_master")
+                row2 = await cursor2.fetchone()
+                if row2 and row2[0] == 0:  # empty DB
+                    await conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
+
         # Enable WAL mode for better concurrency (works with both)
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA foreign_keys=ON")
@@ -266,6 +277,7 @@ class ConnectionPool:
             # Close all connections
             for conn in self._connections:
                 try:
+                    await conn.execute("PRAGMA optimize")
                     await conn.close()
                 except Exception:
                     # Connection may be already closed - intentional silent catch

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -332,3 +332,72 @@ class TestConnectionPool:
         """No cipher key by default."""
         pool = ConnectionPool(":memory:", min_size=1, max_size=5)
         assert pool.cipher_key is None
+
+    @pytest.mark.asyncio
+    async def test_auto_vacuum_incremental_on_new_db(self, temp_db_path: Path) -> None:
+        """New file database gets auto_vacuum set to INCREMENTAL."""
+        pool = ConnectionPool(str(temp_db_path), min_size=1, max_size=2)
+        try:
+            async with pool.connection() as conn:
+                cursor = await conn.execute("PRAGMA auto_vacuum")
+                row = await cursor.fetchone()
+                assert row is not None
+                assert row[0] == 2  # INCREMENTAL
+        finally:
+            await pool.close()
+
+    @pytest.mark.asyncio
+    async def test_auto_vacuum_unchanged_on_existing_db(self, temp_db_path: Path) -> None:
+        """Existing database with tables keeps its auto_vacuum mode."""
+        import aiosqlite
+
+        # Pre-populate the database with a table (auto_vacuum defaults to NONE=0)
+        async with aiosqlite.connect(str(temp_db_path)) as conn:
+            await conn.execute("CREATE TABLE setup (id INTEGER)")
+            await conn.commit()
+
+        pool = ConnectionPool(str(temp_db_path), min_size=1, max_size=2)
+        try:
+            async with pool.connection() as conn:
+                cursor = await conn.execute("PRAGMA auto_vacuum")
+                row = await cursor.fetchone()
+                assert row is not None
+                assert row[0] == 0  # NONE (unchanged)
+        finally:
+            await pool.close()
+
+    @pytest.mark.asyncio
+    async def test_optimize_on_close(self) -> None:
+        """PRAGMA optimize is executed on each connection at close."""
+        pool = ConnectionPool(":memory:", min_size=1, max_size=2)
+        async with pool.connection() as conn:
+            await conn.execute("SELECT 1")
+
+        # Track execute calls via wrapper
+        executed_statements: list[str] = []
+        for conn in pool._connections:
+            original_execute = conn.execute
+
+            async def tracking_execute(
+                sql: str, *args: object, _orig: object = original_execute, **kwargs: object
+            ) -> object:
+                executed_statements.append(str(sql))
+                return await _orig(sql, *args, **kwargs)  # type: ignore[operator]
+
+            conn.execute = tracking_execute  # type: ignore[assignment]
+
+        await pool.close()
+        assert any("optimize" in s for s in executed_statements), "PRAGMA optimize not called"
+
+    @pytest.mark.asyncio
+    async def test_auto_vacuum_skipped_for_memory_db(self) -> None:
+        """Memory databases skip auto_vacuum setup."""
+        pool = ConnectionPool(":memory:", min_size=1, max_size=2)
+        try:
+            async with pool.connection() as conn:
+                cursor = await conn.execute("PRAGMA auto_vacuum")
+                row = await cursor.fetchone()
+                assert row is not None
+                assert row[0] == 0  # NONE (default for :memory:)
+        finally:
+            await pool.close()
