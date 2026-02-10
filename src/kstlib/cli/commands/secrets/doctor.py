@@ -21,7 +21,7 @@ from kstlib.cli.common import (
 from kstlib.config.exceptions import ConfigNotLoadedError
 from kstlib.config.loader import get_config
 
-from .common import INIT_FORCE_OPTION, INIT_LOCAL_OPTION, CheckEntry, resolve_sops_binary
+from .common import INIT_BACKEND_OPTION, INIT_FORCE_OPTION, INIT_LOCAL_OPTION, CheckEntry, resolve_sops_binary
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -475,6 +475,25 @@ def _check_aws_credentials() -> CheckEntry:
     }
 
 
+def _scan_available_backends() -> list[str]:
+    """Scan the system for available encryption backends (binary/package presence only).
+
+    Returns:
+        List of backend names detected on the system: "age", "gpg", "kms".
+    """
+    available: list[str] = []
+    if shutil.which("age-keygen"):
+        available.append("age")
+    if shutil.which("gpg") or shutil.which("gpg2"):
+        available.append("gpg")
+    try:
+        importlib.import_module("boto3")
+        available.append("kms")
+    except ImportError:
+        pass
+    return available
+
+
 def _evaluate_config_state() -> tuple[list[CheckEntry], dict[str, Any] | None]:
     """Return configuration diagnostics entries and resolver snapshot."""
     try:
@@ -501,16 +520,44 @@ def _derive_doctor_status(checks: Sequence[CheckEntry]) -> CommandStatus:
     return CommandStatus.OK
 
 
+def _build_backend_mismatch_hint(
+    configured: list[str],
+    available: list[str],
+) -> str | None:
+    """Build an actionable hint when configured backends are not available.
+
+    Returns:
+        A hint string if there is a mismatch, None otherwise.
+    """
+    unavailable_configured = [b for b in configured if b not in available]
+    usable_alternatives = [b for b in available if b in ("age", "gpg")]
+
+    if not unavailable_configured or not usable_alternatives:
+        return None
+
+    alt = usable_alternatives[0]
+    configured_str = ", ".join(unavailable_configured)
+    return (
+        f"[yellow]Hint:[/yellow] Configured backend ({configured_str}) is not available, "
+        f"but {alt} is. Run: [bold]kstlib secrets init --backend {alt}[/bold]"
+    )
+
+
 def _build_doctor_message(
     checks: Sequence[CheckEntry],
     status: CommandStatus,
     backends: list[str] | None = None,
+    available_backends: list[str] | None = None,
 ) -> str:
     """Build a descriptive message listing issues by severity."""
+    # Compute "also available" backends (available but not configured)
+    also_available = [b for b in (available_backends or []) if b not in (backends or [])]
+
     if status is CommandStatus.OK:
         if backends:
             backend_str = ", ".join(backends)
-            return f"Secrets subsystem ready (backend: {backend_str})."
+            suffix = f"; also available: {', '.join(also_available)}" if also_available else ""
+            return f"Secrets subsystem ready (backend: {backend_str}{suffix})."
         return "Secrets subsystem ready."
 
     # Collect issues by severity
@@ -522,8 +569,46 @@ def _build_doctor_message(
         parts.append(f"[red]Missing ({len(missing)})[/red]: {', '.join(missing)}")
     if warnings:
         parts.append(f"[yellow]Warnings ({len(warnings)})[/yellow]: {', '.join(warnings)}")
+    if also_available:
+        parts.append(f"Available on system: {', '.join(also_available)}")
+
+    # Actionable hint when configured backend is unavailable
+    hint = _build_backend_mismatch_hint(backends or [], available_backends or [])
+    if hint:
+        parts.append(hint)
 
     return "Secrets subsystem issues:\n" + "\n".join(parts)
+
+
+def _collect_backend_checks(
+    configured: list[str],
+    available: list[str],
+) -> list[CheckEntry]:
+    """Collect check entries for configured (deep) and unconfigured (lightweight) backends."""
+    entries: list[CheckEntry] = []
+
+    # Deep checks for configured backends
+    if "age" in configured:
+        entries.extend([_check_age_keygen(), _check_age_key()])
+        consistency_check = _check_age_key_consistency()
+        if consistency_check:
+            entries.append(consistency_check)
+    if "gpg" in configured:
+        entries.extend([_check_gpg_binary(), _check_gpg_keys()])
+    if "kms" in configured:
+        entries.extend([_check_boto3(), _check_aws_credentials()])
+
+    # Lightweight checks for available but not configured backends
+    unconfigured = [b for b in available if b not in configured]
+    for backend in unconfigured:
+        if backend == "age":
+            entries.append(_check_age_keygen())
+        elif backend == "gpg":
+            entries.append(_check_gpg_binary())
+        elif backend == "kms":
+            entries.append(_check_boto3())
+
+    return entries
 
 
 def doctor() -> None:
@@ -546,20 +631,11 @@ def doctor() -> None:
     if not backends and config_path:
         backends = ["age"]
 
-    # Age checks (if age backend configured or default)
-    if "age" in backends:
-        checks.extend([_check_age_keygen(), _check_age_key()])
-        consistency_check = _check_age_key_consistency()
-        if consistency_check:
-            checks.append(consistency_check)
+    # Scan system for available backends (lightweight binary/package detection)
+    available = _scan_available_backends()
 
-    # GPG checks (only if GPG backend configured)
-    if "gpg" in backends:
-        checks.extend([_check_gpg_binary(), _check_gpg_keys()])
-
-    # AWS KMS checks (only if KMS backend configured)
-    if "kms" in backends:
-        checks.extend([_check_boto3(), _check_aws_credentials()])
+    # Deep checks for CONFIGURED backends + lightweight for unconfigured
+    checks.extend(_collect_backend_checks(backends, available))
 
     # Keyring is always checked (used for token caching regardless of backend)
     checks.append(_check_keyring())
@@ -568,8 +644,12 @@ def doctor() -> None:
     checks.extend(config_checks)
 
     status = _derive_doctor_status(checks)
-    message = _build_doctor_message(checks, status, backends)
-    payload: dict[str, Any] = {"checks": checks, "backends": backends}
+    message = _build_doctor_message(checks, status, backends, available)
+    payload: dict[str, Any] = {
+        "checks": checks,
+        "backends": backends,
+        "available_backends": available,
+    }
     if resolver_config is not None:
         payload["resolver"] = resolver_config
 
@@ -669,6 +749,97 @@ def _read_existing_public_key(key_path: Path) -> str | None:
     return None
 
 
+def _resolve_init_backend(backend: str | None) -> str:
+    """Resolve which backend to use for init.
+
+    Priority: explicit choice > age > gpg > error.
+
+    Args:
+        backend: Explicit backend choice, or None for auto-detection.
+
+    Returns:
+        The resolved backend name ("age" or "gpg").
+
+    Raises:
+        SystemExit: If the requested or detected backend is not available.
+    """
+    valid_backends = ("age", "gpg")
+    if backend is not None:
+        backend = backend.lower()
+        if backend not in valid_backends:
+            exit_error(f"Invalid backend '{backend}'. Choose from: {', '.join(valid_backends)}.")
+        available = _scan_available_backends()
+        if backend not in available:
+            exit_error(f"Backend '{backend}' requested but not available. Install it first.")
+        return backend
+
+    available = _scan_available_backends()
+    resolved = next((p for p in valid_backends if p in available), None)
+    if resolved is None:
+        exit_error("No encryption backend found. Install age or GPG first (see: kstlib secrets doctor).")
+    return resolved
+
+
+def _get_gpg_fingerprint() -> str:
+    """Get the fingerprint of the first GPG secret key.
+
+    Returns:
+        The fingerprint string.
+
+    Raises:
+        SystemExit: If GPG is not found or no secret keys exist.
+    """
+    gpg_path = shutil.which("gpg") or shutil.which("gpg2")
+    if not gpg_path:
+        exit_error("GPG not found. Install GPG first.")
+
+    result = run(
+        [gpg_path, "--list-secret-keys", "--with-colons"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        exit_error("Failed to list GPG secret keys.")
+
+    fingerprint = ""
+    for line in result.stdout.splitlines():
+        if line.startswith("fpr:"):
+            fpr = line.split(":")[9]
+            if fpr:
+                fingerprint = fpr
+                break
+
+    if not fingerprint:
+        exit_error("No GPG secret keys found. Run 'gpg --gen-key' first.")
+    return fingerprint
+
+
+def _create_sops_config_gpg(config_path: Path, fingerprint: str) -> bool:
+    """Create a .sops.yaml config file for GPG backend.
+
+    Args:
+        config_path: Path where the config file will be written.
+        fingerprint: GPG key fingerprint to use for encryption.
+
+    Returns:
+        True if the file was created successfully, False otherwise.
+    """
+    config_content = f"""\
+# SOPS configuration - generated by kstlib secrets init
+creation_rules:
+  - path_regex: .*\\.(yml|yaml)$
+    encrypted_regex: .*(?:sops|key|password|secret|token|credentials?).*
+    pgp: {fingerprint}
+"""
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+        config_path.write_text(config_content, encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
 def _ensure_age_key(key_path: Path, *, force: bool) -> tuple[str, bool]:
     """Ensure age key exists, return (public_key, was_created)."""
     if key_path.exists() and not force:
@@ -698,21 +869,8 @@ def _ensure_sops_config(config_path: Path, public_key: str, *, force: bool) -> b
     return True
 
 
-def init(
-    *,
-    local: bool = INIT_LOCAL_OPTION,
-    force: bool = INIT_FORCE_OPTION,
-) -> None:
-    """Quick setup: generate age key and create .sops.yaml config.
-
-    By default, creates files in the user's home directory (cross-platform).
-    Use --local to create them in the current project directory instead.
-
-    For advanced options (KMS, GPG, multi-recipients), use age-keygen and sops directly.
-    """
-    if not shutil.which("age-keygen"):
-        exit_error("age-keygen not found. Install age first (see: kstlib secrets doctor).")
-
+def _init_age(*, local: bool, force: bool) -> None:
+    """Run the age backend init flow."""
     key_path, config_path = _get_default_sops_paths(local)
     created_files: list[str] = []
 
@@ -723,14 +881,12 @@ def init(
     if _ensure_sops_config(config_path, public_key, force=force):
         created_files.append(str(config_path))
 
-    # Build summary
     if created_files:
-        summary = "Created:\n" + "\n".join(f"  - {f}" for f in created_files)
+        summary = "Created (backend: age):\n" + "\n".join(f"  - {f}" for f in created_files)
         summary += f"\n\nPublic key: {public_key}"
         if local:
             summary += "\n\n[dim]Add .age-key.txt to .gitignore![/dim]"
         render_result(CommandResult(status=CommandStatus.OK, message=summary))
-        console.print("\n[dim]For advanced options (KMS, GPG), see age-keygen --help and sops docs.[/dim]")
     else:
         render_result(
             CommandResult(
@@ -738,6 +894,49 @@ def init(
                 message="All files already exist. Use --force to overwrite.",
             )
         )
+
+
+def _init_gpg(*, local: bool, force: bool) -> None:
+    """Run the GPG backend init flow."""
+    fingerprint = _get_gpg_fingerprint()
+    _, config_path = _get_default_sops_paths(local)
+
+    if config_path.exists() and not force:
+        console.print(f"[dim]SOPS config already exists:[/dim] {config_path}")
+        render_result(
+            CommandResult(
+                status=CommandStatus.WARNING,
+                message="All files already exist. Use --force to overwrite.",
+            )
+        )
+        return
+
+    if not _create_sops_config_gpg(config_path, fingerprint):
+        exit_error(f"Failed to create SOPS config at {config_path}.")
+
+    short_fp = f"{fingerprint[:4]}...{fingerprint[-4:]}" if len(fingerprint) > 12 else fingerprint
+    summary = f"Created (backend: gpg):\n  - {config_path}\n\nGPG fingerprint: {short_fp}"
+    render_result(CommandResult(status=CommandStatus.OK, message=summary))
+
+
+def init(
+    *,
+    local: bool = INIT_LOCAL_OPTION,
+    force: bool = INIT_FORCE_OPTION,
+    backend: str | None = INIT_BACKEND_OPTION,
+) -> None:
+    """Quick setup: generate key/config for secrets encryption.
+
+    Auto-detects the best available backend (age > gpg) or use --backend
+    to choose explicitly. By default, creates files in the user's home
+    directory (cross-platform). Use --local for the current directory.
+    """
+    resolved = _resolve_init_backend(backend)
+
+    if resolved == "age":
+        _init_age(local=local, force=force)
+    else:
+        _init_gpg(local=local, force=force)
 
 
 __all__ = ["doctor", "init"]

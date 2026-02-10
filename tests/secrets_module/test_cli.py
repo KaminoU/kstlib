@@ -34,11 +34,15 @@ from kstlib.cli.commands.secrets.doctor import (
     _check_age_key,
     _check_sops_config,
     _create_sops_config,
+    _create_sops_config_gpg,
     _ensure_age_key,
     _ensure_sops_config,
     _generate_age_key,
     _get_default_sops_paths,
+    _get_gpg_fingerprint,
     _read_existing_public_key,
+    _resolve_init_backend,
+    _scan_available_backends,
 )
 from kstlib.cli.commands.secrets.encrypt import (
     _build_encrypt_args,
@@ -80,6 +84,9 @@ def test_doctor_reports_ready(monkeypatch: pytest.MonkeyPatch, runner: CliRunner
     sops_config.write_text("creation_rules:\n  - age: age1test\n", encoding="utf-8")
     monkeypatch.setattr(doctor_mod, "_find_sops_config_path", lambda: sops_config)
 
+    # Mock available backends scan (age only)
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: ["age"])
+
     # Mock all subsystem checks to return "available" status
     monkeypatch.setattr(
         doctor_mod,
@@ -96,7 +103,6 @@ def test_doctor_reports_ready(monkeypatch: pytest.MonkeyPatch, runner: CliRunner
         "_check_age_key_consistency",
         lambda: {"component": "age_consistency", "status": "available", "details": "Key matches .sops.yaml recipient"},
     )
-    # Note: GPG and KMS checks are no longer called when only age backend is detected
 
     result = runner.invoke(secrets_app, ["doctor"])
 
@@ -134,6 +140,7 @@ def test_doctor_uses_configured_sops_binary(monkeypatch: pytest.MonkeyPatch, run
         "_check_age_key",
         lambda: {"component": "age_key", "status": "available", "details": "/mock/keys.txt"},
     )
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: ["age"])
 
     result = runner.invoke(secrets_app, ["doctor"])
 
@@ -144,6 +151,7 @@ def test_doctor_uses_configured_sops_binary(monkeypatch: pytest.MonkeyPatch, run
 def test_doctor_fails_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
     monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: None)
     monkeypatch.setattr(doctor_mod, "get_config", lambda: SimpleNamespace(secrets=None))
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: [])
 
     original_import = __import__
 
@@ -239,16 +247,13 @@ def test_doctor_warns_when_config_missing(monkeypatch: pytest.MonkeyPatch, runne
 
     monkeypatch.setattr(doctor_mod.importlib, "import_module", fake_import)
     monkeypatch.setattr(doctor_mod, "get_config", lambda: (_ for _ in ()).throw(ConfigNotLoadedError()))
+    # Mock available backends scan (gpg + kms available on system)
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: ["gpg", "kms"])
     # Mock GPG checks to return available (to avoid subprocess calls)
     monkeypatch.setattr(
         doctor_mod,
         "_check_gpg_binary",
         lambda: {"component": "gpg", "status": "available", "details": "/usr/bin/gpg"},
-    )
-    monkeypatch.setattr(
-        doctor_mod,
-        "_check_gpg_keys",
-        lambda: {"component": "gpg_keys", "status": "available", "details": "1 secret key(s)"},
     )
     monkeypatch.setattr(
         doctor_mod,
@@ -261,6 +266,42 @@ def test_doctor_warns_when_config_missing(monkeypatch: pytest.MonkeyPatch, runne
     assert result.exit_code == 0
     assert "Secrets subsystem issues" in result.stdout
     assert "warning" in result.stdout.lower()
+
+
+def test_doctor_shows_available_backends_without_config(
+    monkeypatch: pytest.MonkeyPatch,
+    runner: CliRunner,
+) -> None:
+    """Test doctor shows available backends when no .sops.yaml exists."""
+    monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: "/usr/bin/sops")
+
+    class DummyBackend:  # pylint: disable=too-few-public-methods
+        pass
+
+    dummy_keyring = SimpleNamespace(get_keyring=lambda: DummyBackend())
+    monkeypatch.setitem(sys.modules, "keyring", dummy_keyring)
+
+    monkeypatch.setattr(doctor_mod, "get_config", lambda: (_ for _ in ()).throw(ConfigNotLoadedError()))
+    # No .sops.yaml -> backends = []
+    monkeypatch.setattr(doctor_mod, "_find_sops_config_path", lambda: None)
+    # System has gpg and age available
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: ["age", "gpg"])
+    # Mock lightweight checks for unconfigured backends
+    monkeypatch.setattr(
+        doctor_mod,
+        "_check_age_keygen",
+        lambda: {"component": "age-keygen", "status": "available", "details": "/usr/bin/age-keygen"},
+    )
+    monkeypatch.setattr(
+        doctor_mod,
+        "_check_gpg_binary",
+        lambda: {"component": "gpg", "status": "available", "details": "/usr/bin/gpg"},
+    )
+
+    result = runner.invoke(secrets_app, ["doctor"])
+
+    # sops_config is missing so there should be issues
+    assert "Available on system: age, gpg" in result.stdout
 
 
 def test_encrypt_refuses_to_overwrite_without_force(
@@ -612,6 +653,7 @@ def test_shred_command_passes_options(monkeypatch: pytest.MonkeyPatch, runner: C
 
 def test_doctor_reports_missing_keyring(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
     monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: "/usr/bin/sops")
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: [])
 
     def fake_import(name: str) -> Any:
         if name == "keyring":
@@ -1263,14 +1305,115 @@ class TestEnsureSopsConfig:
 class TestInitCommand:
     """Tests for the init CLI command."""
 
-    def test_init_missing_age_keygen(self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
-        """Fails gracefully when age-keygen is not installed."""
+    def test_init_no_backend_available_errors(self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
+        """Fails gracefully when no encryption backend is available."""
         monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: None)
+        monkeypatch.setattr(doctor_mod.importlib, "import_module", lambda n: (_ for _ in ()).throw(ImportError()))
 
         result = runner.invoke(secrets_app, ["init"])
 
         assert result.exit_code == 1
-        assert "age-keygen not found" in result.stdout
+        assert "no encryption backend" in result.stdout.lower()
+
+    def test_init_auto_detects_gpg_when_age_missing(
+        self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any
+    ) -> None:
+        """Falls back to GPG when age is not available."""
+
+        def fake_which(name: str) -> str | None:
+            if name in ("gpg", "gpg2"):
+                return "/usr/bin/gpg"
+            return None
+
+        gpg_output = (
+            "sec:-:4096:1:ABCDEF1234567890:1700000000:::-:::scESC::::::23::0:\n"
+            "fpr:::::::::AABBCCDD11223344556677889900AABBCCDD1122:\n"
+        )
+        monkeypatch.setattr(doctor_mod.shutil, "which", fake_which)
+        monkeypatch.setattr(doctor_mod.importlib, "import_module", lambda n: (_ for _ in ()).throw(ImportError()))
+        monkeypatch.setattr(
+            doctor_mod,
+            "run",
+            lambda *a, **k: CompletedProcess([], 0, stdout=gpg_output, stderr=""),
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(secrets_app, ["init", "--local"])
+
+        assert result.exit_code == 0
+        assert "gpg" in result.stdout.lower()
+        assert (tmp_path / ".sops.yaml").exists()
+        content = (tmp_path / ".sops.yaml").read_text()
+        assert "pgp:" in content
+
+    def test_init_explicit_backend_age(self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+        """Init --backend age uses age backend explicitly."""
+        monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: "/usr/bin/age-keygen")
+        monkeypatch.chdir(tmp_path)
+
+        def fake_generate(path: Path) -> str:
+            path.write_text("# public key: age1explicit\nAGE-SECRET-KEY-xxx\n")
+            return "age1explicit"
+
+        monkeypatch.setattr(doctor_mod, "_generate_age_key", fake_generate)
+
+        result = runner.invoke(secrets_app, ["init", "--local", "--backend", "age"])
+
+        assert result.exit_code == 0
+        assert "age" in result.stdout.lower()
+        assert (tmp_path / ".sops.yaml").exists()
+        content = (tmp_path / ".sops.yaml").read_text()
+        assert "age: age1explicit" in content
+
+    def test_init_explicit_backend_gpg(self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+        """Init --backend gpg uses GPG backend explicitly."""
+
+        def fake_which(name: str) -> str | None:
+            if name in ("gpg", "gpg2", "age-keygen"):
+                return f"/usr/bin/{name}"
+            return None
+
+        gpg_output = (
+            "sec:-:4096:1:ABCDEF1234567890:1700000000:::-:::scESC::::::23::0:\n"
+            "fpr:::::::::AABBCCDD11223344556677889900AABBCCDD1122:\n"
+        )
+        monkeypatch.setattr(doctor_mod.shutil, "which", fake_which)
+        monkeypatch.setattr(
+            doctor_mod,
+            "run",
+            lambda *a, **k: CompletedProcess([], 0, stdout=gpg_output, stderr=""),
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(secrets_app, ["init", "--local", "--backend", "gpg"])
+
+        assert result.exit_code == 0
+        assert "gpg" in result.stdout.lower()
+        assert (tmp_path / ".sops.yaml").exists()
+        content = (tmp_path / ".sops.yaml").read_text()
+        assert "pgp:" in content
+
+    def test_init_gpg_no_keys_errors(self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+        """Errors when GPG is available but no secret keys exist."""
+
+        def fake_which(name: str) -> str | None:
+            if name in ("gpg", "gpg2"):
+                return "/usr/bin/gpg"
+            return None
+
+        monkeypatch.setattr(doctor_mod.shutil, "which", fake_which)
+        monkeypatch.setattr(doctor_mod.importlib, "import_module", lambda n: (_ for _ in ()).throw(ImportError()))
+        monkeypatch.setattr(
+            doctor_mod,
+            "run",
+            lambda *a, **k: CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(secrets_app, ["init", "--local"])
+
+        assert result.exit_code == 1
+        assert "gpg --gen-key" in result.stdout.lower()
 
     def test_init_local_creates_files(self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
         """Init --local creates files in current directory."""

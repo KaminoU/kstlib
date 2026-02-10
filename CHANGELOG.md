@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-02-10
+
+### Added
+
+- **Multi-backend `secrets init`** - Auto-detect best available encryption backend
+  - Priority order: age > GPG > error with clear guidance
+  - `--backend`/`-b` option for explicit backend selection (`age` or `gpg`)
+  - GPG flow: reads fingerprint from keyring, generates `.sops.yaml` with `pgp:` key
+  - Age flow: unchanged (backward compatible)
+
+- **Doctor backend mismatch hint** - Actionable guidance when configured backend
+  is unavailable but an alternative exists on the system
+  (e.g., "Configured backend (age) is not available, but gpg is. Run: `kstlib secrets init --backend gpg`")
+
+### Fixed
+
+- **`secrets doctor` scan** - Detect available backends (age/gpg/kms) by binary presence
+  - Deep checks for configured backends, lightweight checks for unconfigured
+  - New `available_backends` field in doctor payload
+
 ## [1.3.0] - 2026-02-08
 
 ### Added
@@ -232,6 +252,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.4.0]: https://github.com/KaminoU/kstlib/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/KaminoU/kstlib/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/KaminoU/kstlib/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/KaminoU/kstlib/compare/v1.1.1...v1.2.0

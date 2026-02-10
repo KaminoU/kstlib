@@ -157,6 +157,12 @@ INIT_FORCE_OPTION = typer.Option(
     "-f",
     help="Overwrite existing files.",
 )
+INIT_BACKEND_OPTION = typer.Option(
+    None,
+    "--backend",
+    "-b",
+    help="Encryption backend to use (auto-detected if not specified).",
+)
 
 # =============================================================================
 # Dataclasses
@@ -438,6 +444,7 @@ __all__ = [
     "ENCRYPT_SOURCE_ARG",
     "FORCE_OPTION",
     "FORMATS_OPTION",
+    "INIT_BACKEND_OPTION",
     "INIT_FORCE_OPTION",
     "INIT_LOCAL_OPTION",
     "KMS_KEY_OPTION",
