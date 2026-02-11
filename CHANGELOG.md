@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-02-11
+
+### Security
+
+- Upgrade `cryptography` 46.0.4 -> 46.0.5 (CVE-2026-26007, subgroup attack on SECT curves)
+
 ## [1.4.0] - 2026-02-10
 
 ### Added
@@ -252,6 +258,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.4.1]: https://github.com/KaminoU/kstlib/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/KaminoU/kstlib/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/KaminoU/kstlib/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/KaminoU/kstlib/compare/v1.2.0...v1.2.1
