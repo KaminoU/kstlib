@@ -26,12 +26,17 @@ __all__ = [
     "HARD_MAX_DISPLAY_VALUE_LENGTH",
     "HARD_MAX_ENDPOINT_REF_LENGTH",
     "HARD_MAX_EPOCH_TIMESTAMP",
+    "HARD_MAX_PIPELINE_STEPS",
+    "HARD_MAX_PIPELINE_TIMEOUT",
+    "HARD_MAX_STEP_ARGS",
     "HARD_MAX_TIMEZONE_LENGTH",
     "HARD_MIN_EPOCH_TIMESTAMP",
+    "HARD_MIN_PIPELINE_TIMEOUT",
     "AlertsLimits",
     "CacheLimits",
     "DatabaseLimits",
     "MailLimits",
+    "PipelineLimits",
     "RapiLimits",
     "RapiRenderConfig",
     "ResilienceLimits",
@@ -42,6 +47,7 @@ __all__ = [
     "get_cache_limits",
     "get_db_limits",
     "get_mail_limits",
+    "get_pipeline_limits",
     "get_rapi_limits",
     "get_rapi_render_config",
     "get_resilience_limits",
@@ -191,6 +197,16 @@ HARD_MAX_ENDPOINT_REF_LENGTH = 256
 #: Maximum display length for values in rapi show (truncate long strings).
 HARD_MAX_DISPLAY_VALUE_LENGTH = 200
 
+#: Maximum number of steps in a pipeline - protects against config bloat.
+HARD_MAX_PIPELINE_STEPS = 50
+
+#: Pipeline timeout bounds (seconds) - protects against hanging or no-wait.
+HARD_MIN_PIPELINE_TIMEOUT = 1
+HARD_MAX_PIPELINE_TIMEOUT = 3600  # 1 hour
+
+#: Maximum arguments per pipeline step - protects against oversized commands.
+HARD_MAX_STEP_ARGS = 50
+
 #: Maximum datetime format string length - protects against DoS.
 HARD_MAX_DATETIME_FORMAT_LENGTH = 64
 
@@ -247,6 +263,9 @@ DEFAULT_WS_QUEUE_SIZE = 1000  # messages
 DEFAULT_WS_DISCONNECT_CHECK = 10.0  # seconds
 DEFAULT_WS_RECONNECT_CHECK = 5.0  # seconds
 DEFAULT_WS_DISCONNECT_MARGIN = 300.0  # seconds (5 minutes before 24h limit)
+
+DEFAULT_PIPELINE_TIMEOUT = 300.0  # seconds (5 minutes)
+DEFAULT_PIPELINE_ON_ERROR = "fail_fast"
 
 
 @dataclass(frozen=True, slots=True)
@@ -960,4 +979,55 @@ def get_websocket_limits(
             HARD_MIN_WS_DISCONNECT_MARGIN,
             HARD_MAX_WS_DISCONNECT_MARGIN,
         ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineLimits:
+    """Resolved pipeline configuration limits.
+
+    Attributes:
+        default_timeout: Default step timeout in seconds.
+        on_error: Default error policy (``fail_fast`` or ``continue``).
+    """
+
+    default_timeout: float
+    on_error: str
+
+
+def get_pipeline_limits(
+    config: Mapping[str, Any] | None = None,
+) -> PipelineLimits:
+    """Resolve pipeline limits from config with hard limit enforcement.
+
+    Args:
+        config: Optional config mapping. If None, loads from get_config().
+
+    Returns:
+        PipelineLimits with resolved values clamped to hard bounds.
+
+    Examples:
+        >>> limits = get_pipeline_limits()
+        >>> limits.default_timeout
+        300.0
+        >>> limits.on_error
+        'fail_fast'
+    """
+    if config is None:
+        config = _load_config()
+
+    default_timeout = _parse_float_config(
+        _get_nested(config, "pipeline", "default_timeout"),
+        DEFAULT_PIPELINE_TIMEOUT,
+        HARD_MIN_PIPELINE_TIMEOUT,
+        HARD_MAX_PIPELINE_TIMEOUT,
+    )
+
+    on_error = _get_nested(config, "pipeline", "on_error")
+    if on_error not in ("fail_fast", "continue"):
+        on_error = DEFAULT_PIPELINE_ON_ERROR
+
+    return PipelineLimits(
+        default_timeout=default_timeout,
+        on_error=on_error,
     )

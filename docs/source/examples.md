@@ -309,6 +309,52 @@ Mail delivery requires Gmail OAuth2 token. Run `kstlib auth login google` first.
 ```
 :::
 
+:::{dropdown} pipeline - Declarative pipeline execution
+
+Shell commands, Python modules, and callable functions in sequential workflows.
+
+| Example | Description |
+|---------|-------------|
+| [01_basic_shell.py](https://github.com/KaminoU/kstlib/blob/main/examples/pipeline/01_basic_shell.py) | Simple shell steps (echo, date, platform) |
+| [02_multi_step.py](https://github.com/KaminoU/kstlib/blob/main/examples/pipeline/02_multi_step.py) | Conditional steps with on_success/on_failure |
+| [03_config_driven.py](https://github.com/KaminoU/kstlib/blob/main/examples/pipeline/03_config_driven.py) | Pipeline loaded from kstlib.conf.yml |
+| [kstlib.conf.yml](https://github.com/KaminoU/kstlib/blob/main/examples/pipeline/kstlib.conf.yml) | Example pipeline config |
+
+```bash
+cd examples/pipeline
+python 01_basic_shell.py     # Basic shell pipeline
+python 02_multi_step.py      # Conditions + callable
+python 03_config_driven.py   # Config-driven (from_config)
+```
+
+**Step Types** - three execution modes:
+
+```python
+from kstlib.pipeline import StepConfig, StepType
+
+# Shell: subprocess.run(shell=True)
+StepConfig(name="build", type=StepType.SHELL, command="make build")
+
+# Python: python -m module
+StepConfig(name="lint", type=StepType.PYTHON, module="ruff", args=("check",))
+
+# Callable: importlib import + call
+StepConfig(name="notify", type=StepType.CALLABLE, callable="my.alerts:send_ok")
+```
+
+**Conditional Steps** - skip or run based on previous results:
+
+```python
+from kstlib.pipeline import StepCondition
+
+# Only runs if all previous steps succeeded
+StepConfig(name="deploy", ..., when=StepCondition.ON_SUCCESS)
+
+# Only runs if a previous step failed (cleanup)
+StepConfig(name="cleanup", ..., when=StepCondition.ON_FAILURE)
+```
+:::
+
 :::{dropdown} ops - Unified session management
 
 tmux and containers (Docker/Podman), config-driven via `kstlib.conf.yml`.

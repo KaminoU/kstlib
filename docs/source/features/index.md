@@ -77,6 +77,13 @@ HTML dashboards with typed cells, Jinja2, email delivery.
 Session management with tmux and container backends.
 :::
 
+:::{grid-item-card} pipeline
+:link: pipeline/index
+:link-type: doc
+
+Declarative pipeline execution with shell, Python, callable steps.
+:::
+
 :::{grid-item-card} rapi
 :link: rapi/index
 :link-type: doc
@@ -141,6 +148,7 @@ mail/index
 metrics/index
 monitoring/index
 ops/index
+pipeline/index
 rapi/index
 resilience/index
 secrets/index

@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-02-11
+
+### Added
+
+- **`kstlib.pipeline`** - Declarative, config-driven pipeline execution module
+  - Three step types: `ShellStep` (subprocess, shell=True), `PythonStep` (python -m),
+    `CallableStep` (importlib import + call)
+  - Conditional execution: `always`, `on_success`, `on_failure` step conditions
+  - Error policies: `fail_fast` (aborts with on_failure cleanup) or `continue`
+  - Timeout cascade: step timeout overrides pipeline `default_timeout`
+  - Dry-run mode: simulate execution without side effects
+  - Config-driven pipelines: define workflows in `kstlib.conf.yml` under `pipeline.pipelines`
+  - `PipelineRunner.from_config(name)` to load and run named pipelines
+  - Deep input validation reusing `kstlib.ops.validators` (dangerous pattern detection)
+  - `PipelineLimits` in `limits.py` with hard caps (max 50 steps, 1-3600s timeout)
+  - Multi-line shell commands supported via YAML `>-` (folded) and `|` (literal) scalars
+
+### Fixed
+
+- **SQLite `isolation_level`** - Align plain SQLite path with cipher path (`isolation_level=None`
+  for autocommit consistency)
+
+### Documentation
+
+- Pipeline feature guide, API reference, exception catalog
+- 3 example scripts + example `kstlib.conf.yml`
+- Updated landing page, features/api/examples indexes
+
 ## [1.4.1] - 2026-02-11
 
 ### Security
@@ -258,6 +286,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.5.0]: https://github.com/KaminoU/kstlib/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/KaminoU/kstlib/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/KaminoU/kstlib/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/KaminoU/kstlib/compare/v1.2.1...v1.3.0

@@ -401,3 +401,28 @@ class TestConnectionPool:
                 assert row[0] == 0  # NONE (default for :memory:)
         finally:
             await pool.close()
+
+    @pytest.mark.asyncio
+    async def test_plain_sqlite_persists_after_close(self, temp_db_path: Path) -> None:
+        """Plain SQLite path uses autocommit so data survives connection close."""
+        pool = ConnectionPool(str(temp_db_path), min_size=1, max_size=1)
+        try:
+            async with pool.connection() as conn:
+                await conn.execute("CREATE TABLE candles (id INTEGER PRIMARY KEY)")
+                await conn.executemany(
+                    "INSERT INTO candles (id) VALUES (?)",
+                    [(i,) for i in range(100)],
+                )
+        finally:
+            await pool.close()
+
+        # Reopen with a fresh pool and verify rows persisted
+        pool2 = ConnectionPool(str(temp_db_path), min_size=1, max_size=1)
+        try:
+            async with pool2.connection() as conn:
+                cursor = await conn.execute("SELECT count(*) FROM candles")
+                row = await cursor.fetchone()
+                assert row is not None
+                assert row[0] == 100
+        finally:
+            await pool2.close()

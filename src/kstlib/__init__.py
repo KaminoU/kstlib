@@ -66,6 +66,7 @@ __all__ = [
     "mail",
     "metrics",
     "monitoring",
+    "pipeline",
     "rapi",
     "require_config",
     "resilience",
@@ -87,6 +88,7 @@ _SUBMODULES: frozenset[str] = frozenset(
         "mail",
         "metrics",
         "monitoring",
+        "pipeline",
         "rapi",
         "resilience",
         "secrets",
@@ -209,6 +211,7 @@ if TYPE_CHECKING:
     from kstlib import mail as mail
     from kstlib import metrics as metrics
     from kstlib import monitoring as monitoring
+    from kstlib import pipeline as pipeline
     from kstlib import rapi as rapi
     from kstlib import resilience as resilience
     from kstlib import secrets as secrets

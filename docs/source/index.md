@@ -50,6 +50,7 @@ every developer knows that!
 | **monitoring** | Collectors + Jinja rendering + delivery (file, mail) |
 | **resilience** | Circuit breaker, rate limiter, graceful shutdown |
 | **ops** | Session manager (tmux), containers (Docker/Podman) |
+| **pipeline** | Declarative step execution (shell, Python, callable) |
 | **helpers/utils** | TimeTrigger, formatting, secure delete, validators |
 
 ## Quick Start

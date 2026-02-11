@@ -16,6 +16,7 @@ mail
 metrics
 monitoring
 ops
+pipeline
 rapi
 resilience
 secrets

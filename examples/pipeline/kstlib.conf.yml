@@ -1,0 +1,27 @@
+# Example pipeline configuration for kstlib.pipeline
+# Used by 03_config_driven.py
+
+pipeline:
+  default_timeout: 60
+  on_error: fail_fast
+
+  pipelines:
+    example-pipeline:
+      steps:
+        - name: system-info
+          type: shell
+          command: python -c "import platform; print(f'OS={platform.system()}, Python={platform.python_version()}')"
+
+        - name: disk-check
+          type: shell
+          command: python -c "import shutil; u = shutil.disk_usage('.'); print(f'Free={u.free // (1024**3)}GB')"
+          timeout: 10
+
+        - name: get-platform
+          type: callable
+          callable: platform:platform
+
+        - name: cleanup
+          type: shell
+          command: echo Cleanup completed
+          when: on_failure

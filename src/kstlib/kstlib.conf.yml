@@ -840,6 +840,44 @@ websocket:
       reconnect: { delay: 5.0, max_delay: 120.0, max_attempts: 50 }
       proactive: { disconnect_check_interval: 30.0, reconnect_check_interval: 10.0 }
 
+###########################################################################################
+## Pipeline configuration (declarative workflow execution)
+###########################################################################################
+pipeline:
+  # Default step timeout in seconds
+  # Hard limits enforced in code: min 1s, max 3600s (1 hour)
+  default_timeout: 300
+
+  # Error handling policy: fail_fast | continue
+  # fail_fast: abort pipeline on first step failure (run on_failure steps)
+  # continue: execute all remaining steps even after failure
+  on_error: fail_fast
+
+  # Named pipelines (user-defined)
+  pipelines: {}
+    # Example pipeline configuration:
+    # morning-monitoring:
+    #   steps:
+    #     - name: build_logs
+    #       type: shell
+    #       command: |
+    #         for host in server1 server2; do
+    #           ssh $host "systemctl status viya"
+    #         done
+    #       timeout: 300
+    #     - name: process_data
+    #       type: python
+    #       module: my.analytics.runner
+    #       args: ["--output", "report.html"]
+    #     - name: notify
+    #       type: callable
+    #       callable: my.alerts:send_summary
+    #       when: always
+    #     - name: cleanup
+    #       type: shell
+    #       command: "rm -f /tmp/pipeline_*.tmp"
+    #       when: on_failure
+
 # ============================================================================
 # OPS - Session Management Configuration
 # ============================================================================

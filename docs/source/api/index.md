@@ -84,6 +84,13 @@ Complete API documentation for all `kstlib` modules. Each page documents public 
 `SessionManager`, `TmuxRunner`, `ContainerRunner`.
 :::
 
+:::{grid-item-card} pipeline
+:link: pipeline
+:link-type: doc
+
+`PipelineRunner`, `StepConfig`, `ShellStep`, `PythonStep`.
+:::
+
 :::{grid-item-card} rapi
 :link: rapi
 :link-type: doc
@@ -170,6 +177,7 @@ mail
 metrics
 monitoring
 ops
+pipeline
 rapi
 resilience
 secrets

@@ -134,7 +134,7 @@ class ConnectionPool:
             # Use standard sqlite3 for unencrypted database
             import aiosqlite
 
-            conn = await aiosqlite.connect(self.db_path)
+            conn = await aiosqlite.connect(self.db_path, isolation_level=None)
 
         # Enable incremental auto-vacuum on new databases only.
         # auto_vacuum must be set before any write operation (including journal_mode).
