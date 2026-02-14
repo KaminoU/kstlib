@@ -45,6 +45,7 @@ See Also:
 from __future__ import annotations
 
 from kstlib.auth.callback import CallbackResult, CallbackServer
+from kstlib.auth.check import TokenChecker, TokenCheckReport, ValidationStep
 from kstlib.auth.config import (
     build_provider_config,
     get_auth_config,
@@ -120,6 +121,8 @@ __all__ = [
     "ProviderNotFoundError",
     "SOPSTokenStorage",
     "Token",
+    "TokenCheckReport",
+    "TokenChecker",
     "TokenError",
     "TokenExchangeError",
     "TokenExpiredError",
@@ -127,6 +130,7 @@ __all__ = [
     "TokenStorageError",
     "TokenType",
     "TokenValidationError",
+    "ValidationStep",
     # Config helpers
     "build_provider_config",
     "get_auth_config",

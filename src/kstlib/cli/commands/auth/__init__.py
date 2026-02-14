@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+from .check import check
 from .login import login
 from .logout import logout
 from .providers import providers
@@ -14,6 +15,7 @@ from .whoami import whoami
 auth_app = typer.Typer(help="Manage OAuth2/OIDC authentication.")
 
 # Register commands on the auth_app
+auth_app.command()(check)
 auth_app.command()(login)
 auth_app.command()(logout)
 auth_app.command()(status)
@@ -29,6 +31,7 @@ def register_cli(app: typer.Typer) -> None:
 
 __all__ = [
     "auth_app",
+    "check",
     "login",
     "logout",
     "providers",

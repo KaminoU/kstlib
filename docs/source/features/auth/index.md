@@ -36,6 +36,9 @@ with AuthSession(provider) as session:
 kstlib auth login corporate
 kstlib auth status
 kstlib auth whoami
+
+# Validate token with cryptographic proof
+kstlib auth check corporate --verbose
 ```
 
 ## Key Features
@@ -44,7 +47,8 @@ kstlib auth whoami
 - **Auto-discovery**: OIDC providers automatically fetch endpoints from issuer
 - **PKCE by default**: Secure authorization flow without client secrets
 - **SOPS token storage**: Tokens encrypted via {doc}`../secrets/index` (age/GPG/KMS)
-- **CLI included**: `kstlib auth login|logout|status|token|whoami|providers`
+- **Token validation**: `kstlib auth check` provides cryptographic proof that JWT tokens are valid
+- **CLI included**: `kstlib auth login|logout|status|token|whoami|providers|check`
 - **Token refresh**: Automatic refresh before expiration
 
 ## Quick Start
@@ -105,13 +109,15 @@ headers = {"Authorization": f"Bearer {token.access_token}"}
 │                     kstlib.auth                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Providers          │  Storage           │  CLI             │
-│  ├─ OAuth2Provider  │  ├─ MemoryStorage  │  ├─ login        │
-│  └─ OIDCProvider    │  ├─ FileStorage    │  ├─ logout       │
-│                     │  └─ SOPSStorage    │                  │
-│                     │                    │  ├─ status       │
-│  Models             │  Config            │  ├─ token        │
-│  ├─ Token           │  └─ auth: section  │  ├─ whoami       │
-│  └─ AuthFlow        │     in conf.yml    │  └─ providers    │
+│  ├─ OAuth2Provider  │  ├─ MemoryStorage  │  ├─ check        │
+│  └─ OIDCProvider    │  ├─ FileStorage    │  ├─ login        │
+│                     │  └─ SOPSStorage    │  ├─ logout       │
+│  Validation         │                    │  ├─ status       │
+│  └─ TokenChecker    │  Config            │  ├─ token        │
+│                     │  └─ auth: section  │  ├─ whoami       │
+│  Models             │     in conf.yml    │  └─ providers    │
+│  ├─ Token           │                    │                  │
+│  └─ AuthFlow        │                    │                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -265,5 +271,6 @@ Full autodoc: {doc}`../../api/auth`
 | - | - |
 | `OIDCProvider` | OpenID Connect with auto-discovery |
 | `OAuth2Provider` | Manual OAuth2 configuration |
+| `TokenChecker` | 6-step JWT token validation with cryptographic proof |
 | `Token` | Token object with access/refresh/id tokens |
 | `AuthSession` | HTTP session (httpx) with auto token injection and refresh |

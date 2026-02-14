@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-02-14
+
+### Added
+
+- **`kstlib auth check`** - JWT token validation with cryptographic proof
+  - `TokenChecker` class with 6-step validation chain: decode JWT structure, discover
+    issuer endpoints, fetch JWKS, extract public key, verify RSA signature, validate claims
+  - Works with any RSA-signed JWT (RS256/RS384/RS512) whose issuer exposes an OIDC
+    discovery endpoint (`.well-known/openid-configuration`)
+  - Key metadata extraction: type (RSA), size (2048/4096-bit), SHA-256 fingerprint
+  - X.509 certificate parsing from JWKS `x5c` field when published by the IDP
+  - CLI command with `--verbose`, `--json`, `--access-token` options
+  - Rich panel output with step-by-step validation results
+  - Exit codes: 0 (valid), 1 (invalid), 2 (system error)
+  - Delegated trust support: issuer and JWKS server can be different hosts
+
+### Documentation
+
+- Cryptographic proof chain diagram with RSA verification steps
+- Manual verification guide (without kstlib, using curl/openssl/PowerShell)
+- Issuer vs JWKS server (delegated trust) explanation
+- Examples gallery: `token_check.py` (Python) and `token_check.ps1` (PowerShell raw RSA)
+- Updated auth feature guide, API reference, CLI reference
+
 ## [1.5.0] - 2026-02-11
 
 ### Added
@@ -286,6 +310,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.6.0]: https://github.com/KaminoU/kstlib/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/KaminoU/kstlib/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/KaminoU/kstlib/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/KaminoU/kstlib/compare/v1.3.0...v1.4.0

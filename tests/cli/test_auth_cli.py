@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +26,7 @@ runner = CliRunner()
 
 # Import modules for monkeypatching
 common_mod = importlib.import_module("kstlib.cli.commands.auth.common")
+check_mod = importlib.import_module("kstlib.cli.commands.auth.check")
 login_mod = importlib.import_module("kstlib.cli.commands.auth.login")
 logout_mod = importlib.import_module("kstlib.cli.commands.auth.logout")
 status_mod = importlib.import_module("kstlib.cli.commands.auth.status")
@@ -521,3 +523,138 @@ class TestAuthLogin:
 
         assert result.exit_code == 1
         assert "--manual" in result.stdout
+
+
+class TestAuthCheck:
+    """Tests for 'auth check' command."""
+
+    def test_check_help(self) -> None:
+        """Check --help shows usage."""
+        result = runner.invoke(auth_app, ["check", "--help"])
+
+        assert result.exit_code == 0
+        assert "check" in result.stdout.lower()
+        assert "--token" in result.stdout
+        assert "--verbose" in result.stdout
+        assert "--json" in result.stdout
+        assert "--access-token" in result.stdout
+
+    def test_check_not_authenticated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Shows error when not authenticated and no --token."""
+        mock_provider = MagicMock()
+        mock_provider.get_token.return_value = None
+
+        monkeypatch.setattr(check_mod, "resolve_provider_name", lambda _p: "test-provider")
+        monkeypatch.setattr(check_mod, "get_provider", lambda _p: mock_provider)
+
+        result = runner.invoke(auth_app, ["check"])
+
+        assert result.exit_code == 1
+        assert "not authenticated" in result.stdout.lower() or "login" in result.stdout.lower()
+
+    def test_check_with_explicit_token_invalid(self) -> None:
+        """Check with invalid --token exits with code 1."""
+        result = runner.invoke(auth_app, ["check", "--token", "not-a-jwt"])
+
+        assert result.exit_code == 1
+
+    def test_check_with_explicit_token_json_invalid(self) -> None:
+        """Check with --json outputs JSON even for invalid token."""
+        result = runner.invoke(auth_app, ["check", "--token", "not-a-jwt", "--json"])
+
+        assert result.exit_code == 1
+        # Should be valid JSON output
+        output = result.stdout.strip()
+        data = json.loads(output)
+        assert data["valid"] is False
+
+    def test_check_cached_id_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Uses cached id_token by default."""
+        import base64
+        import time
+
+        # Create a structurally valid JWT (will fail at discovery, but tests token source logic)
+        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "kid": "k1"}).encode()).rstrip(b"=").decode()
+        payload_data = {"iss": "https://idp.test", "exp": int(time.time()) + 3600}
+        payload = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        fake_jwt = f"{header}.{payload}.fakesig"
+
+        mock_token = Token(
+            access_token="access-token-value",  # noqa: S106
+            token_type="Bearer",  # noqa: S106
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            id_token=fake_jwt,
+        )
+        mock_provider = MagicMock()
+        mock_provider.get_token.return_value = mock_token
+        mock_provider.config = MagicMock()
+        mock_provider.config.issuer = "https://idp.test"
+        mock_provider.config.client_id = "test-client"
+
+        monkeypatch.setattr(check_mod, "resolve_provider_name", lambda _p: "test-provider")
+        monkeypatch.setattr(check_mod, "get_provider", lambda _p: mock_provider)
+
+        # Will fail at discovery since we can't reach idp.test, but token source is correct
+        result = runner.invoke(auth_app, ["check"])
+
+        # Exits with 1 (invalid - discovery fails) but should not be exit 2
+        assert result.exit_code == 1
+
+    def test_check_access_token_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Uses access_token with --access-token flag."""
+        import base64
+        import time
+
+        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "kid": "k1"}).encode()).rstrip(b"=").decode()
+        payload_data = {"iss": "https://idp.test", "exp": int(time.time()) + 3600}
+        payload = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        access_jwt = f"{header}.{payload}.fakesig"
+
+        mock_token = Token(
+            access_token=access_jwt,
+            token_type="Bearer",  # noqa: S106
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            id_token="id-token-value",  # noqa: S106
+        )
+        mock_provider = MagicMock()
+        mock_provider.get_token.return_value = mock_token
+        mock_provider.config = MagicMock()
+        mock_provider.config.issuer = "https://idp.test"
+        mock_provider.config.client_id = "test-client"
+
+        monkeypatch.setattr(check_mod, "resolve_provider_name", lambda _p: "test-provider")
+        monkeypatch.setattr(check_mod, "get_provider", lambda _p: mock_provider)
+
+        result = runner.invoke(auth_app, ["check", "--access-token"])
+
+        # Will fail at discovery but should attempt validation
+        assert result.exit_code == 1
+
+    def test_check_fallback_to_access_token_when_no_id_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Falls back to access_token when no id_token cached."""
+        import base64
+        import time
+
+        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "kid": "k1"}).encode()).rstrip(b"=").decode()
+        payload_data = {"iss": "https://idp.test", "exp": int(time.time()) + 3600}
+        payload = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        access_jwt = f"{header}.{payload}.fakesig"
+
+        mock_token = Token(
+            access_token=access_jwt,
+            token_type="Bearer",  # noqa: S106
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            id_token=None,  # No id_token
+        )
+        mock_provider = MagicMock()
+        mock_provider.get_token.return_value = mock_token
+        mock_provider.config = MagicMock()
+        mock_provider.config.issuer = "https://idp.test"
+        mock_provider.config.client_id = "test-client"
+
+        monkeypatch.setattr(check_mod, "resolve_provider_name", lambda _p: "test-provider")
+        monkeypatch.setattr(check_mod, "get_provider", lambda _p: mock_provider)
+
+        result = runner.invoke(auth_app, ["check"])
+
+        assert result.exit_code == 1

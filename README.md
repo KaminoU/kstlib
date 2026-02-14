@@ -39,6 +39,7 @@ The focus has always been on building **resilient, secure, and performant** syst
 | **alerts** | Multi-channel (Slack, Email), throttling, severity levels |
 | **websocket** | Resilient connections, auto-reconnect, heartbeat, watchdog |
 | **rapi** | Config-driven REST client with HMAC signing |
+| **pipeline** | Declarative sequential workflows (shell/python/callable steps), error policies, conditional execution |
 | **monitoring** | Collectors + Jinja rendering + delivery (file, mail) |
 | **resilience** | Circuit breaker, rate limiter, graceful shutdown |
 | **ops** | Session manager (tmux), containers (Docker/Podman) |

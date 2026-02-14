@@ -72,6 +72,30 @@ Run from `examples/alerts/` directory for config auto-discovery.
 
 Keycloak and Google OAuth2 providers with SOPS token storage.
 
+**JWT Token Validation** - cryptographic proof that a token is valid:
+
+| Example | Description |
+|---------|-------------|
+| [token_check.py](https://github.com/KaminoU/kstlib/blob/main/examples/auth/token_check.py) | **Python** - kstlib `TokenChecker` + manual httpx/cryptography |
+| [token_check.ps1](https://github.com/KaminoU/kstlib/blob/main/examples/auth/token_check.ps1) | **PowerShell** - raw RSA math, prints both hashes for visual proof |
+
+```bash
+cd examples/auth
+
+# kstlib approach (one class, one call)
+python token_check.py --verbose
+
+# Manual step-by-step (httpx + cryptography)
+python token_check.py --manual --verbose
+
+# PowerShell: zero-dependency, prints computed vs recovered hash
+.\token_check.ps1
+```
+
+The PowerShell example performs raw RSA: `signature^e mod n` to recover the hash,
+then compares with `SHA-256/512(header.payload)`. Both hashes are printed side by side
+for undeniable visual proof.
+
 **Google OAuth2** - two approaches to the same flow:
 
 | Example | Description |

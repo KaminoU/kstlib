@@ -29,6 +29,8 @@ Demonstrates:
 ```text
 examples/auth/
 ├── kstlib.conf.yml                  # Main config (includes providers)
+├── token_check.py                   # JWT validation with cryptographic proof (Python)
+├── token_check.ps1                  # JWT validation with raw RSA math (PowerShell)
 ├── oauth2_google.py                 # OAuth2 with kstlib.auth (production approach)
 ├── oauth2_manual_google.py          # Manual OAuth2 flow (httpx only, educational)
 ├── providers/
@@ -61,6 +63,53 @@ kstlib auth status
 # Get user info
 kstlib auth whoami
 ```
+
+## Token Validation Example
+
+Demonstrates JWT token validation with cryptographic proof. Three approaches:
+
+| Approach | Method | Use Case |
+| -------- | ------ | -------- |
+| `python token_check.py` | kstlib `TokenChecker` | Production (one class, one call) |
+| `python token_check.py --manual` | httpx + cryptography | Educational (every step explicit) |
+| `.\token_check.ps1` | PowerShell + .NET raw RSA | Zero-dependency proof (Windows native) |
+
+```bash
+cd examples/auth
+
+# Login first
+kstlib auth login oidc-keycloak-dev
+# Browser opens -> login with: testuser / testpass123
+
+# Validate with kstlib
+python token_check.py
+
+# Validate step-by-step (manual approach)
+python token_check.py --manual --verbose
+
+# Validate an explicit JWT
+python token_check.py --token "eyJhbGci..." --manual
+
+# CLI shortcut (same validation, Rich output)
+kstlib auth check oidc-keycloak-dev --verbose
+
+# PowerShell: raw RSA math, prints both hashes for visual proof
+.\token_check.ps1
+```
+
+All approaches perform the same core verification:
+
+1. **Decode** JWT structure (header.payload.signature)
+2. **Discover** issuer endpoints (`.well-known/openid-configuration`)
+3. **Fetch** JWKS (public keys from `jwks_uri`)
+4. **Match** key by `kid` (Key ID from JWT header)
+5. **Verify** RSA signature: `DECRYPT(public_key, signature) == SHA-256/512(header.payload)`
+6. **Validate** claims (issuer, audience, expiration)
+
+The PowerShell example goes one step further: it prints both hashes side by side,
+making the mathematical proof visually undeniable.
+
+The result is a mathematical fact, not an opinion. Any third party can reproduce the verification.
 
 ## Provider Comparison
 

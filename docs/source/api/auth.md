@@ -23,6 +23,11 @@ Pair this reference with {doc}`../features/auth/index` for the feature guide and
 - `SOPSTokenStorage` - Encrypted persistent storage using Mozilla SOPS
 - `AbstractTokenStorage` - Base class for custom storage backends
 
+**Token validation:**
+- `TokenChecker` - 6-step JWT token verification with cryptographic proof
+- `TokenCheckReport` - Complete validation report (header, payload, signature, claims)
+- `ValidationStep` - Result of a single validation step
+
 **Config helpers:**
 - `OIDCProvider.from_config(name)` - Load provider from `kstlib.conf.yml`
 - `get_provider_config(name)` - Retrieve raw provider configuration
@@ -114,6 +119,44 @@ Pair this reference with {doc}`../features/auth/index` for the feature guide and
 
 ```{eval-rst}
 .. autoclass:: kstlib.auth.token.AbstractTokenStorage
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+---
+
+## Token Validation
+
+Independent JWT token verification with cryptographic proof. Works with any RSA-signed JWT
+(id_token or access_token) whose issuer exposes an OpenID Connect discovery endpoint. See the
+{doc}`../features/auth/cli` feature guide for the full proof chain diagram and use cases.
+
+### TokenChecker
+
+```{eval-rst}
+.. autoclass:: kstlib.auth.check.TokenChecker
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### TokenCheckReport
+
+```{eval-rst}
+.. autoclass:: kstlib.auth.check.TokenCheckReport
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### ValidationStep
+
+```{eval-rst}
+.. autoclass:: kstlib.auth.check.ValidationStep
    :members:
    :undoc-members:
    :show-inheritance:
