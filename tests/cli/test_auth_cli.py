@@ -658,3 +658,83 @@ class TestAuthCheck:
         result = runner.invoke(auth_app, ["check"])
 
         assert result.exit_code == 1
+
+    def test_check_inherits_ssl_ca_bundle_from_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Passes provider ssl_ca_bundle to httpx.Client verify parameter."""
+        captured_kwargs: dict[str, object] = {}
+
+        original_client = __import__("httpx").Client
+
+        def spy_client(**kwargs: object) -> object:
+            captured_kwargs.update(kwargs)
+            return original_client()
+
+        monkeypatch.setattr("httpx.Client", spy_client)
+
+        mock_provider = MagicMock()
+        mock_provider.get_token.return_value = Token(
+            access_token="tok",
+            token_type="Bearer",
+            id_token="a.b.c",
+        )
+        mock_provider.config = MagicMock()
+        mock_provider.config.ssl_ca_bundle = "/path/to/corporate-ca.pem"
+        mock_provider.config.ssl_verify = True
+        mock_provider.config.issuer = "https://idp.test"
+        mock_provider.config.client_id = "test-client"
+
+        monkeypatch.setattr(check_mod, "resolve_provider_name", lambda _p: "test")
+        monkeypatch.setattr(check_mod, "get_provider", lambda _p: mock_provider)
+
+        runner.invoke(auth_app, ["check"])
+
+        assert captured_kwargs.get("verify") == "/path/to/corporate-ca.pem"
+
+    def test_check_inherits_ssl_verify_false_from_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Passes provider ssl_verify=False to httpx.Client verify parameter."""
+        captured_kwargs: dict[str, object] = {}
+
+        original_client = __import__("httpx").Client
+
+        def spy_client(**kwargs: object) -> object:
+            captured_kwargs.update(kwargs)
+            return original_client()
+
+        monkeypatch.setattr("httpx.Client", spy_client)
+
+        mock_provider = MagicMock()
+        mock_provider.get_token.return_value = Token(
+            access_token="tok",
+            token_type="Bearer",
+            id_token="a.b.c",
+        )
+        mock_provider.config = MagicMock()
+        mock_provider.config.ssl_ca_bundle = None
+        mock_provider.config.ssl_verify = False
+        mock_provider.config.issuer = "https://idp.test"
+        mock_provider.config.client_id = "test-client"
+
+        monkeypatch.setattr(check_mod, "resolve_provider_name", lambda _p: "test")
+        monkeypatch.setattr(check_mod, "get_provider", lambda _p: mock_provider)
+
+        runner.invoke(auth_app, ["check"])
+
+        assert captured_kwargs.get("verify") is False
+
+    def test_check_ssl_fallback_without_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Falls back to build_ssl_context() when using explicit --token."""
+        captured_kwargs: dict[str, object] = {}
+        sentinel = object()
+
+        original_client = __import__("httpx").Client
+
+        def spy_client(**kwargs: object) -> object:
+            captured_kwargs.update(kwargs)
+            return original_client()
+
+        monkeypatch.setattr("httpx.Client", spy_client)
+        monkeypatch.setattr(check_mod, "build_ssl_context", lambda: sentinel)
+
+        runner.invoke(auth_app, ["check", "--token", "a.b.c"])
+
+        assert captured_kwargs.get("verify") is sentinel

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.1] - 2026-02-16
+
+### Fixed
+
+- **`kstlib auth check` SSL context** - HTTP client now reuses the provider's SSL config
+  (`ca_bundle`, `ssl_verify`) instead of creating a bare `httpx.Client()`. Falls back to the
+  global SSL cascade from `kstlib.conf.yml` when no provider config is available.
+
+### Added
+
+- **Shell examples** - `kstlib-auth-check.sh` (wrapper script) and `token_check.sh` (raw
+  curl/openssl verification) for auth check usage without Python
+- **CLI tests** - New test suite for `kstlib auth check` CLI command (80 lines, covers
+  SSL context propagation)
+
+### Documentation
+
+- Updated examples gallery with shell script references
+
 ## [1.6.0] - 2026-02-14
 
 ### Added
@@ -310,6 +329,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.6.1]: https://github.com/KaminoU/kstlib/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/KaminoU/kstlib/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/KaminoU/kstlib/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/KaminoU/kstlib/compare/v1.4.0...v1.4.1

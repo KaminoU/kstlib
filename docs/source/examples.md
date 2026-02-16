@@ -78,23 +78,33 @@ Keycloak and Google OAuth2 providers with SOPS token storage.
 |---------|-------------|
 | [token_check.py](https://github.com/KaminoU/kstlib/blob/main/examples/auth/token_check.py) | **Python** - kstlib `TokenChecker` + manual httpx/cryptography |
 | [token_check.ps1](https://github.com/KaminoU/kstlib/blob/main/examples/auth/token_check.ps1) | **PowerShell** - raw RSA math, prints both hashes for visual proof |
+| [token_check.sh](https://github.com/KaminoU/kstlib/blob/main/examples/auth/token_check.sh) | **Bash** - raw RSA math via openssl, same dual-hash approach as PS1 |
+| [kstlib-auth-check.sh](https://github.com/KaminoU/kstlib/blob/main/examples/auth/kstlib-auth-check.sh) | **Bash** - 6-step validation chain (curl + openssl + jq) |
 
 ```bash
 cd examples/auth
 
-# kstlib approach (one class, one call)
+# Python: kstlib approach (one class, one call)
 python token_check.py --verbose
 
-# Manual step-by-step (httpx + cryptography)
+# Python: manual step-by-step (httpx + cryptography)
 python token_check.py --manual --verbose
 
-# PowerShell: zero-dependency, prints computed vs recovered hash
+# PowerShell: raw RSA, prints computed vs recovered hash
 .\token_check.ps1
+
+# Bash: raw RSA, same dual-hash proof as PowerShell
+./token_check.sh
+./token_check.sh --ca-bundle /etc/pki/.../tls-ca-bundle.pem  # corporate CA
+
+# Bash: 6-step validation chain (like kstlib TokenChecker)
+./kstlib-auth-check.sh --ca-bundle /path/to/ca.pem --verbose
 ```
 
-The PowerShell example performs raw RSA: `signature^e mod n` to recover the hash,
-then compares with `SHA-256/512(header.payload)`. Both hashes are printed side by side
-for undeniable visual proof.
+The PowerShell and Bash `token_check` scripts perform raw RSA: `signature^e mod n`
+to recover the hash, then compare with `SHA(header.payload)`. Both hashes are printed
+side by side for undeniable visual proof. The `kstlib-auth-check.sh` script mirrors
+the Python `TokenChecker` 6-step chain using only `curl + openssl + jq`.
 
 **Google OAuth2** - two approaches to the same flow:
 

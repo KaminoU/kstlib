@@ -155,7 +155,7 @@ class TokenChecker:
 
     Example:
         >>> import httpx  # doctest: +SKIP
-        >>> client = httpx.Client()  # doctest: +SKIP
+        >>> client = httpx.Client(verify="/path/to/ca.pem")  # doctest: +SKIP
         >>> checker = TokenChecker(client, expected_audience="my-app")  # doctest: +SKIP
         >>> report = checker.check(token_string)  # doctest: +SKIP
     """

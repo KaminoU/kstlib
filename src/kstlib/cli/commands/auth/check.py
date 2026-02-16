@@ -13,6 +13,7 @@ from rich.table import Table
 
 from kstlib.auth.check import TokenChecker, TokenCheckReport
 from kstlib.cli.common import console, exit_error
+from kstlib.ssl import build_ssl_context
 
 from .common import PROVIDER_ARGUMENT, get_provider, resolve_provider_name
 
@@ -298,7 +299,7 @@ def check(
 
     import httpx
 
-    http_client = httpx.Client()
+    http_client = httpx.Client(verify=_build_check_ssl_context(auth_provider))
 
     try:
         expected_issuer, expected_audience = _resolve_expectations(auth_provider, token_str)
@@ -381,6 +382,30 @@ def _resolve_expectations(
         return getattr(config, "issuer", None), getattr(config, "client_id", None)
     except AttributeError:
         return None, None
+
+
+def _build_check_ssl_context(auth_provider: Any) -> bool | str:
+    """Build SSL context for token check HTTP requests.
+
+    Reuses the provider's SSL config when available (ca_bundle, ssl_verify),
+    otherwise falls back to the global SSL cascade from kstlib.conf.yml.
+
+    Args:
+        auth_provider: Auth provider instance (or None for explicit --token).
+
+    Returns:
+        Value suitable for httpx verify parameter.
+    """
+    if auth_provider is not None:
+        config = getattr(auth_provider, "config", None)
+        if config is not None:
+            ca_bundle = getattr(config, "ssl_ca_bundle", None)
+            if isinstance(ca_bundle, str):
+                return ca_bundle
+            ssl_verify = getattr(config, "ssl_verify", None)
+            if isinstance(ssl_verify, bool):
+                return ssl_verify
+    return build_ssl_context()
 
 
 def _output_report(
