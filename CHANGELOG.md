@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.2] - 2026-02-18
+
+### Fixed
+
+- **`get_logger()` missing `.trace()` and `.success()` methods** - Child loggers returned by
+  `get_logger(__name__)` are standard `logging.Logger` instances that lack custom level methods.
+  Calling `logger.trace(...)` raised `AttributeError`. Now `init_logging()` patches the
+  `logging.Logger` class once at startup so all child loggers support `.trace()` and `.success()`.
+
 ## [1.6.1] - 2026-02-16
 
 ### Fixed
@@ -329,6 +338,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.6.2]: https://github.com/KaminoU/kstlib/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/KaminoU/kstlib/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/KaminoU/kstlib/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/KaminoU/kstlib/compare/v1.4.1...v1.5.0

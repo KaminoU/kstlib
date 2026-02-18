@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from kstlib.logging.manager import HAS_ASYNC, TRACE_LEVEL, LogManager
+from kstlib.logging.manager import HAS_ASYNC, SUCCESS_LEVEL, TRACE_LEVEL, LogManager
 
 # Singleton root logger for kstlib
 _root_logger: LogManager | None = None
@@ -52,6 +52,24 @@ def init_logging(
     """
     global _root_logger
     _root_logger = LogManager(name="kstlib", preset=preset, config=config)
+
+    # Patch logging.Logger class to add custom level methods so that child
+    # loggers returned by get_logger() also support .trace() and .success().
+    if not hasattr(logging.Logger, "trace"):
+
+        def _trace(self: logging.Logger, msg: object, *args: object, **kwargs: Any) -> None:
+            if self.isEnabledFor(TRACE_LEVEL):
+                self._log(TRACE_LEVEL, msg, args, **kwargs)
+
+        logging.Logger.trace = _trace  # type: ignore[attr-defined]
+
+    if not hasattr(logging.Logger, "success"):
+
+        def _success(self: logging.Logger, msg: object, *args: object, **kwargs: Any) -> None:
+            if self.isEnabledFor(SUCCESS_LEVEL):
+                self._log(SUCCESS_LEVEL, msg, args, **kwargs)
+
+        logging.Logger.success = _success  # type: ignore[attr-defined]
 
     # Also configure the standard "kstlib" logger so child loggers
     # (created via logging.getLogger("kstlib.xxx")) propagate correctly
@@ -105,4 +123,4 @@ def get_logger(name: str | None = None) -> logging.Logger:
     return logging.getLogger(logger_name)
 
 
-__all__ = ["HAS_ASYNC", "TRACE_LEVEL", "LogManager", "get_logger", "init_logging"]
+__all__ = ["HAS_ASYNC", "SUCCESS_LEVEL", "TRACE_LEVEL", "LogManager", "get_logger", "init_logging"]

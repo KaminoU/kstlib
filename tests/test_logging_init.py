@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import logging
+import logging.handlers
+from collections.abc import Generator
+
+import pytest
 
 import kstlib.logging as kstlib_logging
 from kstlib.logging import LogManager, get_logger, init_logging
+from kstlib.logging.manager import TRACE_LEVEL, SUCCESS_LEVEL
 
 
 class TestInitLogging:
@@ -88,6 +93,82 @@ class TestGetLogger:
 
         assert logger.name == "kstlib"
         assert isinstance(logger, logging.Logger)
+
+
+@pytest.fixture()
+def _clean_logger_patch() -> Generator[None, None, None]:
+    """Remove class-level .trace()/.success() patches after the test."""
+    yield
+    for attr in ("trace", "success"):
+        # Only remove if it was injected by init_logging (not from LogManager)
+        if attr in logging.Logger.__dict__:
+            delattr(logging.Logger, attr)
+
+
+class TestLoggerTracePatch:
+    """Tests for .trace() and .success() class-level patch on logging.Logger."""
+
+    def test_trace_before_init_raises(self, _clean_logger_patch: None) -> None:
+        """Test that .trace() is not available before init_logging()."""
+        # Ensure patch is removed for this test
+        for attr in ("trace", "success"):
+            if attr in logging.Logger.__dict__:
+                delattr(logging.Logger, attr)
+
+        logger = logging.getLogger("kstlib.test_no_patch")
+        assert not hasattr(logging.Logger, "trace")
+        with pytest.raises(AttributeError):
+            logger.trace("should fail")  # type: ignore[attr-defined]
+
+    def test_trace_after_init_works(self, _clean_logger_patch: None) -> None:
+        """Test that get_logger().trace() works after init_logging()."""
+        kstlib_logging._root_logger = None
+        init_logging(preset="dev")
+
+        logger = get_logger("test_trace_works")
+        # Should not raise
+        logger.trace("hello from child logger")  # type: ignore[attr-defined]
+
+    def test_success_after_init_works(self, _clean_logger_patch: None) -> None:
+        """Test that get_logger().success() works after init_logging()."""
+        kstlib_logging._root_logger = None
+        init_logging(preset="dev")
+
+        logger = get_logger("test_success_works")
+        # Should not raise
+        logger.success("operation completed")  # type: ignore[attr-defined]
+
+    def test_trace_captures_message(self, _clean_logger_patch: None) -> None:
+        """Test that trace messages are captured by handlers at TRACE level."""
+        kstlib_logging._root_logger = None
+        init_logging(preset="dev")
+
+        logger = get_logger("test_trace_capture")
+        logger.setLevel(TRACE_LEVEL)
+
+        handler = logging.handlers.MemoryHandler(capacity=100)
+        handler.setLevel(TRACE_LEVEL)
+        logger.addHandler(handler)
+
+        logger.trace("trace payload")  # type: ignore[attr-defined]
+
+        assert len(handler.buffer) == 1
+        assert handler.buffer[0].getMessage() == "trace payload"
+        assert handler.buffer[0].levelno == TRACE_LEVEL
+
+        logger.removeHandler(handler)
+
+    def test_multiple_init_no_duplicate_patch(self, _clean_logger_patch: None) -> None:
+        """Test that calling init_logging() twice does not duplicate the patch."""
+        kstlib_logging._root_logger = None
+        init_logging(preset="dev")
+        first_trace = logging.Logger.__dict__["trace"]
+
+        kstlib_logging._root_logger = None
+        init_logging(preset="dev")
+        second_trace = logging.Logger.__dict__["trace"]
+
+        assert first_trace is second_trace
 
 
 class TestModuleExports:
