@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from kstlib.logging.manager import (
+    FALLBACK_PRESETS,
     LOGGING_LEVEL,
     SUCCESS_LEVEL,
     TRACE_LEVEL,
@@ -358,6 +359,44 @@ class TestFilePathConfig:
                     },
                 }
             )
+
+
+class TestFallbackPresetsTracebacks:
+    """Tests for tracebacks_show_locals in FALLBACK_PRESETS."""
+
+    def test_prod_preset_hides_locals(self) -> None:
+        """Prod preset should disable tracebacks_show_locals."""
+        prod_console: dict[str, object] = FALLBACK_PRESETS["prod"]["console"]  # type: ignore[assignment]
+        assert prod_console["tracebacks_show_locals"] is False
+
+    def test_debug_preset_shows_locals(self) -> None:
+        """Debug preset should enable tracebacks_show_locals."""
+        debug_console: dict[str, object] = FALLBACK_PRESETS["debug"]["console"]  # type: ignore[assignment]
+        assert debug_console["tracebacks_show_locals"] is True
+
+    def test_dev_preset_inherits_secure_default(self) -> None:
+        """Dev preset should not set tracebacks_show_locals (inherits False default)."""
+        dev_console: dict[str, object] = FALLBACK_PRESETS["dev"]["console"]  # type: ignore[assignment]
+        assert "tracebacks_show_locals" not in dev_console
+
+    def test_prod_preset_rich_handler(self) -> None:
+        """Prod preset should produce RichHandler with show_locals=False."""
+        logger = LogManager(preset="prod")
+        from rich.logging import RichHandler
+
+        rich_handlers = [h for h in logger.handlers if isinstance(h, RichHandler)]
+        for handler in rich_handlers:
+            assert handler.tracebacks_show_locals is False
+
+    def test_debug_preset_rich_handler(self) -> None:
+        """Debug preset should produce RichHandler with show_locals=True."""
+        logger = LogManager(preset="debug")
+        from rich.logging import RichHandler
+
+        rich_handlers = [h for h in logger.handlers if isinstance(h, RichHandler)]
+        assert len(rich_handlers) >= 1
+        for handler in rich_handlers:
+            assert handler.tracebacks_show_locals is True
 
 
 class TestHardcodedLimits:

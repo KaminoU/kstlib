@@ -16,25 +16,32 @@ class TestAlertLevel:
         """AlertLevel.WARNING should have value 20."""
         assert int(AlertLevel.WARNING) == 20
 
+    def test_success_value(self) -> None:
+        """AlertLevel.SUCCESS should have value 11."""
+        assert int(AlertLevel.SUCCESS) == 11
+
     def test_critical_value(self) -> None:
         """AlertLevel.CRITICAL should have value 30."""
         assert int(AlertLevel.CRITICAL) == 30
 
     def test_ordering(self) -> None:
         """Alert levels should be ordered by severity."""
-        assert AlertLevel.INFO < AlertLevel.WARNING
+        assert AlertLevel.INFO < AlertLevel.SUCCESS
+        assert AlertLevel.SUCCESS < AlertLevel.WARNING
         assert AlertLevel.WARNING < AlertLevel.CRITICAL
         assert AlertLevel.INFO < AlertLevel.CRITICAL
 
     def test_name(self) -> None:
         """Alert levels should have correct names."""
         assert AlertLevel.INFO.name == "INFO"
+        assert AlertLevel.SUCCESS.name == "SUCCESS"
         assert AlertLevel.WARNING.name == "WARNING"
         assert AlertLevel.CRITICAL.name == "CRITICAL"
 
     def test_is_int_enum(self) -> None:
         """AlertLevel should be usable as int."""
         assert int(AlertLevel.INFO) == 10
+        assert int(AlertLevel.SUCCESS) == 11
         assert int(AlertLevel.WARNING) == 20
         assert int(AlertLevel.CRITICAL) == 30
 

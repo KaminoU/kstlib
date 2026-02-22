@@ -100,7 +100,7 @@ FALLBACK_PRESETS = {
     },
     "prod": {
         "output": "file",
-        "console": {"level": "WARNING", "show_path": False},
+        "console": {"level": "WARNING", "show_path": False, "tracebacks_show_locals": False},
         "file": {"level": "INFO"},
         "icons": {"show": False},
     },
@@ -181,7 +181,7 @@ FALLBACK_DEFAULTS = {
         "datefmt": "%Y-%m-%d %H:%M:%S",
         "format": "::: PID %(process)d / TID %(thread)d ::: %(message)s",
         "show_path": True,
-        "tracebacks_show_locals": True,
+        "tracebacks_show_locals": False,
     },
     "file": {
         "level": "DEBUG",
@@ -365,7 +365,7 @@ class LogManager(logging.Logger):
             console=self.console,
             show_path=console_config.get("show_path", True),
             markup=True,
-            tracebacks_show_locals=console_config.get("tracebacks_show_locals", True),
+            tracebacks_show_locals=console_config.get("tracebacks_show_locals", False),
         )
         rich_handler.setFormatter(logging.Formatter(console_config.format, datefmt=console_config.datefmt))
         level = console_config.level.upper()

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-02-22
+
+### Added
+
+- **`AlertLevel.SUCCESS`** - New alert severity level for positive confirmations
+  - Value 11 (between INFO=10 and WARNING=20), filtered like INFO by `min_level`
+  - Slack emoji `:white_check_mark:` (green checkmark), color `#36a64f` (green)
+  - `_parse_level("success")` supported for config-driven channel setup
+  - Consumer: astro trading bot for `ws_reconnect`, `heartbeat_ok`, `order_filled`
+
+### Fixed
+
+- **Prod preset now defaults `tracebacks_show_locals` to `False`** - Reduces default exposure
+  surface in production tracebacks. Local variables are still available by switching to the
+  `debug` preset or setting `tracebacks_show_locals: True` in config. The fallback default
+  also changed from `True` to `False` so unlisted presets inherit the safer behavior.
+
 ## [1.6.2] - 2026-02-18
 
 ### Fixed
@@ -338,6 +355,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.7.0]: https://github.com/KaminoU/kstlib/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/KaminoU/kstlib/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/KaminoU/kstlib/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/KaminoU/kstlib/compare/v1.5.0...v1.6.0

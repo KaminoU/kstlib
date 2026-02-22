@@ -38,6 +38,7 @@ class AlertLevel(IntEnum):
 
     Attributes:
         INFO: Informational messages (10).
+        SUCCESS: Positive confirmation messages (11).
         WARNING: Warning conditions that need attention (20).
         CRITICAL: Critical issues requiring immediate action (30).
 
@@ -48,9 +49,14 @@ class AlertLevel(IntEnum):
         'INFO'
         >>> int(AlertLevel.WARNING)
         20
+        >>> AlertLevel.SUCCESS > AlertLevel.INFO
+        True
+        >>> AlertLevel.SUCCESS < AlertLevel.WARNING
+        True
     """
 
     INFO = 10
+    SUCCESS = 11
     WARNING = 20
     CRITICAL = 30
 

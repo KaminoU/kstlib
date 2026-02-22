@@ -8,7 +8,7 @@ Key components:
 
 - :class:`AlertManager`: Orchestrates multi-channel delivery
 - :class:`AlertMessage`: The alert payload with title, body, and level
-- :class:`AlertLevel`: Severity levels (INFO, WARNING, CRITICAL)
+- :class:`AlertLevel`: Severity levels (INFO, SUCCESS, WARNING, CRITICAL)
 - :class:`AlertThrottle`: Rate limiting for alert floods
 
 Channels:

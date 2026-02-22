@@ -527,6 +527,7 @@ def _parse_level(level_str: str) -> AlertLevel:
     """
     level_map = {
         "info": AlertLevel.INFO,
+        "success": AlertLevel.SUCCESS,
         "warning": AlertLevel.WARNING,
         "critical": AlertLevel.CRITICAL,
     }

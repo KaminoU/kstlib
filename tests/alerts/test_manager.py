@@ -209,6 +209,25 @@ class TestAlertManagerSend:
         assert results[0].channel == "info"
 
     @pytest.mark.asyncio
+    async def test_level_filtering_success(self) -> None:
+        """Should filter channels by min_level (SUCCESS alert)."""
+        info_channel = MockAsyncChannel("info")
+        warning_channel = MockAsyncChannel("warning")
+
+        manager = (
+            AlertManager()
+            .add_channel(info_channel, min_level=AlertLevel.INFO)
+            .add_channel(warning_channel, min_level=AlertLevel.WARNING)
+        )
+
+        alert = AlertMessage(title="Test", body="Body", level=AlertLevel.SUCCESS)
+        results = await manager.send(alert)
+
+        # Only info channel should receive (SUCCESS < WARNING)
+        assert len(results) == 1
+        assert results[0].channel == "info"
+
+    @pytest.mark.asyncio
     async def test_level_filtering_warning(self) -> None:
         """Should filter channels by min_level (WARNING alert)."""
         info_channel = MockAsyncChannel("info")
@@ -347,6 +366,10 @@ class TestParseLevelHelper:
         """Should parse 'info' level."""
         assert _parse_level("info") == AlertLevel.INFO
 
+    def test_parse_success(self) -> None:
+        """Should parse 'success' level."""
+        assert _parse_level("success") == AlertLevel.SUCCESS
+
     def test_parse_warning(self) -> None:
         """Should parse 'warning' level."""
         assert _parse_level("warning") == AlertLevel.WARNING
@@ -358,6 +381,7 @@ class TestParseLevelHelper:
     def test_parse_case_insensitive(self) -> None:
         """Should parse levels case-insensitively."""
         assert _parse_level("INFO") == AlertLevel.INFO
+        assert _parse_level("Success") == AlertLevel.SUCCESS
         assert _parse_level("Warning") == AlertLevel.WARNING
         assert _parse_level("CRITICAL") == AlertLevel.CRITICAL
 

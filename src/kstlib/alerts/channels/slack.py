@@ -74,6 +74,7 @@ SLACK_WEBHOOK_PATTERN = re.compile(r"^https://hooks\.slack\.com/services/T[A-Z0-
 # Emoji indicators for alert levels
 LEVEL_EMOJI = {
     AlertLevel.INFO: ":information_source:",
+    AlertLevel.SUCCESS: ":white_check_mark:",
     AlertLevel.WARNING: ":warning:",
     AlertLevel.CRITICAL: ":rotating_light:",
 }
@@ -81,6 +82,7 @@ LEVEL_EMOJI = {
 # Color indicators for alert levels (Slack attachment colors)
 LEVEL_COLOR = {
     AlertLevel.INFO: "#36a64f",  # Green
+    AlertLevel.SUCCESS: "#36a64f",  # Green (same as INFO)
     AlertLevel.WARNING: "#ff9800",  # Orange
     AlertLevel.CRITICAL: "#ff0000",  # Red
 }
