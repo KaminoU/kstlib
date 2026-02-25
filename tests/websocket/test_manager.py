@@ -887,3 +887,101 @@ class TestWebSocketManagerCloseMethods:
 
         assert ws.stats.disconnects == 1
         assert ws.stats.proactive_disconnects == 0  # NOT proactive
+
+
+class _RaisingAsyncIter:
+    """Async iterator that raises an exception on first __anext__ call."""
+
+    def __init__(self, exc: BaseException) -> None:
+        self._exc = exc
+
+    def __aiter__(self) -> "_RaisingAsyncIter":
+        return self
+
+    async def __anext__(self) -> Any:
+        raise self._exc
+
+
+class TestReceiveLoopCleanClose:
+    """Tests for _receive_loop handling of ConnectionClosedOK."""
+
+    @pytest.mark.asyncio
+    async def test_connection_closed_ok_calls_handle_disconnect(self) -> None:
+        """ConnectionClosedOK triggers _handle_disconnect with SERVER_CLOSED."""
+        from websockets.exceptions import ConnectionClosedOK
+        from websockets.frames import Close
+
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws", auto_reconnect=True)
+        ws._state = ConnectionState.CONNECTED
+
+        exc = ConnectionClosedOK(Close(1000, "normal closure"), None)
+        ws._ws = _RaisingAsyncIter(exc)
+
+        ws._handle_disconnect = AsyncMock()
+        await ws._receive_loop()
+
+        ws._handle_disconnect.assert_called_once_with(
+            DisconnectReason.SERVER_CLOSED,
+            code=1000,
+        )
+
+    @pytest.mark.asyncio
+    async def test_connection_closed_ok_passes_close_code(self) -> None:
+        """ConnectionClosedOK passes the close code to _handle_disconnect."""
+        from websockets.exceptions import ConnectionClosedOK
+        from websockets.frames import Close
+
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+        ws._state = ConnectionState.CONNECTED
+
+        exc = ConnectionClosedOK(Close(1001, "going away"), None)
+        ws._ws = _RaisingAsyncIter(exc)
+
+        ws._handle_disconnect = AsyncMock()
+        await ws._receive_loop()
+
+        call_kwargs = ws._handle_disconnect.call_args
+        assert call_kwargs[1]["code"] == 1001
+
+    @pytest.mark.asyncio
+    async def test_connection_closed_ok_triggers_reconnect(self) -> None:
+        """ConnectionClosedOK triggers _attempt_reconnect when auto_reconnect=True."""
+        from websockets.exceptions import ConnectionClosedOK
+        from websockets.frames import Close
+
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws", auto_reconnect=True)
+        ws._state = ConnectionState.CONNECTED
+
+        exc = ConnectionClosedOK(Close(1000, "normal closure"), None)
+        ws._ws = _RaisingAsyncIter(exc)
+
+        ws._attempt_reconnect = AsyncMock()
+        await ws._receive_loop()
+
+        ws._attempt_reconnect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_connection_closed_ok_no_reconnect_when_disabled(self) -> None:
+        """ConnectionClosedOK does not reconnect when auto_reconnect=False."""
+        from websockets.exceptions import ConnectionClosedOK
+        from websockets.frames import Close
+
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws", auto_reconnect=False)
+        ws._state = ConnectionState.CONNECTED
+
+        exc = ConnectionClosedOK(Close(1000, "normal closure"), None)
+        ws._ws = _RaisingAsyncIter(exc)
+
+        ws._attempt_reconnect = AsyncMock()
+        await ws._receive_loop()
+
+        ws._attempt_reconnect.assert_not_called()
+        assert ws.state == ConnectionState.DISCONNECTED

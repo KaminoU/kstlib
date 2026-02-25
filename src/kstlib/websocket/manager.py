@@ -472,11 +472,15 @@ class WebSocketManager:
         try:
             async for message in self._ws:
                 await self._process_message(message)
-        except ConnectionClosedOK:
-            log.debug("WebSocket closed normally")
+        except ConnectionClosedOK as e:
+            code = e.rcvd.code if e.rcvd else 1000
+            log.debug("WebSocket closed normally (code=%d)", code)
+            await self._handle_disconnect(DisconnectReason.SERVER_CLOSED, code=code)
         except ConnectionClosedError as e:
-            log.warning("WebSocket closed with error: code=%d reason=%s", e.code, e.reason)
-            await self._handle_disconnect(DisconnectReason.SERVER_CLOSED, code=e.code)
+            code = e.rcvd.code if e.rcvd else 1006
+            reason = e.rcvd.reason if e.rcvd else ""
+            log.warning("WebSocket closed with error: code=%d reason=%s", code, reason)
+            await self._handle_disconnect(DisconnectReason.SERVER_CLOSED, code=code)
         except ConnectionClosed as e:
             log.warning("WebSocket connection closed: %s", e)
             await self._handle_disconnect(DisconnectReason.SERVER_CLOSED)

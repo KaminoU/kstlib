@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-02-25
+
+### Fixed
+
+- **WebSocket `ConnectionClosedOK` silent data loss** - When Binance (or any server) closes
+  the WebSocket cleanly (code 1000, e.g. after 24h), `_receive_loop` now triggers
+  `_handle_disconnect(SERVER_CLOSED)` instead of only logging a debug message. This restores
+  auto-reconnect behavior on clean server closures, preventing silent data loss.
+- **Deprecated `websockets` API** - Replace `e.code`/`e.reason` with `e.rcvd.code`/`e.rcvd.reason`
+  (deprecated since websockets 13.1) in both `ConnectionClosedOK` and `ConnectionClosedError`
+  handlers.
+
 ## [1.7.0] - 2026-02-22
 
 ### Added
@@ -355,6 +367,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.7.1]: https://github.com/KaminoU/kstlib/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/KaminoU/kstlib/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/KaminoU/kstlib/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/KaminoU/kstlib/compare/v1.6.0...v1.6.1
