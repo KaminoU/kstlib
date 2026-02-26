@@ -651,7 +651,8 @@ def test_shred_command_passes_options(monkeypatch: pytest.MonkeyPatch, runner: C
     assert "shred" in result.stdout
 
 
-def test_doctor_reports_missing_keyring(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
+def test_doctor_reports_missing_keyring_as_warning(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
+    """Keyring missing is a warning (optional), not an error."""
     monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: "/usr/bin/sops")
     monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: [])
 
@@ -666,8 +667,8 @@ def test_doctor_reports_missing_keyring(monkeypatch: pytest.MonkeyPatch, runner:
 
     result = runner.invoke(secrets_app, ["doctor"])
 
-    assert result.exit_code == 1
     assert "keyring" in result.stdout.lower()
+    assert "optional" in result.stdout.lower()
 
 
 def test_run_sops_command_raises_when_binary_missing(monkeypatch: pytest.MonkeyPatch) -> None:

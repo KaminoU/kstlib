@@ -346,8 +346,8 @@ def _check_keyring() -> CheckEntry:
     except ImportError:
         return {
             "component": "keyring",
-            "status": "missing",
-            "details": "Python 'keyring' package not installed.",
+            "status": "warning",
+            "details": "Python 'keyring' package not installed (optional, for credential caching).",
         }
     backend = keyring_module.get_keyring().__class__.__name__
     return {"component": "keyring", "status": "available", "details": backend}
