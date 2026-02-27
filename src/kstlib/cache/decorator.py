@@ -4,6 +4,8 @@ Provides @cache decorator with automatic async/sync detection
 and configuration priority chain.
 """
 
+__all__ = ["cache"]
+
 # pylint: disable=too-many-arguments
 
 import functools

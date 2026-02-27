@@ -69,7 +69,6 @@ README.md text
 docs/* linguist-documentation
 examples/* linguist-documentation
 tests/* linguist-documentation
-.claude/* linguist-documentation
 
 # Mark config files as detectable
 *.toml linguist-detectable=true
@@ -91,27 +90,11 @@ tests/* linguist-documentation
 # Export ignore (excluded from git archive / sdist)
 # =============================================================================
 
-# --- CI/CD and GitHub ---
-.github/ export-ignore
-
-# --- Development tools ---
-.claude/ export-ignore
-.vscode/ export-ignore
-.idea/ export-ignore
-
-# --- Infrastructure ---
-infra/ export-ignore
-
-# --- Development files ---
-.gitattributes export-ignore
-.gitignore export-ignore
-.pre-commit-config.yaml export-ignore
-.editorconfig export-ignore
-tox.ini export-ignore
-Makefile export-ignore
-
-# --- Documentation source (built docs distributed separately) ---
-docs/ export-ignore
+.*          export-ignore
+tox.ini     export-ignore
+Makefile    export-ignore
+infra/      export-ignore
+docs/       export-ignore
 
 # --- Examples (optional - uncomment to exclude) ---
 # examples/ export-ignore

@@ -3,6 +3,11 @@
 # This example demonstrates a modular, config-driven approach to
 # interacting with SAS Viya 3.5+ REST APIs using kstlib.rapi.
 #
+# The 1200+ endpoints covered here were extracted and structured
+# with the help of Claude from the official SAS Viya 3.5
+# Swagger/OpenAPI specifications — a task that would have taken weeks
+# to do manually.
+#
 # Usage:
 #   cd examples/rapi/viyapi
 #   export VIYA_HOST=your-viya-server.example.com
@@ -24,8 +29,6 @@
 #   - sub-modules:      name: <api>-<section>      (e.g., name: annotations-members)
 #   - endpoints:        <verb>                     (main section: list, create, get)
 #                       <section>-<verb>           (other sections: members-list, root-check)
-#
-# See CLAUDE.md "RAPI Conventions (SAS Viya)" for full documentation.
 #
 # Inheritance (sub-modules inherit from defaults, do NOT repeat):
 #   - base_url      <- inherited

@@ -183,7 +183,7 @@ def token(
 
     if copy:
         try:
-            import pyperclip  # type: ignore[import-untyped]
+            import pyperclip  # type: ignore[import-untyped]  # no stubs available
 
             pyperclip.copy(output)
             console.print(f"[green]Token copied to clipboard ({provider_name}).[/]")

@@ -31,6 +31,7 @@ from kstlib.config.exceptions import (
 
 
 def test_minimal_yaml(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> None:
+    """Load a minimal YAML config and verify meta.name is set."""
     copy_fixture("config", "minimal.yml", dest_name="kstlib.conf.yml")
     monkeypatch.chdir(tmp_path)
     config = load_config()
@@ -38,6 +39,7 @@ def test_minimal_yaml(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> Non
 
 
 def test_basic_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> None:
+    """Merge values from a JSON include file into the root config."""
     copy_fixture("config", "kstlib.conf.yml")
     copy_fixture("config", "included.json")
     monkeypatch.chdir(tmp_path)
@@ -47,6 +49,7 @@ def test_basic_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> No
 
 
 def test_relative_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> None:
+    """Resolve a relative include path and merge its TOML values."""
     copy_fixture("config", "with_relative_include.yml", dest_name="kstlib.conf.yml")
     copy_fixture("config", "included.toml")
     monkeypatch.chdir(tmp_path)
@@ -56,6 +59,7 @@ def test_relative_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) ->
 
 
 def test_absolute_include(tmp_path: Any, monkeypatch: Any) -> None:
+    """Resolve an absolute include path and merge its INI values."""
     abs_ini = tmp_path / "included_absolute.ini"
     abs_ini.write_text("[section]\nmykey=abs_value\n", encoding="utf-8")
     abs_yml = tmp_path / "absolute_include.yml"
@@ -67,6 +71,7 @@ def test_absolute_include(tmp_path: Any, monkeypatch: Any) -> None:
 
 
 def test_circular_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> None:
+    """Raise ConfigCircularIncludeError when includes form a cycle."""
     copy_fixture("config", "circular1.yml")
     copy_fixture("config", "circular2.yml")
     monkeypatch.chdir(tmp_path)
@@ -75,6 +80,7 @@ def test_circular_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) ->
 
 
 def test_missing_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> None:
+    """Raise ConfigFileNotFoundError when an include target does not exist."""
     missing_include = tmp_path / "kstlib.conf.yml"
     missing_include.write_text("include: missing_file.yml\nfoo: root\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -94,6 +100,7 @@ def test_missing_include(copy_fixture: Any, monkeypatch: Any, tmp_path: Any) -> 
 def test_zone_override(
     copy_fixture: Any, monkeypatch: Any, tmp_path: Any, zone: Any, expected_author: Any, cfg_loader: Any
 ) -> None:
+    """Verify that cascading zone configs override lower-priority layers."""
     # Always put the fallback in place, but it's always overwritten here
     # Copy fallback to a location, so it always exists
     fallback = tmp_path / "package_fallback.yml"

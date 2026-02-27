@@ -21,6 +21,7 @@ from kstlib.secrets.providers.sops import SOPSProvider
 
 
 def test_environment_provider_resolves_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify EnvironmentProvider resolves a secret from the environment."""
     provider = EnvironmentProvider(prefix="APP_", delimiter="__")
     request = SecretRequest(name="api.token", scope="prod", required=True, default=None)
     monkeypatch.setenv("APP__PROD__API__TOKEN", "secret")
@@ -34,6 +35,7 @@ def test_environment_provider_resolves_from_env(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_environment_provider_respects_configure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify configure() updates prefix and delimiter used for key construction."""
     provider = EnvironmentProvider()
     provider.configure(None)
     provider.configure({"prefix": "svc", "delimiter": "-"})
@@ -47,6 +49,7 @@ def test_environment_provider_respects_configure(monkeypatch: pytest.MonkeyPatch
 
 
 def test_environment_provider_returns_none_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify EnvironmentProvider returns None when the environment variable is absent."""
     provider = EnvironmentProvider(prefix="ENV_", delimiter="__")
     request = SecretRequest(name="missing", scope=None, required=False, default=None)
 
@@ -58,6 +61,7 @@ def test_environment_provider_returns_none_when_missing(monkeypatch: pytest.Monk
 
 
 def test_keyring_provider_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify KeyringProvider stores, resolves, and deletes a secret correctly."""
     storage: dict[tuple[str, str], str] = {}
 
     def get_password(service: str, username: str) -> str | None:
@@ -93,6 +97,7 @@ def test_keyring_provider_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_keyring_provider_handles_missing_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify KeyringProvider raises RuntimeError when no keyring backend is available."""
     monkeypatch.setattr(keyring_module, "keyring_backend", None)
 
     provider = KeyringProvider()
@@ -106,6 +111,8 @@ def test_keyring_provider_handles_missing_backend(monkeypatch: pytest.MonkeyPatc
 
 
 def test_keyring_provider_returns_none_when_value_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify KeyringProvider returns None when the backend holds no entry."""
+
     def get_password(*_: Any) -> None:
         return None
 
@@ -124,6 +131,7 @@ def test_keyring_provider_returns_none_when_value_missing(monkeypatch: pytest.Mo
 
 
 def test_sops_provider_resolve_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify SOPSProvider decrypts and resolves a nested JSON secret."""
     payload = '{"smtp": {"password": "hunter2"}}'
     secret_file = tmp_path / "secrets.enc"
     secret_file.write_text("encrypted")
@@ -161,6 +169,7 @@ def test_sops_provider_resolve_success(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 
 def test_sops_provider_sequence_key_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify SOPSProvider resolves a value using an explicit key_path list."""
     secret_file = tmp_path / "secrets.yml"
     secret_file.write_text("ignored")
 
@@ -194,6 +203,7 @@ def test_sops_provider_sequence_key_path(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
 
 def test_sops_provider_overrides_via_configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify configure() overrides path, binary, and format on SOPSProvider."""
     secret_file = tmp_path / "overrides.enc"
     secret_file.write_text("ignored")
 
@@ -228,6 +238,7 @@ def test_sops_provider_overrides_via_configure(monkeypatch: pytest.MonkeyPatch, 
 
 
 def test_sops_provider_raises_when_binary_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Raise SecretDecryptionError when the sops binary cannot be found."""
     secret_file = tmp_path / "missing"
     secret_file.write_text("ignored")
 
@@ -241,6 +252,7 @@ def test_sops_provider_raises_when_binary_missing(monkeypatch: pytest.MonkeyPatc
 
 
 def test_sops_provider_resolve_returns_none_without_path() -> None:
+    """Verify SOPSProvider returns None when no file path is configured."""
     provider = SOPSProvider()
     request = SecretRequest(name="smtp.password", scope=None, required=False, default=None)
 
@@ -248,6 +260,7 @@ def test_sops_provider_resolve_returns_none_without_path() -> None:
 
 
 def test_sops_provider_configure_noop_when_missing_settings(tmp_path: Path) -> None:
+    """Verify configure() with None or empty dict leaves existing settings intact."""
     provider = SOPSProvider(path=tmp_path / "a.enc", binary="custom", document_format="json")
 
     provider.configure(None)
@@ -259,6 +272,7 @@ def test_sops_provider_configure_noop_when_missing_settings(tmp_path: Path) -> N
 
 
 def test_sops_provider_uses_metadata_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify SOPSProvider picks up the file path from request metadata."""
     payload = '{"api": {"token": "value"}}'
     secrets_file = tmp_path / "metadata.enc"
     secrets_file.write_text("encrypted")
@@ -300,6 +314,7 @@ def test_sops_provider_handles_command_failure(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Handle SOPS command failure with redacted error logging."""
     secrets_file = tmp_path / "broken.enc"
     secrets_file.write_text("encrypted")
 
@@ -328,6 +343,7 @@ def test_sops_provider_handles_command_failure(
 
 
 def test_sops_provider_auto_falls_back_to_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Fall back to YAML parsing when format is auto-detected."""
     secrets_file = tmp_path / "data.enc"
     secrets_file.write_text("encrypted")
 
@@ -353,6 +369,7 @@ def test_sops_provider_auto_falls_back_to_yaml(monkeypatch: pytest.MonkeyPatch, 
 
 
 def test_sops_provider_yaml_format(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Parse YAML-formatted SOPS output correctly."""
     secrets_file = tmp_path / "yaml.enc"
     secrets_file.write_text("encrypted")
 
@@ -386,6 +403,7 @@ def test_sops_provider_yaml_format(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 
 def test_sops_provider_json_format(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Parse JSON-formatted SOPS output correctly."""
     secrets_file = tmp_path / "json.enc"
     secrets_file.write_text("encrypted")
 
@@ -411,6 +429,7 @@ def test_sops_provider_json_format(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 
 def test_sops_provider_text_format_passthrough(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Pass through raw text output without parsing."""
     secrets_file = tmp_path / "plain.enc"
     secrets_file.write_text("encrypted")
 
@@ -440,6 +459,7 @@ def test_sops_provider_text_format_passthrough(monkeypatch: pytest.MonkeyPatch, 
 
 
 def test_sops_provider_raises_when_parsing_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Raise error when SOPS output cannot be parsed."""
     secrets_file = tmp_path / "invalid.enc"
     secrets_file.write_text("encrypted")
 
@@ -465,6 +485,7 @@ def test_sops_provider_raises_when_parsing_fails(monkeypatch: pytest.MonkeyPatch
 
 
 def test_sops_provider_yaml_parse_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Raise error on invalid YAML output from SOPS."""
     secrets_file = tmp_path / "invalid-yaml.enc"
     secrets_file.write_text("encrypted")
 
@@ -490,6 +511,7 @@ def test_sops_provider_yaml_parse_error(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
 
 def test_sops_provider_returns_none_when_key_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Return None when requested key is missing from SOPS output."""
     secrets_file = tmp_path / "missing.enc"
     secrets_file.write_text("encrypted")
 
@@ -510,6 +532,7 @@ def test_sops_provider_returns_none_when_key_missing(monkeypatch: pytest.MonkeyP
 
 
 def test_sops_provider_redacts_sensitive_output() -> None:
+    """Redact AWS ARNs, access keys, and file paths from error output."""
     message = "arn:aws:kms:us-east-1:123456789012:key/abc AKIA1234567890ABCDEF /home/user/secret"
 
     redacted = SOPSProvider._redact_sensitive_output(message)
@@ -521,6 +544,7 @@ def test_sops_provider_redacts_sensitive_output() -> None:
 
 
 def test_sops_provider_purge_cache_variants(tmp_path: Path) -> None:
+    """Purge cache entries for both direct and resolved paths."""
     provider = SOPSProvider()
     direct_path = tmp_path / "direct.enc"
     resolved_path = tmp_path / "resolved.enc"
@@ -544,6 +568,7 @@ def test_sops_provider_purge_cache_variants(tmp_path: Path) -> None:
 
 
 def test_environment_provider_builds_key_without_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Build environment variable key without scope prefix."""
     provider = EnvironmentProvider(prefix="kstlib_", delimiter="__")
     request = SecretRequest(name="db.password", scope=None, required=False, default=None)
     monkeypatch.setenv("KSTLIB__DB__PASSWORD", "value")
@@ -556,6 +581,7 @@ def test_environment_provider_builds_key_without_scope(monkeypatch: pytest.Monke
 
 
 def test_get_provider_returns_registered_instance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Return a configured provider instance from the registry."""
     env_provider = get_provider("environment", prefix="app_", delimiter="__")
     request = SecretRequest(name="token", scope="ops", required=True, default=None)
     monkeypatch.setenv("APP__OPS__TOKEN", "abc")
@@ -573,6 +599,7 @@ def test_get_provider_returns_registered_instance(monkeypatch: pytest.MonkeyPatc
 
 
 def test_configure_provider_returns_same_instance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Return the same provider instance after configuration update."""
     provider = EnvironmentProvider()
     configured = configure_provider(provider, {"prefix": "svc_", "delimiter": "__"})
     request = SecretRequest(name="api.key", scope="jobs", required=False, default=None)

@@ -311,7 +311,7 @@ class MonitoringService:
         )
 
     def run_sync(self) -> MonitoringResult:
-        """Synchronous version of run().
+        """Run the monitoring service synchronously.
 
         Convenience method for non-async contexts. Creates a new event loop
         if needed.

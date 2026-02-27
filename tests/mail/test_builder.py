@@ -20,6 +20,7 @@ class FakeTransport(MailTransport):
         self.sent: list[EmailMessage] = []
 
     def send(self, message: EmailMessage) -> None:
+        """Store the message in the sent list."""
         self.sent.append(message)
 
 
@@ -27,6 +28,7 @@ class ErrorTransport(MailTransport):
     """Transport double that raises ``MailTransportError`` on send."""
 
     def send(self, message: EmailMessage) -> None:
+        """Raise MailTransportError unconditionally."""
         raise MailTransportError("boom")
 
 

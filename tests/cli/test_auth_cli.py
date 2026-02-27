@@ -351,6 +351,537 @@ class TestAuthToken:
 
         assert result.exit_code == 0
 
+    # ── _decode_jwt() unit tests ──────────────────────────────────────────────
+
+    def test_decode_jwt_valid(self) -> None:
+        """Decodes a well-formed JWT into header and payload dicts."""
+        import base64
+
+        header_data = {"alg": "RS256", "typ": "JWT"}
+        payload_data = {"sub": "user1", "exp": 9999999999}
+        header_b64 = base64.urlsafe_b64encode(json.dumps(header_data).encode()).rstrip(b"=").decode()
+        payload_b64 = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        jwt_str = f"{header_b64}.{payload_b64}.fakesignature"
+
+        result = token_mod._decode_jwt(jwt_str)
+
+        assert result is not None
+        header, payload = result
+        assert header["alg"] == "RS256"
+        assert payload["sub"] == "user1"
+
+    def test_decode_jwt_not_three_parts(self) -> None:
+        """Returns None when token does not have exactly three dot-separated parts."""
+        result = token_mod._decode_jwt("not-a-jwt")
+
+        assert result is None
+
+    def test_decode_jwt_invalid_base64(self) -> None:
+        """Returns None when base64 decoding of a part fails."""
+        result = token_mod._decode_jwt("!!!.!!!.fakesig")
+
+        assert result is None
+
+    def test_decode_jwt_invalid_json(self) -> None:
+        """Returns None when decoded bytes are not valid JSON."""
+        import base64
+
+        bad_b64 = base64.urlsafe_b64encode(b"not-json").rstrip(b"=").decode()
+        result = token_mod._decode_jwt(f"{bad_b64}.{bad_b64}.sig")
+
+        assert result is None
+
+    # ── _format_decoded() unit tests ─────────────────────────────────────────
+
+    def test_format_decoded_yaml_like(self) -> None:
+        """Returns Rich-marked YAML-like text when as_json is False."""
+        header = {"alg": "RS256", "typ": "JWT"}
+        payload = {"sub": "user1", "name": "Alice"}
+
+        output = token_mod._format_decoded(header, payload, as_json=False)
+
+        assert "JWT Header" in output
+        assert "JWT Payload" in output
+        assert "RS256" in output
+        assert "Alice" in output
+
+    def test_format_decoded_json(self) -> None:
+        """Returns valid JSON string when as_json is True."""
+        header = {"alg": "RS256"}
+        payload = {"sub": "user1"}
+
+        output = token_mod._format_decoded(header, payload, as_json=True)
+
+        parsed = json.loads(output)
+        assert parsed["header"]["alg"] == "RS256"
+        assert parsed["payload"]["sub"] == "user1"
+
+    def test_format_decoded_timestamp_fields(self) -> None:
+        """Appends ISO timestamp for exp/iat/nbf/auth_time integer fields."""
+        import time
+
+        header = {"alg": "RS256"}
+        payload = {"exp": int(time.time()) + 3600, "iat": int(time.time())}
+
+        output = token_mod._format_decoded(header, payload, as_json=False)
+
+        # ISO format contains "T" and "+" or "Z"
+        assert "T" in output
+
+    def test_format_decoded_list_field(self) -> None:
+        """Renders list payload values as comma-separated string."""
+        header = {"alg": "RS256"}
+        payload = {"roles": ["admin", "user"]}
+
+        output = token_mod._format_decoded(header, payload, as_json=False)
+
+        assert "admin" in output
+        assert "user" in output
+
+    # ── token() command – basic display ──────────────────────────────────────
+
+    def test_token_show_prints_raw_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Prints raw access token to stdout when no flags set."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="my-raw-access-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show"])
+
+        assert result.exit_code == 0
+        assert "my-raw-access-token" in result.stdout
+
+    def test_token_not_authenticated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when provider returns no token."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = None
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show"])
+
+        assert result.exit_code == 1
+        assert "not authenticated" in result.stdout.lower() or "login" in result.stdout.lower()
+
+    # ── --header flag ─────────────────────────────────────────────────────────
+
+    def test_token_header_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Outputs 'Bearer <token>' when --header flag is set."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="header-access-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--header"])
+
+        assert result.exit_code == 0
+        assert "Bearer header-access-token" in result.stdout
+
+    def test_token_header_flag_with_enum_token_type(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Outputs correct prefix when token_type is a TokenType enum value."""
+        from kstlib.auth.models import TokenType
+
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="enum-type-token",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--header"])
+
+        assert result.exit_code == 0
+        assert "Bearer enum-type-token" in result.stdout
+
+    # ── --show-refresh flag ───────────────────────────────────────────────────
+
+    def test_token_show_refresh_with_refresh_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Displays refresh token when --show-refresh and refresh_token exists."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="access-tok",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            refresh_token="my-refresh-token-value",
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--show-refresh"])
+
+        assert result.exit_code == 0
+        assert "my-refresh-token-value" in result.stdout
+
+    def test_token_show_refresh_without_refresh_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --show-refresh but no refresh_token available."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="access-tok",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            refresh_token=None,
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--show-refresh"])
+
+        assert result.exit_code == 1
+        assert "refresh" in result.stdout.lower()
+
+    def test_token_header_with_show_refresh_incompatible(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --header and --show-refresh used together."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="access-tok",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            refresh_token="refresh-tok",
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--header", "--show-refresh"])
+
+        assert result.exit_code == 1
+        assert "header" in result.stdout.lower() or "refresh" in result.stdout.lower()
+
+    # ── --refresh flag ────────────────────────────────────────────────────────
+
+    def test_token_refresh_flag_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Refreshes token and prints new access token when --refresh flag used."""
+        old_token = Token(
+            access_token="old-access-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            refresh_token="valid-refresh-token",
+        )
+        new_token = Token(
+            access_token="new-access-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = old_token
+        mock_provider.refresh.return_value = new_token
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--refresh"])
+
+        assert result.exit_code == 0
+        assert "new-access-token" in result.stdout
+
+    def test_token_refresh_flag_not_authenticated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --refresh used but not authenticated."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = None
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--refresh"])
+
+        assert result.exit_code == 1
+        assert "not authenticated" in result.stdout.lower() or "login" in result.stdout.lower()
+
+    def test_token_refresh_flag_no_refresh_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --refresh used but token has no refresh_token."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="access-tok",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            refresh_token=None,
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--refresh"])
+
+        assert result.exit_code == 1
+        assert "refresh" in result.stdout.lower()
+
+    def test_token_refresh_flag_refresh_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when provider.refresh() raises an exception."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="old-tok",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            refresh_token="expired-refresh",
+        )
+        mock_provider.refresh.side_effect = RuntimeError("Refresh endpoint unreachable")
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--refresh"])
+
+        assert result.exit_code == 1
+        assert "refresh failed" in result.stdout.lower() or "refresh" in result.stdout.lower()
+
+    # ── --copy flag ───────────────────────────────────────────────────────────
+
+    def test_token_copy_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Copies access token to clipboard and shows confirmation."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="clipboard-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        import builtins
+        import sys
+
+        mock_pyperclip = MagicMock()
+        monkeypatch.setattr(builtins, "pyperclip", mock_pyperclip, raising=False)
+
+        mock_pyperclip_mod = MagicMock()
+        monkeypatch.setitem(sys.modules, "pyperclip", mock_pyperclip_mod)
+
+        result = runner.invoke(auth_app, ["token", "show", "--copy"])
+
+        assert result.exit_code == 0
+        mock_pyperclip_mod.copy.assert_called_once_with("clipboard-token")
+        assert "clipboard" in result.stdout.lower() or "copied" in result.stdout.lower()
+
+    def test_token_copy_pyperclip_not_installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when pyperclip is not installed."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="clipboard-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        import sys
+
+        monkeypatch.setitem(sys.modules, "pyperclip", None)
+
+        result = runner.invoke(auth_app, ["token", "show", "--copy"])
+
+        assert result.exit_code == 1
+        assert "pyperclip" in result.stdout.lower() or "clipboard" in result.stdout.lower()
+
+    def test_token_copy_clipboard_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when clipboard operation itself fails."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="clipboard-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        import sys
+
+        mock_pyperclip_mod = MagicMock()
+        mock_pyperclip_mod.copy.side_effect = Exception("No display available")
+        monkeypatch.setitem(sys.modules, "pyperclip", mock_pyperclip_mod)
+
+        result = runner.invoke(auth_app, ["token", "show", "--copy"])
+
+        assert result.exit_code == 1
+        assert "clipboard" in result.stdout.lower() or "failed" in result.stdout.lower()
+
+    # ── --decode flag ─────────────────────────────────────────────────────────
+
+    def test_token_decode_valid_jwt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Decodes a valid JWT access token and displays header and payload."""
+        import base64
+
+        header_data = {"alg": "RS256", "typ": "JWT"}
+        payload_data = {"sub": "user123", "iss": "https://idp.test"}
+        header_b64 = base64.urlsafe_b64encode(json.dumps(header_data).encode()).rstrip(b"=").decode()
+        payload_b64 = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        valid_jwt = f"{header_b64}.{payload_b64}.fakesig"
+
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token=valid_jwt,
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--decode"])
+
+        assert result.exit_code == 0
+        assert "RS256" in result.stdout
+        assert "user123" in result.stdout
+
+    def test_token_decode_non_jwt_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --decode used but token is not a valid JWT."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="opaque-non-jwt-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--decode"])
+
+        assert result.exit_code == 1
+        assert "jwt" in result.stdout.lower() or "format" in result.stdout.lower()
+
+    # ── --json flag ───────────────────────────────────────────────────────────
+
+    def test_token_decode_json_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Outputs valid JSON when --decode and --json flags are combined."""
+        import base64
+
+        header_data = {"alg": "HS256"}
+        payload_data = {"sub": "json-user", "exp": 9999999999}
+        header_b64 = base64.urlsafe_b64encode(json.dumps(header_data).encode()).rstrip(b"=").decode()
+        payload_b64 = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        valid_jwt = f"{header_b64}.{payload_b64}.fakesig"
+
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token=valid_jwt,
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--decode", "--json"])
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.stdout.strip())
+        assert parsed["header"]["alg"] == "HS256"
+        assert parsed["payload"]["sub"] == "json-user"
+
+    def test_token_json_without_decode_errors(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --json used without --decode."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token="some-token",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--json"])
+
+        assert result.exit_code == 1
+        assert "decode" in result.stdout.lower() or "json" in result.stdout.lower()
+
+    # ── incompatible flag combinations ────────────────────────────────────────
+
+    def test_token_decode_and_header_incompatible(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --decode and --header used together."""
+        import base64
+
+        header_data = {"alg": "RS256"}
+        payload_data = {"sub": "user1"}
+        header_b64 = base64.urlsafe_b64encode(json.dumps(header_data).encode()).rstrip(b"=").decode()
+        payload_b64 = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        valid_jwt = f"{header_b64}.{payload_b64}.fakesig"
+
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token=valid_jwt,
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--decode", "--header"])
+
+        assert result.exit_code == 1
+        assert "decode" in result.stdout.lower() or "header" in result.stdout.lower()
+
+    def test_token_decode_and_copy_incompatible(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Exits with error when --decode and --copy used together."""
+        import base64
+
+        import sys
+
+        mock_pyperclip_mod = MagicMock()
+        monkeypatch.setitem(sys.modules, "pyperclip", mock_pyperclip_mod)
+
+        header_data = {"alg": "RS256"}
+        payload_data = {"sub": "user1"}
+        header_b64 = base64.urlsafe_b64encode(json.dumps(header_data).encode()).rstrip(b"=").decode()
+        payload_b64 = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
+        valid_jwt = f"{header_b64}.{payload_b64}.fakesig"
+
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.get_token.return_value = Token(
+            access_token=valid_jwt,
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        monkeypatch.setattr(token_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(token_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["token", "show", "--decode", "--copy"])
+
+        assert result.exit_code == 1
+        assert "decode" in result.stdout.lower() or "copy" in result.stdout.lower()
+
 
 class TestExtractCodeFromInput:
     """Tests for _extract_code_from_input helper function."""
@@ -433,10 +964,10 @@ class TestExtractCodeFromInput:
         assert state is None
 
     def test_rejects_code_exceeding_max_length(self) -> None:
-        """Rejects code that exceeds maximum code length."""
-        from kstlib.cli.commands.auth.login import _extract_code_from_input
+        """Rejects code that exceeds maximum code length (2048)."""
+        from kstlib.cli.commands.auth.login import _MAX_CODE_LENGTH, _extract_code_from_input
 
-        long_code = "a" * 600
+        long_code = "a" * (_MAX_CODE_LENGTH + 1)
         url = f"https://example.com/callback?code={long_code}&state=xyz"
         code, _state = _extract_code_from_input(url)
 
@@ -523,6 +1054,653 @@ class TestAuthLogin:
 
         assert result.exit_code == 1
         assert "--manual" in result.stdout
+
+    # ── _login_manual() tests ─────────────────────────────────────────────────
+
+    def test_login_manual_success_with_pkce(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual mode succeeds with PKCE provider and full redirect URL."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-xyz",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=["openid", "profile"],
+        )
+        mock_provider = MagicMock()
+        mock_provider.name = "test-provider"
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth?response_type=code&client_id=x",
+            "state-abc",
+            "verifier-xyz",
+        )
+        mock_provider.exchange_code.return_value = mock_token
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(
+            login_mod,
+            "Prompt",
+            MagicMock(ask=MagicMock(return_value="https://app.test/cb?code=authcode123&state=state-abc")),
+        )
+
+        result = runner.invoke(auth_app, ["login", "--manual"])
+
+        assert result.exit_code == 0
+        assert "successfully authenticated" in result.stdout.lower()
+        mock_provider.exchange_code.assert_called_once_with(
+            code="authcode123",
+            state="state-abc",
+            code_verifier="verifier-xyz",
+        )
+
+    def test_login_manual_success_without_pkce(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual mode succeeds with standard provider (no PKCE)."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-abc",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=["openid"],
+        )
+
+        # Provider without get_authorization_url_with_pkce attribute
+        mock_provider = MagicMock(spec=["is_authenticated", "get_authorization_url", "exchange_code"])
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url.return_value = (
+            "https://idp.test/auth",
+            "state-nopkce",
+        )
+        mock_provider.exchange_code.return_value = mock_token
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(
+            login_mod,
+            "Prompt",
+            MagicMock(ask=MagicMock(return_value="rawcode456")),
+        )
+
+        result = runner.invoke(auth_app, ["login", "--manual"])
+
+        assert result.exit_code == 0
+        mock_provider.exchange_code.assert_called_once_with(
+            code="rawcode456",
+            state="state-nopkce",
+            code_verifier=None,
+        )
+
+    def test_login_manual_empty_input(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual mode exits with error when user provides empty input."""
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-xyz",
+            "verifier-xyz",
+        )
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(
+            login_mod,
+            "Prompt",
+            MagicMock(ask=MagicMock(return_value="")),
+        )
+
+        result = runner.invoke(auth_app, ["login", "--manual"])
+
+        assert result.exit_code != 0
+        assert "no input" in result.stdout.lower()
+
+    def test_login_manual_invalid_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual mode exits with error when code cannot be extracted."""
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-xyz",
+            "verifier-xyz",
+        )
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        # Input with invalid characters that fail code extraction
+        monkeypatch.setattr(
+            login_mod,
+            "Prompt",
+            MagicMock(ask=MagicMock(return_value="invalid code with spaces!")),
+        )
+
+        result = runner.invoke(auth_app, ["login", "--manual"])
+
+        assert result.exit_code != 0
+        assert "authorization code" in result.stdout.lower() or "could not extract" in result.stdout.lower()
+
+    def test_login_manual_state_mismatch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual mode exits with error when state parameter does not match."""
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "expected-state",
+            "verifier-xyz",
+        )
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        # Redirect URL with a different state value
+        monkeypatch.setattr(
+            login_mod,
+            "Prompt",
+            MagicMock(ask=MagicMock(return_value="https://app.test/cb?code=abc123&state=tampered-state")),
+        )
+
+        result = runner.invoke(auth_app, ["login", "--manual"])
+
+        assert result.exit_code != 0
+        assert "state mismatch" in result.stdout.lower() or "csrf" in result.stdout.lower()
+
+    def test_login_manual_token_exchange_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual mode exits with error when token exchange fails."""
+        from kstlib.auth.errors import TokenExchangeError
+
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-abc",
+            "verifier-xyz",
+        )
+        mock_provider.exchange_code.side_effect = TokenExchangeError("invalid_grant")
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(
+            login_mod,
+            "Prompt",
+            MagicMock(ask=MagicMock(return_value="https://app.test/cb?code=authcode123&state=state-abc")),
+        )
+
+        result = runner.invoke(auth_app, ["login", "--manual"])
+
+        assert result.exit_code != 0
+        assert "token exchange failed" in result.stdout.lower()
+
+    def test_login_manual_quiet_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual mode with --quiet suppresses verbose output."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-quiet",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=[],
+        )
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-abc",
+            "verifier-xyz",
+        )
+        mock_provider.exchange_code.return_value = mock_token
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(
+            login_mod,
+            "Prompt",
+            MagicMock(ask=MagicMock(return_value="https://app.test/cb?code=code1&state=state-abc")),
+        )
+
+        result = runner.invoke(auth_app, ["login", "--manual", "--quiet"])
+
+        assert result.exit_code == 0
+        # Quiet mode should not print "Exchanging authorization code for token..."
+        assert "exchanging" not in result.stdout.lower()
+
+    # ── _login_with_callback() tests ──────────────────────────────────────────
+
+    def test_login_callback_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode completes successfully with valid code and state."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.callback import CallbackResult
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-callback",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=["openid"],
+        )
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-cb",
+            "verifier-cb",
+        )
+        mock_provider.exchange_code.return_value = mock_token
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code="cbcode123",
+            state="state-cb",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code == 0
+        assert "successfully authenticated" in result.stdout.lower()
+
+    def test_login_callback_no_browser_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode with --no-browser prints URL instead of opening browser."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.callback import CallbackResult
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-nobrowser",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=[],
+        )
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth?response_type=code",
+            "state-nb",
+            "verifier-nb",
+        )
+        mock_provider.exchange_code.return_value = mock_token
+
+        mock_browser = MagicMock()
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code="nbcode",
+            state="state-nb",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", mock_browser)
+
+        result = runner.invoke(auth_app, ["login", "--no-browser"])
+
+        assert result.exit_code == 0
+        # URL printed in output, browser not opened
+        assert "https://idp.test/auth" in result.stdout
+        mock_browser.open.assert_not_called()
+
+    def test_login_callback_without_pkce(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode works with provider that does not support PKCE."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.callback import CallbackResult
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-nopkce",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=[],
+        )
+
+        mock_provider = MagicMock(spec=["is_authenticated", "get_authorization_url", "exchange_code"])
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url.return_value = ("https://idp.test/auth", "state-nopkce")
+        mock_provider.exchange_code.return_value = mock_token
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code="nopkce-code",
+            state="state-nopkce",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code == 0
+        mock_provider.exchange_code.assert_called_once_with(
+            code="nopkce-code",
+            state="state-nopkce",
+            code_verifier=None,
+        )
+
+    def test_login_callback_returns_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode exits with error when IdP returns an error response."""
+        from kstlib.auth.callback import CallbackResult
+
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-err",
+            "verifier-err",
+        )
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code=None,
+            state="state-err",
+            error="access_denied",
+            error_description="User denied access",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code != 0
+        assert "authorization failed" in result.stdout.lower() or "user denied" in result.stdout.lower()
+
+    def test_login_callback_no_code_received(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode exits with error when no authorization code is received."""
+        from kstlib.auth.callback import CallbackResult
+
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-nocode",
+            "verifier-nocode",
+        )
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code=None,
+            state="state-nocode",
+            error=None,
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code != 0
+        assert "no authorization code" in result.stdout.lower()
+
+    def test_login_callback_state_mismatch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode exits with error when returned state does not match."""
+        from kstlib.auth.callback import CallbackResult
+
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "expected-state",
+            "verifier-xyz",
+        )
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code="valid-code",
+            state="tampered-state",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code != 0
+        assert "state mismatch" in result.stdout.lower() or "csrf" in result.stdout.lower()
+
+    def test_login_callback_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode exits with error when waiting for callback times out."""
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-timeout",
+            "verifier-timeout",
+        )
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.side_effect = TimeoutError("timed out")
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code != 0
+        assert "timed out" in result.stdout.lower()
+
+    def test_login_callback_quiet_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Callback mode with --quiet suppresses progress messages."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.callback import CallbackResult
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-quiet-cb",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=[],
+        )
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-quiet",
+            "verifier-quiet",
+        )
+        mock_provider.exchange_code.return_value = mock_token
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code="quiet-code",
+            state="state-quiet",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login", "--quiet"])
+
+        assert result.exit_code == 0
+        assert "opening browser" not in result.stdout.lower()
+        assert "waiting for callback" not in result.stdout.lower()
+
+    # ── login() entry point tests ─────────────────────────────────────────────
+
+    def test_login_force_flag_re_authenticates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--force flag bypasses already-authenticated check."""
+        from datetime import datetime, timedelta, timezone
+
+        from kstlib.auth.callback import CallbackResult
+        from kstlib.auth.models import Token, TokenType
+
+        mock_token = Token(
+            access_token="access-force",
+            token_type=TokenType.BEARER,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=[],
+        )
+        mock_provider = MagicMock()
+        # Already authenticated, but --force should bypass the check
+        mock_provider.is_authenticated = True
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-force",
+            "verifier-force",
+        )
+        mock_provider.exchange_code.return_value = mock_token
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = CallbackResult(
+            code="force-code",
+            state="state-force",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login", "--force"])
+
+        assert result.exit_code == 0
+        # Should NOT show "already authenticated" message
+        assert "already" not in result.stdout.lower()
+
+    def test_login_already_authenticated_quiet(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Already-authenticated message is shorter in --quiet mode."""
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = True
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+
+        result = runner.invoke(auth_app, ["login", "--quiet"])
+
+        assert result.exit_code == 0
+        assert "already authenticated" in result.stdout.lower()
+
+    def test_login_token_exchange_error_at_top_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """TokenExchangeError raised in callback mode is caught at top level."""
+        from kstlib.auth.errors import TokenExchangeError
+
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-te",
+            "verifier-te",
+        )
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.return_value = MagicMock(
+            error=None,
+            code="te-code",
+            state="state-te",
+        )
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        mock_provider.exchange_code.side_effect = TokenExchangeError("server_error")
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code != 0
+        assert "token exchange failed" in result.stdout.lower()
+
+    def test_login_auth_error_at_top_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """AuthError raised during login is caught and displayed."""
+        from kstlib.auth.errors import AuthError
+
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.side_effect = AuthError("auth backend unavailable")
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+
+        mock_server = MagicMock()
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code != 0
+        assert "authentication failed" in result.stdout.lower()
+
+    def test_login_keyboard_interrupt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """KeyboardInterrupt during login is caught and shows cancellation message."""
+        mock_provider = MagicMock()
+        mock_provider.is_authenticated = False
+        mock_provider.get_authorization_url_with_pkce.return_value = (
+            "https://idp.test/auth",
+            "state-ki",
+            "verifier-ki",
+        )
+
+        mock_server = MagicMock()
+        mock_server.wait_for_callback.side_effect = KeyboardInterrupt()
+        mock_server.__enter__ = MagicMock(return_value=mock_server)
+        mock_server.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(login_mod, "resolve_provider_name", lambda p: "test-provider")
+        monkeypatch.setattr(login_mod, "get_provider", lambda p: mock_provider)
+        monkeypatch.setattr(login_mod, "get_callback_server_config", lambda: {"host": "127.0.0.1", "port": 8400})
+        monkeypatch.setattr(login_mod, "CallbackServer", MagicMock(return_value=mock_server))
+        monkeypatch.setattr(login_mod, "webbrowser", MagicMock())
+
+        result = runner.invoke(auth_app, ["login"])
+
+        assert result.exit_code != 0
+        assert "cancelled" in result.stdout.lower()
 
 
 class TestAuthCheck:

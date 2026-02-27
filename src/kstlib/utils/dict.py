@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__all__ = ["deep_merge"]
+
 import copy
 from collections.abc import Mapping
 from typing import Any

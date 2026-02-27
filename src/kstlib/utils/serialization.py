@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 def _default_encoder(obj: Any) -> Any:
-    """Default JSON encoder for complex types.
+    """Encode complex types for JSON serialization.
 
     Handles:
     - datetime objects (ISO format)

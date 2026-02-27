@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.3] - 2026-02-27
+
+### Changed
+
+- **Full quality sweep** - Comprehensive code quality audit and fixes across 35 files
+  - Add `__all__` exports to 5 modules (cache/decorator, cache/strategies, logging/manager,
+    utils/dict, config/export)
+  - Expose `ops` module via lazy loading in root `__init__.py`
+  - Fix all D401 (imperative mood) docstring violations in 12 src/ files
+  - Add ~137 missing test function docstrings (D103) across 9 test files
+  - Simplify `MANIFEST.in` (use `prune .*` instead of individual exclusions)
+  - Add `coverage.json` to `.gitignore`
+
+### Fixed
+
+- **3 mypy --strict errors** - Remove stale `type: ignore` comments for authlib, fix duplicate
+  `__all__` in config/export, fix unreachable code in test_auth_cli
+- **`test_rejects_code_exceeding_max_length`** - Use `_MAX_CODE_LENGTH + 1` instead of
+  hardcoded value that became too small after limit was raised to 2048
+- **CLI test coverage** - token.py (28% to 100%), attach.py (35% to 100%),
+  login.py (47% to 99%)
+
 ## [1.7.2] - 2026-02-27
 
 ### Fixed
@@ -376,6 +398,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.7.3]: https://github.com/KaminoU/kstlib/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/KaminoU/kstlib/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/KaminoU/kstlib/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/KaminoU/kstlib/compare/v1.6.2...v1.7.0

@@ -63,6 +63,7 @@ cli_common_mod = importlib.import_module("kstlib.cli.common")
 
 @pytest.fixture(name="runner")
 def runner_fixture() -> CliRunner:
+    """Provide a Typer CliRunner for invoking CLI commands in tests."""
     return CliRunner()
 
 
@@ -111,6 +112,7 @@ def test_doctor_reports_ready(monkeypatch: pytest.MonkeyPatch, runner: CliRunner
 
 
 def test_doctor_uses_configured_sops_binary(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
+    """Verify doctor invokes the SOPS binary name from kstlib config."""
     captured: list[str] = []
 
     def fake_which(binary: str) -> str | None:
@@ -149,6 +151,7 @@ def test_doctor_uses_configured_sops_binary(monkeypatch: pytest.MonkeyPatch, run
 
 
 def test_doctor_fails_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
+    """Ensure doctor exits with code 1 and reports error when sops is absent."""
     monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: None)
     monkeypatch.setattr(doctor_mod, "get_config", lambda: SimpleNamespace(secrets=None))
     monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: [])
@@ -169,6 +172,7 @@ def test_doctor_fails_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runner:
 
 
 def test_encrypt_writes_to_stdout(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify encrypt prints ciphertext to stdout when no output file is given."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
 
@@ -184,6 +188,7 @@ def test_encrypt_writes_to_stdout(monkeypatch: pytest.MonkeyPatch, runner: CliRu
 
 
 def test_encrypt_errors_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Ensure encrypt exits with code 1 and reports a clear error when sops is missing."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
 
@@ -200,6 +205,7 @@ def test_encrypt_errors_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runne
 
 
 def test_decrypt_writes_to_stdout(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify decrypt prints plaintext to stdout when no output file is given."""
     encrypted = tmp_path / "secrets.sops.yml"
     encrypted.write_text("dummy", encoding="utf-8")
 
@@ -214,6 +220,7 @@ def test_decrypt_writes_to_stdout(monkeypatch: pytest.MonkeyPatch, runner: CliRu
 
 
 def test_decrypt_errors_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Ensure decrypt exits with code 1 and reports a clear error when sops is missing."""
     encrypted = tmp_path / "secrets.sops.yml"
     encrypted.write_text("dummy", encoding="utf-8")
 
@@ -230,6 +237,7 @@ def test_decrypt_errors_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runne
 
 
 def test_doctor_warns_when_config_missing(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
+    """Ensure doctor reports a subsystem warning when kstlib config is not loaded."""
     monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: "/usr/bin/sops")
 
     class DummyBackend:  # pylint: disable=too-few-public-methods
@@ -309,6 +317,7 @@ def test_encrypt_refuses_to_overwrite_without_force(
     runner: CliRunner,
     tmp_path: Any,
 ) -> None:
+    """Ensure encrypt refuses to overwrite an existing output file without --force."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
     output = tmp_path / "encrypted.sops.yml"
@@ -327,6 +336,7 @@ def test_encrypt_refuses_to_overwrite_without_force(
 
 
 def test_encrypt_reports_non_zero_exit(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Report sops stderr output and exit with code 1 on non-zero sops exit."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
 
@@ -344,6 +354,7 @@ def test_decrypt_refuses_to_overwrite_without_force(
     runner: CliRunner,
     tmp_path: Any,
 ) -> None:
+    """Ensure decrypt refuses to overwrite an existing output file without --force."""
     encrypted = tmp_path / "secrets.sops.yml"
     encrypted.write_text("encrypted", encoding="utf-8")
     output = tmp_path / "decrypted.yml"
@@ -362,6 +373,7 @@ def test_decrypt_refuses_to_overwrite_without_force(
 
 
 def test_decrypt_reports_non_zero_exit(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Report sops stderr and exit with code 1 when decryption fails."""
     encrypted = tmp_path / "secrets.sops.yml"
     encrypted.write_text("encrypted", encoding="utf-8")
 
@@ -375,6 +387,7 @@ def test_decrypt_reports_non_zero_exit(monkeypatch: pytest.MonkeyPatch, runner: 
 
 
 def test_encrypt_quiet_suppresses_output(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify --quiet flag produces no stdout output on successful encrypt."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
 
@@ -392,6 +405,7 @@ def test_encrypt_with_shred_removes_cleartext(
     runner: CliRunner,
     tmp_path: Any,
 ) -> None:
+    """Delete the cleartext file after successful encryption when --shred is set."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
 
@@ -416,6 +430,7 @@ def test_encrypt_with_shred_removes_cleartext(
 
 
 def test_shred_command_requires_confirmation(runner: CliRunner, tmp_path: Any) -> None:
+    """Verify shred aborts when user denies confirmation prompt."""
     target = tmp_path / "secrets.yml"
     target.write_text("token", encoding="utf-8")
 
@@ -427,6 +442,7 @@ def test_shred_command_requires_confirmation(runner: CliRunner, tmp_path: Any) -
 
 
 def test_shred_command_force(runner: CliRunner, tmp_path: Any) -> None:
+    """Verify shred deletes the file when --force flag is provided."""
     target = tmp_path / "secrets.yml"
     target.write_text("token", encoding="utf-8")
 
@@ -438,6 +454,7 @@ def test_shred_command_force(runner: CliRunner, tmp_path: Any) -> None:
 
 
 def test_shred_command_reports_failure(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify shred command exits with error when deletion fails."""
     target = tmp_path / "secrets.yml"
     target.write_text("token", encoding="utf-8")
 
@@ -459,6 +476,7 @@ def test_shred_command_reports_failure(monkeypatch: pytest.MonkeyPatch, runner: 
 
 
 def test_encrypt_shred_failure_aborts(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify encrypt aborts with error when post-encrypt shred fails."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
 
@@ -483,6 +501,7 @@ def test_encrypt_shred_failure_aborts(monkeypatch: pytest.MonkeyPatch, runner: C
 
 
 def test_encrypt_shred_passes_options(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify encrypt forwards all shred CLI options to shred_file."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
 
@@ -541,6 +560,7 @@ def test_encrypt_shred_passes_options(monkeypatch: pytest.MonkeyPatch, runner: C
 
 
 def test_encrypt_uses_config_option(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify encrypt passes --config path as first sops argument."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
     config_path = tmp_path / "custom.sops.yaml"
@@ -568,6 +588,7 @@ def test_encrypt_uses_default_config_when_present(
     runner: CliRunner,
     tmp_path: Any,
 ) -> None:
+    """Verify encrypt auto-detects and uses a .sops.yaml in the home directory."""
     cleartext = tmp_path / "secrets.yml"
     cleartext.write_text("token: plain", encoding="utf-8")
     default_config = tmp_path / ".sops.yaml"
@@ -592,6 +613,7 @@ def test_encrypt_uses_default_config_when_present(
 
 
 def test_shred_command_passes_options(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
+    """Verify shred forwards all CLI options to shred_file."""
     target = tmp_path / "secrets.yml"
     target.write_text("token", encoding="utf-8")
 
@@ -672,6 +694,7 @@ def test_doctor_reports_missing_keyring_as_warning(monkeypatch: pytest.MonkeyPat
 
 
 def test_run_sops_command_raises_when_binary_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Raise FileNotFoundError when the sops binary is not found on PATH."""
     monkeypatch.setattr(secrets_common_mod.shutil, "which", lambda _: None)
 
     with pytest.raises(FileNotFoundError):
@@ -679,6 +702,7 @@ def test_run_sops_command_raises_when_binary_missing(monkeypatch: pytest.MonkeyP
 
 
 def test_run_sops_command_invokes_binary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify run_sops_command builds the correct subprocess call."""
     monkeypatch.setattr(secrets_common_mod.shutil, "which", lambda _: "/usr/bin/sops")
 
     captured: dict[str, Any] = {}
@@ -696,6 +720,7 @@ def test_run_sops_command_invokes_binary(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_build_encrypt_args_includes_optional_flags(tmp_path: Any) -> None:
+    """Verify _build_encrypt_args emits age, kms, and data-key flags."""
     source = Path(tmp_path) / "input.yml"
     out = Path(tmp_path) / "output.sops.yml"
     options = EncryptCommandOptions(
@@ -740,6 +765,7 @@ def test_build_encrypt_args_includes_optional_flags(tmp_path: Any) -> None:
 
 
 def test_build_encrypt_args_includes_config(tmp_path: Any) -> None:
+    """Verify _build_encrypt_args prepends --config when a config path is set."""
     source = Path(tmp_path) / "input.yml"
     config = Path(tmp_path) / "config.yaml"
     options = EncryptCommandOptions(
@@ -768,6 +794,7 @@ def test_build_encrypt_args_includes_config(tmp_path: Any) -> None:
 
 
 def test_build_decrypt_args_includes_output(tmp_path: Any) -> None:
+    """Verify _build_decrypt_args includes --output flag when an output path is given."""
     source = Path(tmp_path) / "secrets.sops.yml"
     out = Path(tmp_path) / "plain.yml"
 

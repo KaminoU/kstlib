@@ -413,7 +413,7 @@ def rate_limiter(
     timeout: float | None = None,
     name: str | None = None,
 ) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:
-    """Decorator to rate limit function calls.
+    """Rate limit calls to the decorated function.
 
     Can be used with or without arguments:
 

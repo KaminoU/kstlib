@@ -26,17 +26,25 @@ from kstlib.config.exceptions import ConfigFileNotFoundError
 class CachedCallable(Protocol):
     """Protocol describing helpers exposed by cached callables."""
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Invoke the cached callable with positional and keyword arguments."""
+        ...
 
-    def cache_info(self) -> dict[str, Any]: ...
+    def cache_info(self) -> dict[str, Any]:
+        """Return cache statistics as a dictionary."""
+        ...
 
-    def cache_clear(self) -> None: ...
+    def cache_clear(self) -> None:
+        """Evict all entries from the cache."""
+        ...
 
 
 class AsyncCachedCallable(CachedCallable, Protocol):
     """Protocol for cached async callables."""
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Awaitable[Any]: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> Awaitable[Any]:
+        """Invoke the async cached callable and return an awaitable."""
+        ...
 
 
 P = ParamSpec("P")
@@ -69,11 +77,13 @@ class TestTTLCacheStrategy:
     """Behavioural tests for the TTL strategy."""
 
     def test_basic_get_set(self) -> None:
+        """Store and retrieve a value using the TTL strategy."""
         strategy = TTLCacheStrategy(ttl=10)
         strategy.set("key1", "value1")
         assert strategy.get("key1") == "value1"
 
     def test_expiration(self) -> None:
+        """Verify that entries are evicted after the TTL elapses."""
         strategy = TTLCacheStrategy(ttl=1)
         strategy.set("key1", "value1")
         assert strategy.get("key1") == "value1"
@@ -81,6 +91,7 @@ class TestTTLCacheStrategy:
         assert strategy.get("key1") is None
 
     def test_max_entries(self) -> None:
+        """Oldest entry is evicted when max_entries limit is reached."""
         strategy = TTLCacheStrategy(ttl=100, max_entries=2)
         strategy.set("key1", "value1")
         strategy.set("key2", "value2")
@@ -90,6 +101,7 @@ class TestTTLCacheStrategy:
         assert strategy.get("key3") == "value3"
 
     def test_clear(self) -> None:
+        """Confirm that clear() removes all TTL cache entries."""
         strategy = TTLCacheStrategy()
         strategy.set("a", 1)
         strategy.set("b", 2)
@@ -102,11 +114,13 @@ class TestLRUCacheStrategy:
     """Behavioural tests for the LRU strategy."""
 
     def test_basic_get_set(self) -> None:
+        """Store and retrieve a value using the LRU strategy."""
         strategy = LRUCacheStrategy(maxsize=4)
         strategy.set("item", 123)
         assert strategy.get("item") == 123
 
     def test_lru_eviction(self) -> None:
+        """Least recently used entry is evicted when capacity is exceeded."""
         strategy = LRUCacheStrategy(maxsize=2)
         strategy.set("one", 1)
         strategy.set("two", 2)
@@ -117,6 +131,7 @@ class TestLRUCacheStrategy:
         assert strategy.get("three") == 3
 
     def test_update_moves_to_end(self) -> None:
+        """Updating an existing entry refreshes its LRU position."""
         strategy = LRUCacheStrategy(maxsize=2)
         strategy.set("one", 1)
         strategy.set("two", 2)
@@ -127,6 +142,7 @@ class TestLRUCacheStrategy:
         assert strategy.get("three") == 3
 
     def test_clear(self) -> None:
+        """Confirm that clear() removes all LRU cache entries."""
         strategy = LRUCacheStrategy()
         strategy.set("item", "value")
         strategy.clear()
@@ -137,16 +153,19 @@ class TestFileCacheStrategy:
     """Tests for the file-backed cache strategy."""
 
     def test_basic_get_set(self, tmp_path: Path) -> None:
+        """Store and retrieve a value using the file-backed strategy."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         strategy.set("key", "value")
         assert strategy.get("key") == "value"
 
     def test_persistence(self, tmp_path: Path) -> None:
+        """Cached value survives across separate strategy instances."""
         cache_dir = tmp_path / ".cache"
         FileCacheStrategy(cache_dir=str(cache_dir)).set("key", "value")
         assert FileCacheStrategy(cache_dir=str(cache_dir)).get("key") == "value"
 
     def test_mtime_invalidation(self, tmp_path: Path) -> None:
+        """Modified source file invalidates the cached entry."""
         cache_dir = tmp_path / ".cache"
         source = tmp_path / "source.txt"
         source.write_text("initial")
@@ -160,6 +179,7 @@ class TestFileCacheStrategy:
         assert strategy.get("key") is None
 
     def test_clear(self, tmp_path: Path) -> None:
+        """Confirm that clear() removes all file-backed cache entries."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         strategy.set("x", 1)
         strategy.set("y", 2)
@@ -168,6 +188,7 @@ class TestFileCacheStrategy:
         assert strategy.get("y") is None
 
     def test_corrupted_cache_file(self, tmp_path: Path) -> None:
+        """Corrupted cache file is discarded and None is returned."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         cache_file = tmp_path / "bad.cache"
         cache_file.write_bytes(b"not pickle data")
@@ -175,6 +196,7 @@ class TestFileCacheStrategy:
         assert not cache_file.exists()
 
     def test_file_strategy_memory_fallback(self, tmp_path: Path) -> None:
+        """In-memory fallback serves cached value when disk file is gone."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         strategy.set("memory", "value")
         cache_file = tmp_path / "memory.cache"
@@ -183,6 +205,7 @@ class TestFileCacheStrategy:
         assert strategy.get("memory") == "value"
 
     def test_file_strategy_handles_corrupted_file(self, tmp_path: Path) -> None:
+        """Corrupted cache file is deleted and None is returned on get."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         key = "corrupted"
         file_path = tmp_path / f"{key}.cache"
@@ -191,6 +214,7 @@ class TestFileCacheStrategy:
         assert not file_path.exists()
 
     def test_file_strategy_json_unserializable(self, tmp_path: Path) -> None:
+        """Non-JSON-serializable values fall back to in-memory cache only."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
 
         class NotSerializable:
@@ -201,6 +225,7 @@ class TestFileCacheStrategy:
         assert "nonjson" in strategy._memory_cache  # pylint: disable=protected-access
 
     def test_file_strategy_pickle_fallback(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+        """Failed pickle serialization falls back to in-memory cache."""
         with pytest.warns(DeprecationWarning, match="pickle serializer is deprecated"):
             strategy = FileCacheStrategy(cache_dir=str(tmp_path), serializer="pickle")
 
@@ -214,6 +239,7 @@ class TestFileCacheStrategy:
         assert "unpickleable" in strategy._memory_cache  # pylint: disable=protected-access
 
     def test_file_strategy_loads_legacy_pickle(self, tmp_path: Path) -> None:
+        """Legacy pickle cache files are loaded and their value extracted."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         key = "legacy"
         cache_file = tmp_path / f"{key}.cache"
@@ -221,12 +247,14 @@ class TestFileCacheStrategy:
         assert strategy.get(key) == "old"
 
     def test_memory_cache_eviction(self, tmp_path: Path) -> None:
+        """Oldest in-memory entry is evicted when memory_max_entries is reached."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path), memory_max_entries=1)
         strategy.set("alpha", "a")
         strategy.set("beta", "b")
         assert list(strategy._memory_cache.keys()) == ["beta"]  # pylint: disable=protected-access
 
     def test_memory_cache_reload_respects_limit(self, tmp_path: Path) -> None:
+        """Disk reload into memory respects the memory_max_entries limit."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path), memory_max_entries=1)
         strategy.set("persisted", "value")
         # Clear in-memory cache to force disk reload
@@ -235,6 +263,7 @@ class TestFileCacheStrategy:
         assert list(strategy._memory_cache.keys()) == ["persisted"]  # pylint: disable=protected-access
 
     def test_memory_cache_unbounded(self, tmp_path: Path) -> None:
+        """All entries are retained when memory_max_entries is None."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path), memory_max_entries=None)
         strategy.set("alpha", "a")
         strategy.set("beta", "b")
@@ -246,6 +275,7 @@ class TestCacheDecorator:
     """Integration tests for the public cache decorator."""
 
     def test_basic_caching(self) -> None:
+        """Decorated function is only called once for the same arguments."""
         call_count = 0
 
         @typed_cache
@@ -262,6 +292,7 @@ class TestCacheDecorator:
         assert call_count == 1
 
     def test_ttl_strategy(self) -> None:
+        """TTL-backed decorator re-calls function after expiry."""
         call_count = 0
 
         @typed_cache(strategy="ttl", ttl=1)
@@ -281,6 +312,8 @@ class TestCacheDecorator:
         assert call_count == 2
 
     def test_lru_strategy(self) -> None:
+        """Verify LRU-backed decorator reports correct strategy metadata."""
+
         @typed_cache(strategy="lru", maxsize=2)
         def fibonacci(n: int) -> int:
             if n < 2:
@@ -295,6 +328,7 @@ class TestCacheDecorator:
 
     @pytest.mark.asyncio
     async def test_async_caching(self) -> None:
+        """Verify async functions are cached correctly across awaits."""
         call_count = 0
 
         @typed_cache(ttl=10)
@@ -316,6 +350,7 @@ class TestCacheDecorator:
         assert info["is_async"] is True
 
     def test_cache_clear(self) -> None:
+        """Verify cache_clear() forces subsequent calls to re-invoke the function."""
         call_count = 0
 
         @typed_cache
@@ -334,6 +369,7 @@ class TestCacheDecorator:
         assert call_count == 4
 
     def test_kwargs_caching(self) -> None:
+        """Verify equivalent kwargs signatures share the same cache entry."""
         call_count = 0
 
         @typed_cache
@@ -354,6 +390,8 @@ class TestCacheDecorator:
         assert call_count == 2
 
     def test_config_fallback(self, monkeypatch: MonkeyPatch) -> None:
+        """Verify cache works when config file is not found."""
+
         def mock_get_config() -> Any:
             raise ConfigFileNotFoundError("No config found")
 
@@ -369,6 +407,8 @@ class TestCacheDecorator:
         assert cached_compute(5) == 10
 
     def test_signature_binding_fallback(self) -> None:
+        """Verify make_key falls back gracefully when binding kwargs with **kwargs."""
+
         def func(x: Any, **_kwargs: Any) -> Any:
             return x
 
@@ -377,6 +417,8 @@ class TestCacheDecorator:
         assert key
 
     def test_make_key_bind_failure(self) -> None:
+        """Verify make_key produces a valid key even when signature binding fails."""
+
         def func(required: int) -> int:
             return required
 
@@ -385,6 +427,8 @@ class TestCacheDecorator:
         assert key
 
     def test_ttl_cleanup_removes_expired_entries(self, monkeypatch: MonkeyPatch) -> None:
+        """Verify TTL cleanup removes stale cache entries after interval elapses."""
+
         class TimeStub:
             def __init__(self) -> None:
                 self.current = 0.0
@@ -403,6 +447,7 @@ class TestCacheDecorator:
         assert "key" not in strategy._cache  # pylint: disable=protected-access
 
     def test_file_strategy_memory_fallback(self, tmp_path: Path) -> None:
+        """Verify in-memory fallback serves value when disk file is gone."""
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         strategy.set("present", "value")
         cache_file = tmp_path / "present.cache"
@@ -411,6 +456,8 @@ class TestCacheDecorator:
         assert strategy.get("present") == "value"
 
     def test_get_cache_config_with_cache_section(self, monkeypatch: MonkeyPatch) -> None:
+        """Verify _get_cache_config extracts settings from cache config section."""
+
         class DummyConfig:
             def __init__(self) -> None:
                 self.cache = {
@@ -428,6 +475,7 @@ class TestCacheDecorator:
         assert config["lru"]["typed"] is True
 
     def test_create_strategy_file_uses_config_defaults(self, monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+        """Verify file strategy is created with cache_dir from config defaults."""
         cache_dir = tmp_path / "custom-cache"
 
         def config_factory() -> dict[str, Any]:
@@ -444,6 +492,8 @@ class TestCacheDecorator:
         assert strategy.check_mtime is False
 
     def test_create_strategy_unknown_falls_back_to_ttl(self, monkeypatch: MonkeyPatch) -> None:
+        """Verify unknown strategy name falls back to TTL strategy."""
+
         def empty_config() -> dict[str, Any]:
             return {}
 

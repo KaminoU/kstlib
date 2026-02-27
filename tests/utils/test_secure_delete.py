@@ -17,6 +17,7 @@ SECURE_DELETE_MODULE = importlib.import_module("kstlib.utils.secure_delete")
 
 
 def test_secure_delete_noop_when_missing(tmp_path: Path) -> None:
+    """Return a successful no-op report when the target file does not exist."""
     target = tmp_path / "missing.txt"
 
     report = secure_delete(target)
@@ -27,6 +28,7 @@ def test_secure_delete_noop_when_missing(tmp_path: Path) -> None:
 
 
 def test_secure_delete_overwrite_removes_file(tmp_path: Path) -> None:
+    """Overwrite method removes the file and reports success."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -39,6 +41,7 @@ def test_secure_delete_overwrite_removes_file(tmp_path: Path) -> None:
 
 
 def test_secure_delete_uses_shred_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Invoke shred on Linux when AUTO method is selected."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -67,6 +70,7 @@ def test_secure_delete_uses_shred_command(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 
 def test_secure_delete_command_zero_last_pass(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Pass --zero flag to shred when zero_last_pass is enabled."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -93,6 +97,7 @@ def test_secure_delete_command_zero_last_pass(monkeypatch: pytest.MonkeyPatch, t
 
 
 def test_secure_delete_uses_srm_on_darwin(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Invoke srm on macOS with the expected flags when AUTO method is selected."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -121,6 +126,7 @@ def test_secure_delete_uses_srm_on_darwin(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 
 def test_secure_delete_command_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Report failure and preserve the file when the shred command exits non-zero."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -145,6 +151,7 @@ def test_secure_delete_command_failure(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 
 def test_secure_delete_auto_falls_back_to_overwrite(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Fall back to OVERWRITE and succeed when the shred command fails in AUTO mode."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -168,6 +175,7 @@ def test_secure_delete_auto_falls_back_to_overwrite(monkeypatch: pytest.MonkeyPa
 
 
 def test_secure_delete_rejects_invalid_passes(tmp_path: Path) -> None:
+    """Raise ValueError when passes is less than one."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -176,6 +184,7 @@ def test_secure_delete_rejects_invalid_passes(tmp_path: Path) -> None:
 
 
 def test_secure_delete_requires_regular_file(tmp_path: Path) -> None:
+    """Raise ValueError when the target path is a directory rather than a file."""
     directory = tmp_path / "folder"
     directory.mkdir()
 
@@ -184,6 +193,7 @@ def test_secure_delete_requires_regular_file(tmp_path: Path) -> None:
 
 
 def test_secure_delete_removes_zero_length_file(tmp_path: Path) -> None:
+    """Remove a zero-length file and report the dedicated success message."""
     target = tmp_path / "empty.bin"
     target.touch()
 
@@ -195,6 +205,7 @@ def test_secure_delete_removes_zero_length_file(tmp_path: Path) -> None:
 
 
 def test_secure_delete_reports_overwrite_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Report OVERWRITE failure and keep the file when fsync raises OSError."""
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 

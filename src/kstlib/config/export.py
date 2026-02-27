@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "ConfigExportError",
+    "ConfigExportOptions",
+    "ConfigExportResult",
+    "export_configuration",
+]
+
 import io
 import json
 import shutil
@@ -215,11 +222,3 @@ def _wrap_with_path(value: Any, path_parts: list[str]) -> Any:
     for part in reversed(path_parts):
         wrapped = {part: wrapped}
     return wrapped
-
-
-__all__: Final[tuple[str, ...]] = (
-    "ConfigExportError",
-    "ConfigExportOptions",
-    "ConfigExportResult",
-    "export_configuration",
-)

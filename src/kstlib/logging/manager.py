@@ -76,6 +76,8 @@ ALLOWED_LOG_EXTENSIONS: frozenset[str] = frozenset({".log", ".txt", ".json", ""}
 #     HAS_ASYNC = False
 HAS_ASYNC = False
 
+__all__ = ["HAS_ASYNC", "LOGGING_LEVEL", "SUCCESS_LEVEL", "TRACE_LEVEL", "LogManager"]
+
 # Custom log levels
 TRACE_LEVEL = 5  # Below DEBUG (10) - for HTTP traces, detailed diagnostics
 SUCCESS_LEVEL = 25  # Between INFO (20) and WARNING (30)
@@ -342,7 +344,7 @@ class LogManager(logging.Logger):
         )
 
     def _setup_handlers(self) -> None:
-        """Setup console and/or file handlers based on config."""
+        """Set up console and/or file handlers based on config."""
         # Clear existing handlers to prevent duplication on re-initialization
         # (Python loggers are singletons by name, so handlers accumulate)
         self.handlers.clear()
@@ -359,7 +361,7 @@ class LogManager(logging.Logger):
             self._setup_file_handler()
 
     def _setup_console_handler(self) -> None:
-        """Setup Rich console handler."""
+        """Set up the Rich console handler."""
         console_config = self._config.console
         rich_handler = RichHandler(
             console=self.console,
@@ -373,7 +375,7 @@ class LogManager(logging.Logger):
         self.addHandler(rich_handler)
 
     def _setup_file_handler(self) -> None:
-        """Setup file handler with rotation.
+        """Set up the file handler with rotation.
 
         Supports two configuration styles:
             - New style: ``file.file_path`` (single path, recommended)

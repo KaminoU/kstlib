@@ -329,7 +329,7 @@ class MailBuilder:
         include_return: bool = False,
         include_traceback: bool = True,
     ) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:
-        """Decorator to send email notifications on function execution.
+        """Send email notifications on function execution.
 
         Sends a notification email after the decorated function completes,
         reporting success or failure with execution metrics.

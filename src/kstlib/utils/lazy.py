@@ -13,7 +13,7 @@ T = TypeVar("T")
 
 
 def lazy_factory(module_path: str, class_name: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Decorator for lazy loading of classes in factory functions.
+    """Defer import of a class until the factory function is first called.
 
     Defers the import of the specified class until the factory is actually called,
     reducing startup time when the factory is registered but not used.

@@ -206,7 +206,7 @@ class Monitoring:
         return list(self._collectors)
 
     def collector(self, func: F) -> F:
-        """Decorator to register a collector function.
+        """Register a collector function.
 
         The function name becomes the template variable name.
 
@@ -270,7 +270,7 @@ class Monitoring:
         return result
 
     def run_sync(self, *, deliver: bool = True) -> MonitoringResult:
-        """Synchronous version of run().
+        """Run the monitoring pipeline synchronously.
 
         Args:
             deliver: If True and delivery is configured, send the result.

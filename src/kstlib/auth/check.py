@@ -406,7 +406,7 @@ class TokenChecker:
 
             jwt.decode(
                 self._token_str,
-                report.jwks_data,  # pyright: ignore[reportArgumentType]
+                report.jwks_data,
             )
 
             report.steps.append(

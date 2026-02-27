@@ -349,7 +349,7 @@ class WebSocketManager:
         )
 
     async def _establish_connection(self) -> None:
-        """Internal connection establishment with timeout."""
+        """Establish the WebSocket connection with timeout and retry logic."""
         last_error: BaseException | None = None
 
         for attempt in range(1, self._max_reconnect_attempts + 2):

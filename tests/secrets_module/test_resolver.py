@@ -39,6 +39,7 @@ class DummyProvider(SecretProvider):
         self._value = value
 
     def resolve(self, request: SecretRequest) -> SecretRecord | None:
+        """Return a record with the preset value, or None if not set."""
         if self._value is None:
             return None
         return SecretRecord(
@@ -61,6 +62,7 @@ register_provider("dummy-null", _make_dummy_null_provider)
 
 
 def test_resolve_secret_returns_provider_value() -> None:
+    """Verify resolve_secret returns the value from the configured provider."""
     record = resolve_secret(
         "smtp.password",
         config={"providers": [{"name": "dummy", "options": {"value": "hunter2"}}]},
@@ -72,6 +74,7 @@ def test_resolve_secret_returns_provider_value() -> None:
 
 
 def test_resolve_secret_uses_default_when_not_required() -> None:
+    """Verify resolve_secret returns the default value when secret is not found."""
     record = resolve_secret(
         "missing.secret",
         config={"providers": [{"name": "dummy-null"}]},
@@ -84,6 +87,7 @@ def test_resolve_secret_uses_default_when_not_required() -> None:
 
 
 def test_resolve_secret_raises_when_required_and_missing() -> None:
+    """Raise SecretNotFoundError when a required secret is missing."""
     with pytest.raises(SecretNotFoundError):
         resolve_secret("missing.secret", config={"providers": [{"name": "dummy-null"}]})
 
@@ -91,6 +95,7 @@ def test_resolve_secret_raises_when_required_and_missing() -> None:
 def test_get_secret_resolver_attaches_sops_provider_when_configured(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
+    """Verify get_secret_resolver attaches a SOPSProvider when sops config is given."""
     secrets_dir = tmp_path_factory.mktemp("secrets")
     secrets_path = secrets_dir / "credentials.sops.yml"
     resolver = get_secret_resolver({"sops": {"path": secrets_path}})
@@ -99,6 +104,7 @@ def test_get_secret_resolver_attaches_sops_provider_when_configured(
 
 
 def test_secret_resolver_returns_default_record_when_not_required() -> None:
+    """Verify SecretResolver returns a default record when secret is not required."""
     resolver = SecretResolver([])
     record = resolver.resolve(
         SecretRequest(name="missing", scope=None, required=False, default="fallback"),
@@ -110,6 +116,7 @@ def test_secret_resolver_returns_default_record_when_not_required() -> None:
 
 
 def test_secret_resolver_default_record_includes_custom_name() -> None:
+    """Verify default record metadata includes the custom resolver name."""
     resolver = SecretResolver([], name="secrets")
     record = resolver.resolve(
         SecretRequest(name="example", scope=None, required=False, default=None),
@@ -121,6 +128,7 @@ def test_secret_resolver_default_record_includes_custom_name() -> None:
 
 @pytest.mark.asyncio
 async def test_secret_resolver_async_raises_when_required() -> None:
+    """Raise SecretNotFoundError on async resolve when secret is required."""
     resolver = SecretResolver([])
     request = SecretRequest(name="missing", scope=None, required=True, default=None)
 
@@ -130,6 +138,7 @@ async def test_secret_resolver_async_raises_when_required() -> None:
 
 @pytest.mark.asyncio
 async def test_secret_resolver_async_returns_default_metadata() -> None:
+    """Verify async resolve returns default metadata including async flag."""
     resolver = SecretResolver([])
     record = await resolver.resolve_async(
         SecretRequest(name="missing", scope=None, required=False, default="value"),
@@ -142,6 +151,8 @@ async def test_secret_resolver_async_returns_default_metadata() -> None:
 
 @pytest.mark.asyncio
 async def test_secret_provider_default_resolve_async_uses_thread() -> None:
+    """Verify the default resolve_async delegates to resolve via a thread."""
+
     class AsyncProbeProvider(SecretProvider):
         name = "probe"
 
@@ -163,6 +174,8 @@ async def test_secret_provider_default_resolve_async_uses_thread() -> None:
 
 @pytest.mark.asyncio
 async def test_secret_resolver_async_returns_provider_record() -> None:
+    """Verify async resolver returns the record from an async-only provider."""
+
     class AsyncOnlyProvider(SecretProvider):
         name = "async-only"
 
@@ -183,6 +196,7 @@ async def test_secret_resolver_async_returns_provider_record() -> None:
 
 @pytest.mark.asyncio
 async def test_secret_resolver_async_optional_without_default_returns_none() -> None:
+    """Verify async resolve returns a None-valued record for optional missing secrets."""
     resolver = SecretResolver([])
     request = SecretRequest(name="missing", scope=None, required=False, default=None)
 
@@ -193,6 +207,8 @@ async def test_secret_resolver_async_optional_without_default_returns_none() -> 
 
 
 def test_secret_provider_base_configure_handles_settings() -> None:
+    """Verify base configure() accepts None, empty dict, and ignored settings."""
+
     class ConfigProbeProvider(SecretProvider):
         name = "config-probe"
 
@@ -207,12 +223,14 @@ def test_secret_provider_base_configure_handles_settings() -> None:
 
 
 def test_secret_resolver_exposes_name_property() -> None:
+    """Expose resolver name via the name property."""
     resolver = SecretResolver([], name="accounts")
 
     assert resolver.name == "accounts"
 
 
 def test_get_secret_resolver_with_custom_provider_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pass custom provider settings through resolver factory."""
     captured_settings: list[dict[str, Any] | None] = []
 
     class TrackingProvider(SecretProvider):
@@ -256,11 +274,13 @@ def test_get_secret_resolver_with_custom_provider_settings(monkeypatch: pytest.M
 
 
 def test_get_secret_resolver_missing_provider_name_raises() -> None:
+    """Raise ValueError when provider config lacks a name."""
     with pytest.raises(ValueError):
         get_secret_resolver({"providers": [{}]})
 
 
 def test_build_sops_provider_applies_alias_and_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Apply alias and settings when building a SOPS provider."""
     captured_options: dict[str, Any] = {}
     captured_settings: list[dict[str, Any] | None] = []
     provider = DummyProvider(value="ignored")
@@ -292,6 +312,7 @@ def test_build_sops_provider_applies_alias_and_settings(monkeypatch: pytest.Monk
 
 
 def test_build_sops_provider_accepts_binary_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Forward custom binary option to the SOPS provider factory."""
     captured_options: dict[str, Any] = {}
     provider = DummyProvider(value="ignored")
 
@@ -314,6 +335,8 @@ def test_build_sops_provider_accepts_binary_option(monkeypatch: pytest.MonkeyPat
 
 
 def test_resolve_secret_uses_global_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve secrets using the global kstlib configuration."""
+
     class GlobalConfig:
         def __init__(self, data: dict[str, Any]) -> None:
             self.secrets = types.SimpleNamespace(to_dict=lambda: data)

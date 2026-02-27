@@ -813,8 +813,7 @@ def get_config(
     force_reload: bool = False,
     max_age: float | None = None,
 ) -> Box:
-    """
-    Returns the current kstlib configuration object (singleton).
+    """Return the current kstlib configuration object (singleton).
 
     Loads the configuration only once, unless `force_reload=True` is set.
 
@@ -847,8 +846,7 @@ def get_config(
 
 
 def require_config() -> Box:
-    """
-    Returns the configuration object, raising an exception if not loaded.
+    """Return the configuration object, raising an exception if not loaded.
 
     Use this when you need to ensure a config is available.
 

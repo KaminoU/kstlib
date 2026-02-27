@@ -862,7 +862,7 @@ def call(
     confirm: str | None = None,
     **kwargs: Any,
 ) -> RapiResponse:
-    """Convenience function for quick API calls.
+    """Make a quick synchronous API call using a temporary RapiClient.
 
     Creates a temporary RapiClient and makes the call.
 
@@ -893,7 +893,7 @@ async def call_async(
     confirm: str | None = None,
     **kwargs: Any,
 ) -> RapiResponse:
-    """Convenience function for async API calls.
+    """Make a quick asynchronous API call using a temporary RapiClient.
 
     Creates a temporary RapiClient and makes the async call.
 

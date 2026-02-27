@@ -120,6 +120,7 @@ pylock.body*.tmp
 infra/.env
 
 # Coverage reports
+coverage.json
 coverage.xml
 
 # Build artifacts

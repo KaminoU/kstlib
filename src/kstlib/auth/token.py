@@ -440,7 +440,7 @@ def get_token_storage(
     directory: Path | str | None = None,
     **kwargs: Any,
 ) -> AbstractTokenStorage:
-    """Factory function to create a token storage backend.
+    """Create a token storage backend.
 
     Args:
         storage_type: Type of storage ("memory", "file", or "sops").

@@ -1031,7 +1031,7 @@ def call_stats(
     name: str | None = None,
     print_on_call: bool = False,
 ) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:
-    """Decorator to track call statistics.
+    """Track call statistics for the decorated function.
 
     Tracks call count, total time, min, max, and average duration.
     Use get_call_stats() or print_all_call_stats() to access results.

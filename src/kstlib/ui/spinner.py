@@ -379,7 +379,7 @@ class Spinner:
     # ------------------------------------------------------------------
 
     def _animate(self) -> None:
-        """Main animation loop running in background thread."""
+        """Run the main animation loop in the background thread."""
         while self._running:
             self._render_frame()
             time.sleep(self._interval)
@@ -582,7 +582,7 @@ def with_spinner(
     log_zone_height: int | None = None,
     **spinner_kwargs: Any,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """Decorator that wraps a function with a spinner, capturing its prints.
+    """Wrap a function with a spinner, capturing its prints.
 
     Args:
         message: Spinner message to display.

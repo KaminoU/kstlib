@@ -123,7 +123,7 @@ class MailFilesystemGuards:
 
     @classmethod
     def relaxed_for_testing(cls, root: Path) -> MailFilesystemGuards:
-        """Helper for tests/examples that need a temporary relaxed environment."""
+        """Create a guards instance with relaxed path policy for tests and examples."""
         policy = RELAXED_POLICY
         attachments_guard = PathGuardrails(root / "attachments", policy=policy)
         inline_guard = PathGuardrails(root / "inline", policy=policy)

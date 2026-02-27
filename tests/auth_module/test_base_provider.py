@@ -104,9 +104,11 @@ class ConcreteAuthProvider(AbstractAuthProvider):
 
     @property
     def flow(self) -> AuthFlow:
+        """Return the authorization flow type."""
         return AuthFlow.AUTHORIZATION_CODE
 
     def get_authorization_url(self, state: str | None = None) -> tuple[str, str]:
+        """Return a fake authorization URL and state for testing."""
         return ("https://auth.example.com/authorize", state or "test-state")
 
     def exchange_code(
@@ -116,6 +118,7 @@ class ConcreteAuthProvider(AbstractAuthProvider):
         *,
         code_verifier: str | None = None,
     ) -> Token:
+        """Exchange an authorization code for a token."""
         return Token(
             access_token="new_access_token",
             token_type="Bearer",
@@ -123,6 +126,7 @@ class ConcreteAuthProvider(AbstractAuthProvider):
         )
 
     def refresh(self, token: Token | None = None) -> Token:
+        """Return a refreshed token with a new access token."""
         return Token(
             access_token="refreshed_access_token",
             token_type="Bearer",
@@ -130,9 +134,11 @@ class ConcreteAuthProvider(AbstractAuthProvider):
         )
 
     def revoke(self, token: Token | None = None) -> bool:
+        """Revoke the token and return True."""
         return True
 
     def preflight(self) -> PreflightReport:
+        """Return a successful preflight report."""
         return PreflightReport(
             provider_name=self.name,
             results=[PreflightResult(step="test", status=PreflightStatus.SUCCESS, message="OK")],
