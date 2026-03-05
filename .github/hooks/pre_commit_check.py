@@ -66,11 +66,50 @@ def check_lockfiles() -> int:
     return 0
 
 
+def check_sops_files() -> int:
+    """Verify staged SOPS files are still encrypted. Returns 0 on success."""
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        capture_output=True,
+        text=True,
+    )
+    staged = result.stdout.strip().splitlines()
+    sops_files = [f for f in staged if "sops" in f and f.endswith((".yml", ".yaml", ".json"))]
+
+    if not sops_files:
+        return 0
+
+    print("  Checking SOPS files...")
+    errors = 0
+    for fpath in sops_files:
+        path = Path(fpath)
+        if not path.exists():
+            continue
+        content = path.read_text(encoding="utf-8")
+        if "sops:" not in content and '"sops":' not in content:
+            print(f"    {fpath}: missing sops metadata block (decrypted?)")
+            errors += 1
+
+    if errors:
+        print(f"  {errors} SOPS file(s) appear decrypted. Encrypt before committing.")
+        return 1
+
+    print("  SOPS files OK.")
+    return 0
+
+
 def main() -> int:
     """Main entry point."""
     print("=" * 60)
     print("Pre-commit check")
     print("=" * 60)
+
+    # Always check SOPS files (fast, critical)
+    sops_result = check_sops_files()
+    if sops_result != 0:
+        print()
+        print("❌ SOPS check failed. Encrypt files before committing.")
+        return sops_result
 
     if MARKER.exists():
         print(f"✓ Tox marker found ({MARKER})")

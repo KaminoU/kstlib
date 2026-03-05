@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.6] - 2026-03-06
+
+### Security
+
+- **Harden `ContainerRunner.exec()`** - Add `validate_command()` input validation before execution,
+  consistent with `SessionConfig.__post_init__` validation
+- **Harden `TmuxRunner.send_keys()`** - Add `validate_session_name()` input validation before
+  passing session name to tmux subprocess
+- **Pre-commit SOPS guard** - Add `check_sops_files()` to pre-commit hook to block commits
+  containing decrypted SOPS files (missing `sops:` metadata block)
+
 ## [1.7.5] - 2026-03-05
 
 ### Security
@@ -420,6 +431,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.7.6]: https://github.com/KaminoU/kstlib/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/KaminoU/kstlib/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/KaminoU/kstlib/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/KaminoU/kstlib/compare/v1.7.2...v1.7.3

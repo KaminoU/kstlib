@@ -41,6 +41,7 @@ from kstlib.ops.exceptions import (
     SessionStopError,
 )
 from kstlib.ops.models import BackendType, SessionConfig, SessionState, SessionStatus
+from kstlib.ops.validators import validate_command
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -560,6 +561,7 @@ class ContainerRunner:
         Raises:
             SessionNotFoundError: If container doesn't exist.
         """
+        validate_command(command)
         if not self.exists(name):
             raise SessionNotFoundError(name, "container")
 

@@ -39,6 +39,7 @@ from kstlib.ops.exceptions import (
     TmuxNotFoundError,
 )
 from kstlib.ops.models import BackendType, SessionConfig, SessionState, SessionStatus
+from kstlib.ops.validators import validate_session_name
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -357,6 +358,7 @@ class TmuxRunner:
         Raises:
             SessionNotFoundError: If session doesn't exist.
         """
+        validate_session_name(name)
         if not self.exists(name):
             raise SessionNotFoundError(name, "tmux")
 
