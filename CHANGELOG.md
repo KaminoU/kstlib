@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.5] - 2026-03-05
+
+### Security
+
+- **Pin authlib>=1.6.9** - Tighten minimum version to exclude versions vulnerable to
+  `alg: none` signature verification bypass (CVE-2026-28802)
+- **Pin jinja2>=3.1.5** - Tighten minimum version to exclude versions vulnerable to
+  sandbox bypass leading to RCE (CVE-2024-56326, CVE-2024-56201)
+- **Upgrade werkzeug 3.1.5 to 3.1.6** - Fix `safe_join()` path traversal on Windows
+  (dependabot #7, transitive dependency via moto)
+
+### Changed
+
+- Sync `uv.lock` and `pylock.toml` with updated dependency constraints
+
 ## [1.7.4] - 2026-03-04
 
 ### Security
@@ -405,6 +420,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.7.5]: https://github.com/KaminoU/kstlib/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/KaminoU/kstlib/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/KaminoU/kstlib/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/KaminoU/kstlib/compare/v1.7.1...v1.7.2

@@ -47,14 +47,14 @@ dependencies = [
     "aiosqlite>=0.21,<1",   # Async SQLite wrapper
     "aiosmtplib>=4.0,<5",   # Async SMTP client (email sending)
     "websockets>=15.0,<16", # WebSocket server/client
-    "jinja2>=3.1,<4",       # Template engine (used for mails, configs, etc.)
+    "jinja2>=3.1.5,<4",     # Template engine (used for mails, configs, etc.)
 
     # --- Formatting & Display ---
     "humanize>=4.11,<5", # Human-friendly formatting (file sizes, time deltas, etc.)
 
     # --- HTTP Client & Auth ---
     "httpx>=0.28,<1",  # Modern async HTTP client (OAuth2/OIDC flows)
-    "authlib>=1.5,<2", # OAuth2/OIDC client + JWT signature verification
+    "authlib>=1.6.9,<2", # OAuth2/OIDC client + JWT signature verification
 
     # --- Time & Scheduling ---
     "pendulum>=3.0,<4", # Modern datetime library with timezone support
@@ -506,4 +506,3 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
-
