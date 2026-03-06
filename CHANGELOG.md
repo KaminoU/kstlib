@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.7] - 2026-03-06
+
+### Fixed
+
+- **tmux custom socket discovery** - `TmuxRunner` now supports sessions started with
+  `tmux -L <name>` (custom sockets). Previously, `kstlib ops list` only discovered sessions
+  on the default socket, making multi-bot setups (e.g. Orion on `-L orion`) invisible.
+  - `TmuxRunner(socket_name=...)` injects `-L` flag in all tmux commands including `attach`
+  - `SessionStatus.socket_name` tracks the origin socket for each session
+  - `_discover_tmux_sockets()` auto-scans `/tmp/tmux-{uid}/` for non-default sockets
+  - `kstlib ops list` shows a new **Socket** column and `socket_name` in JSON output
+  - New `--socket / -L` CLI option on `start`, `stop`, `attach`, `logs`, `status`
+  - `SessionManager` and `auto_detect_backend` propagate socket context end-to-end
+
 ## [1.7.6] - 2026-03-06
 
 ### Security
@@ -431,6 +445,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.7.7]: https://github.com/KaminoU/kstlib/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/KaminoU/kstlib/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/KaminoU/kstlib/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/KaminoU/kstlib/compare/v1.7.3...v1.7.4

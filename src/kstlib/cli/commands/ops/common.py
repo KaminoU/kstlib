@@ -105,6 +105,13 @@ LINES_OPTION = typer.Option(
     help="Number of lines to show.",
 )
 
+SOCKET_OPTION = typer.Option(
+    None,
+    "--socket",
+    "-L",
+    help="tmux socket name (for sessions started with tmux -L <name>).",
+)
+
 
 # ============================================================================
 # Helper Functions
@@ -179,12 +186,13 @@ def _try_from_config(
     return manager
 
 
-def get_session_manager(
+def get_session_manager(  # noqa: C901, PLR0913
     name: str,
     *,
     backend: str | None = None,
     image: str | None = None,
     command: str | None = None,
+    socket_name: str | None = None,
     from_config: bool = True,
 ) -> SessionManager:
     """Get or create a SessionManager.
@@ -198,6 +206,7 @@ def get_session_manager(
         backend: Override backend type.
         image: Container image (for container backend).
         command: Command to run.
+        socket_name: Custom tmux socket name.
         from_config: If True, try to load from config first.
 
     Returns:
@@ -215,7 +224,7 @@ def get_session_manager(
 
         # Auto-detect backend if not specified
         if backend is None:
-            detected = auto_detect_backend(name)
+            detected = auto_detect_backend(name, socket_name=socket_name)
             if detected is not None:
                 backend = detected.value
 
@@ -227,6 +236,8 @@ def get_session_manager(
             kwargs["image"] = image
         if command:
             kwargs["command"] = command
+        if socket_name:
+            kwargs["socket_name"] = socket_name
 
         return SessionManager(name, **kwargs)
     except SessionAmbiguousError as e:
@@ -261,6 +272,7 @@ __all__ = [
     "PORT_OPTION",
     "QUIET_OPTION",
     "SESSION_ARGUMENT",
+    "SOCKET_OPTION",
     "TIMEOUT_OPTION",
     "VOLUME_OPTION",
     "WORKDIR_OPTION",

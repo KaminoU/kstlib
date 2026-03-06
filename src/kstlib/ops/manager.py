@@ -44,7 +44,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def auto_detect_backend(name: str) -> BackendType | None:
+def auto_detect_backend(
+    name: str,
+    *,
+    socket_name: str | None = None,
+) -> BackendType | None:
     """Auto-detect which backend a session exists in.
 
     Checks both tmux and container backends to find where a session with
@@ -53,6 +57,7 @@ def auto_detect_backend(name: str) -> BackendType | None:
 
     Args:
         name: Session name to search for.
+        socket_name: Custom tmux socket name to check.
 
     Returns:
         BackendType if found in exactly one backend, None if not found.
@@ -74,7 +79,7 @@ def auto_detect_backend(name: str) -> BackendType | None:
 
     # Check tmux backend (skip if not installed)
     try:
-        tmux_runner = TmuxRunner()
+        tmux_runner = TmuxRunner(socket_name=socket_name)
         if tmux_runner.exists(name):
             found_in.append("tmux")
     except TmuxNotFoundError:
@@ -193,10 +198,14 @@ class SessionManager:
             raise SessionConfigError(str(e)) from None
 
         # Initialize the appropriate runner
+        self._socket_name: str | None = kwargs.get("socket_name")
         self._runner: AbstractRunner
         if self._backend == BackendType.TMUX:
             tmux_binary = kwargs.get("tmux_binary", "tmux")
-            self._runner = TmuxRunner(binary=tmux_binary)
+            self._runner = TmuxRunner(
+                binary=tmux_binary,
+                socket_name=self._socket_name,
+            )
         else:
             runtime = kwargs.get("runtime")  # None = auto-detect
             self._runner = ContainerRunner(runtime=runtime)
@@ -281,6 +290,7 @@ class SessionManager:
             "log_volume": session_data.get("log_volume"),
             "tmux_binary": tmux_binary,
             "runtime": session_data.get("runtime", container_runtime),
+            "socket_name": session_data.get("socket_name"),
         }
 
         return cls(name, **kwargs)

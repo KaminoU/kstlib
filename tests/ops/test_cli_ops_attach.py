@@ -65,7 +65,7 @@ class TestOpsAttach:
         with patch.object(attach_mod, "get_session_manager", return_value=mock_manager) as mock_gsm:
             result = runner.invoke(app, ["ops", "attach", "prod", "--backend", "tmux"])
         assert result.exit_code == 0
-        mock_gsm.assert_called_once_with("prod", backend="tmux")
+        mock_gsm.assert_called_once_with("prod", backend="tmux", socket_name=None)
         mock_manager.attach.assert_called_once()
 
     def test_attach_session_not_found_via_exists(self) -> None:

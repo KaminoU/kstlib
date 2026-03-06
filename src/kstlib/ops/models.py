@@ -135,6 +135,7 @@ class SessionStatus:
         pid: Process ID (tmux server PID or container main PID).
         created_at: ISO timestamp when the session was created.
         window_count: Number of tmux windows (tmux backend only).
+        socket_name: tmux socket name for custom sockets (tmux backend only).
         image: Container image name (container backend only).
         exit_code: Container exit code if exited (container backend only).
 
@@ -163,6 +164,7 @@ class SessionStatus:
     created_at: str | None = None
     # tmux-specific
     window_count: int = 0
+    socket_name: str | None = None
     # container-specific
     image: str | None = None
     exit_code: int | None = None

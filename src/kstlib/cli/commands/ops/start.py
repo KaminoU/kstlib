@@ -18,6 +18,7 @@ from .common import (
     PORT_OPTION,
     QUIET_OPTION,
     SESSION_ARGUMENT,
+    SOCKET_OPTION,
     VOLUME_OPTION,
     WORKDIR_OPTION,
     get_session_manager,
@@ -34,6 +35,7 @@ def start(  # noqa: PLR0913
     env: list[str] | None = ENV_OPTION,
     volume: list[str] | None = VOLUME_OPTION,
     port: list[str] | None = PORT_OPTION,
+    socket: str | None = SOCKET_OPTION,
 ) -> None:
     """Start a new session.
 
@@ -44,7 +46,7 @@ def start(  # noqa: PLR0913
     Examples:
         kstlib ops start dev --backend tmux --command "python app.py"
         kstlib ops start prod --backend container --image app:latest
-        kstlib ops start astro  # Uses config from kstlib.conf.yml
+        kstlib ops start orion --socket orion --command "python bot.py"
     """
     # Parse environment variables
     env_dict: dict[str, str] = {}
@@ -62,6 +64,7 @@ def start(  # noqa: PLR0913
             backend=backend,
             image=image,
             command=command,
+            socket_name=socket,
         )
 
         # Build kwargs for start

@@ -17,6 +17,7 @@ from .common import (
     JSON_OPTION,
     QUIET_OPTION,
     SESSION_ARGUMENT,
+    SOCKET_OPTION,
     get_session_manager,
 )
 
@@ -67,6 +68,7 @@ def status(
     backend: str | None = BACKEND_OPTION,
     quiet: bool = QUIET_OPTION,
     json: bool = JSON_OPTION,
+    socket: str | None = SOCKET_OPTION,
 ) -> None:
     """Show status of a session.
 
@@ -76,9 +78,10 @@ def status(
     Examples:
         kstlib ops status dev
         kstlib ops status prod --json
+        kstlib ops status orion --socket orion
     """
     try:
-        manager = get_session_manager(name, backend=backend)
+        manager = get_session_manager(name, backend=backend, socket_name=socket)
 
         if not manager.exists():
             # Try config fallback for defined-but-not-started sessions
@@ -97,6 +100,7 @@ def status(
                 "pid": session_status.pid,
                 "created_at": session_status.created_at,
                 "window_count": session_status.window_count,
+                "socket_name": session_status.socket_name,
                 "image": session_status.image,
                 "exit_code": session_status.exit_code,
             }
@@ -120,6 +124,7 @@ def status(
             ("PID", str(session_status.pid) if session_status.pid else None),
             ("Created", _format_created_at(session_status.created_at)),
             ("Windows", str(session_status.window_count) if session_status.window_count > 0 else None),
+            ("Socket", session_status.socket_name),
             ("Image", session_status.image),
             ("Exit Code", str(session_status.exit_code) if session_status.exit_code is not None else None),
         ]

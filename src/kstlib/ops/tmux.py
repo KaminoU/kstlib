@@ -51,10 +51,12 @@ class TmuxRunner:
     """tmux session runner for local development.
 
     Manages tmux sessions for running persistent processes with
-    detach/attach capability.
+    detach/attach capability. Supports custom sockets via the ``-L`` flag
+    for multi-instance setups (e.g. multiple bots on a single host).
 
     Args:
         binary: Path or name of the tmux binary.
+        socket_name: Custom tmux socket name (``-L`` flag).
 
     Attributes:
         binary: The tmux binary path (validated on first use).
@@ -66,14 +68,21 @@ class TmuxRunner:
         >>> runner.attach("bot")  # doctest: +SKIP
     """
 
-    def __init__(self, binary: str = "tmux") -> None:
+    def __init__(
+        self,
+        binary: str = "tmux",
+        socket_name: str | None = None,
+    ) -> None:
         """Initialize TmuxRunner.
 
         Args:
             binary: Path or name of the tmux binary.
+            socket_name: Custom tmux socket name (``-L`` flag).
+                If None, uses the default tmux socket.
         """
         self._binary_name = binary
         self._binary_path: str | None = None
+        self._socket_name = socket_name
 
     @property
     def binary(self) -> str:
@@ -110,7 +119,10 @@ class TmuxRunner:
         Raises:
             TmuxNotFoundError: If tmux is not installed.
         """
-        cmd = [self.binary, *args]
+        cmd = [self.binary]
+        if self._socket_name:
+            cmd.extend(["-L", self._socket_name])
+        cmd.extend(args)
         logger.debug("Running: %s", " ".join(cmd))
         return subprocess.run(  # noqa: S603
             cmd,
@@ -228,7 +240,11 @@ class TmuxRunner:
 
         # Replace current process with tmux attach
         try:
-            os.execvp(binary, [binary, "attach-session", "-t", name])  # noqa: S606
+            attach_cmd = [binary]
+            if self._socket_name:
+                attach_cmd.extend(["-L", self._socket_name])
+            attach_cmd.extend(["attach-session", "-t", name])
+            os.execvp(binary, attach_cmd)  # noqa: S606
         except OSError as e:
             raise SessionAttachError(name, "tmux", str(e)) from e
 
@@ -270,6 +286,7 @@ class TmuxRunner:
                     pid=int(parts[3]) if parts[3].isdigit() else None,
                     created_at=parts[2] if parts[2] else None,
                     window_count=int(parts[1]) if parts[1].isdigit() else 0,
+                    socket_name=self._socket_name,
                 )
 
         raise SessionNotFoundError(name, "tmux")
@@ -342,6 +359,7 @@ class TmuxRunner:
                         pid=int(parts[3]) if parts[3].isdigit() else None,
                         created_at=parts[2] if parts[2] else None,
                         window_count=int(parts[1]) if parts[1].isdigit() else 0,
+                        socket_name=self._socket_name,
                     )
                 )
 

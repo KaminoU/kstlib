@@ -49,6 +49,12 @@ def runner(mock_which: MagicMock) -> TmuxRunner:
 
 
 @pytest.fixture
+def socket_runner(mock_which: MagicMock) -> TmuxRunner:
+    """Create a TmuxRunner with custom socket."""
+    return TmuxRunner(socket_name="orion")
+
+
+@pytest.fixture
 def config() -> SessionConfig:
     """Create a basic session config."""
     return SessionConfig(
@@ -86,6 +92,124 @@ class TestTmuxRunnerInit:
             runner = TmuxRunner()
             with pytest.raises(TmuxNotFoundError, match="not found in PATH"):
                 _ = runner.binary
+
+    def test_default_socket_name_is_none(self, mock_which: MagicMock) -> None:
+        """Default socket_name is None."""
+        runner = TmuxRunner()
+        assert runner._socket_name is None
+
+    def test_custom_socket_name(self, mock_which: MagicMock) -> None:
+        """Store custom socket name."""
+        runner = TmuxRunner(socket_name="orion")
+        assert runner._socket_name == "orion"
+
+
+# ============================================================================
+# TmuxRunner._run with socket tests
+# ============================================================================
+
+
+class TestTmuxRunnerSocket:
+    """Tests for TmuxRunner socket_name injection."""
+
+    def test_run_without_socket(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """Run command without -L flag when no socket."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        runner.exists("test")
+        cmd = mock_run.call_args[0][0]
+        assert "-L" not in cmd
+
+    def test_run_with_socket(
+        self,
+        socket_runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """Inject -L flag when socket_name is set."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        socket_runner.exists("test")
+        cmd = mock_run.call_args[0][0]
+        assert cmd[1] == "-L"
+        assert cmd[2] == "orion"
+        assert "has-session" in cmd
+
+    def test_list_sessions_with_socket_propagates(
+        self,
+        socket_runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """Sessions listed from custom socket include socket_name."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="orion-bot:1:1000000000:111\n",
+            stderr="",
+        )
+        sessions = socket_runner.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0].socket_name == "orion"
+
+    def test_status_with_socket_propagates(
+        self,
+        socket_runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """Status from custom socket includes socket_name."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="orion-bot:1:1234567890:12345\n",
+            stderr="",
+        )
+        status = socket_runner.status("orion-bot")
+        assert status.socket_name == "orion"
+
+    def test_attach_with_socket(
+        self,
+        socket_runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """Attach injects -L flag for custom socket."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        with patch("kstlib.ops.tmux.os.execvp") as mock_execvp:
+            socket_runner.attach("orion-bot")
+            mock_execvp.assert_called_once_with(
+                "/usr/bin/tmux",
+                ["/usr/bin/tmux", "-L", "orion", "attach-session", "-t", "orion-bot"],
+            )
+
+    def test_default_socket_none_in_status(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """Status from default socket has socket_name=None."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="test-session:1:1234567890:12345\n",
+            stderr="",
+        )
+        status = runner.status("test-session")
+        assert status.socket_name is None
 
 
 # ============================================================================

@@ -15,17 +15,19 @@ from .common import (
     FORCE_OPTION,
     QUIET_OPTION,
     SESSION_ARGUMENT,
+    SOCKET_OPTION,
     TIMEOUT_OPTION,
     get_session_manager,
 )
 
 
-def stop(
+def stop(  # noqa: PLR0913
     name: str = SESSION_ARGUMENT,
     backend: str | None = BACKEND_OPTION,
     quiet: bool = QUIET_OPTION,
     force: bool = FORCE_OPTION,
     timeout: int = TIMEOUT_OPTION,
+    socket: str | None = SOCKET_OPTION,
 ) -> None:
     """Stop a running session.
 
@@ -35,10 +37,10 @@ def stop(
     Examples:
         kstlib ops stop dev
         kstlib ops stop prod --force
-        kstlib ops stop bot --timeout 30
+        kstlib ops stop orion --socket orion
     """
     try:
-        manager = get_session_manager(name, backend=backend)
+        manager = get_session_manager(name, backend=backend, socket_name=socket)
 
         if not manager.exists():
             exit_error(f"Session '{name}' not found.")

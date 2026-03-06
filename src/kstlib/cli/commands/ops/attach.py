@@ -8,6 +8,7 @@ from kstlib.ops.exceptions import OpsError, SessionNotFoundError
 from .common import (
     BACKEND_OPTION,
     SESSION_ARGUMENT,
+    SOCKET_OPTION,
     get_session_manager,
 )
 
@@ -15,6 +16,7 @@ from .common import (
 def attach(
     name: str = SESSION_ARGUMENT,
     backend: str | None = BACKEND_OPTION,
+    socket: str | None = SOCKET_OPTION,
 ) -> None:
     """Attach to a running session.
 
@@ -27,9 +29,10 @@ def attach(
     Examples:
         kstlib ops attach dev
         kstlib ops attach prod --backend container
+        kstlib ops attach orion --socket orion
     """
     try:
-        manager = get_session_manager(name, backend=backend)
+        manager = get_session_manager(name, backend=backend, socket_name=socket)
 
         if not manager.exists():
             exit_error(f"Session '{name}' not found.")

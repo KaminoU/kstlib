@@ -9,6 +9,7 @@ from .common import (
     BACKEND_OPTION,
     LINES_OPTION,
     SESSION_ARGUMENT,
+    SOCKET_OPTION,
     get_session_manager,
 )
 
@@ -17,6 +18,7 @@ def logs(
     name: str = SESSION_ARGUMENT,
     backend: str | None = BACKEND_OPTION,
     lines: int = LINES_OPTION,
+    socket: str | None = SOCKET_OPTION,
 ) -> None:
     """Show logs from a session.
 
@@ -26,9 +28,10 @@ def logs(
     Examples:
         kstlib ops logs dev
         kstlib ops logs prod --lines 50
+        kstlib ops logs orion --socket orion
     """
     try:
-        manager = get_session_manager(name, backend=backend)
+        manager = get_session_manager(name, backend=backend, socket_name=socket)
 
         if not manager.exists():
             exit_error(f"Session '{name}' not found.")

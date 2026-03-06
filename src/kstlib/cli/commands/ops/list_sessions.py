@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json as json_lib
 import logging
+import os
+from pathlib import Path
 from typing import Any
 
 from rich.table import Table
@@ -135,6 +137,28 @@ def _validate_config_session(name: str, data: dict[str, Any]) -> None:
         validate_ports(ports)
 
 
+def _discover_tmux_sockets() -> list[str]:
+    """Discover non-default tmux socket names.
+
+    Scans the tmux socket directory (``/tmp/tmux-{uid}/``) for socket
+    files other than ``default``. Only works on Unix systems.
+
+    Returns:
+        List of custom socket names found.
+    """
+    # getuid is only available on Unix (not Windows)
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:
+        return []
+
+    uid = getuid()
+    socket_dir = Path(f"/tmp/tmux-{uid}")  # noqa: S108
+    if not socket_dir.is_dir():
+        return []
+
+    return [entry.name for entry in socket_dir.iterdir() if entry.name != "default"]
+
+
 def _collect_sessions(backend: str | None) -> list[SessionStatus]:
     """Collect sessions from runtime backends and config definitions.
 
@@ -149,13 +173,21 @@ def _collect_sessions(backend: str | None) -> list[SessionStatus]:
     """
     sessions: list[SessionStatus] = []
 
-    # Collect from tmux
+    # Collect from tmux (default socket + custom sockets)
     if backend is None or backend == "tmux":
         try:
             tmux = TmuxRunner()
             sessions.extend(tmux.list_sessions())
         except BackendNotFoundError:
             pass
+
+        # Discover sessions on custom tmux sockets
+        for socket_name in _discover_tmux_sockets():
+            try:
+                tmux = TmuxRunner(socket_name=socket_name)
+                sessions.extend(tmux.list_sessions())
+            except BackendNotFoundError:
+                pass
 
     # Collect from container
     if backend is None or backend == "container":
@@ -218,6 +250,7 @@ def list_sessions(
                 "backend": s.backend.value,
                 "pid": s.pid,
                 "image": s.image,
+                "socket_name": s.socket_name,
             }
             for s in sessions
         ]
@@ -233,6 +266,7 @@ def list_sessions(
     table.add_column("Name", style="cyan")
     table.add_column("State", style="white")
     table.add_column("Backend", style="blue")
+    table.add_column("Socket", style="dim")
     table.add_column("PID", style="dim")
     table.add_column("Image", style="dim")
 
@@ -242,6 +276,7 @@ def list_sessions(
             session.name,
             f"[{state_style}]{session.state.value}[/]",
             session.backend.value,
+            session.socket_name or "-",
             str(session.pid) if session.pid else "-",
             session.image or "-",
         )
@@ -249,4 +284,4 @@ def list_sessions(
     console.print(table)
 
 
-__all__ = ["list_sessions"]
+__all__ = ["_discover_tmux_sockets", "list_sessions"]
