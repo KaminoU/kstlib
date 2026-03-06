@@ -12,9 +12,11 @@ from typer.testing import CliRunner
 from kstlib.cli.app import app
 from kstlib.ops.exceptions import OpsError, SessionNotFoundError
 
-# Force-import the actual module so patching targets are stable
+# Force-import the actual modules so patching targets are stable
 importlib.import_module("kstlib.cli.commands.ops.attach")
+importlib.import_module("kstlib.cli.commands.ops.common")
 attach_mod = sys.modules["kstlib.cli.commands.ops.attach"]
+common_mod = sys.modules["kstlib.cli.commands.ops.common"]
 
 pytestmark = pytest.mark.cli
 
@@ -110,3 +112,55 @@ class TestOpsAttach:
         assert result.exit_code == 0
         assert "--backend" in result.stdout
         assert "NAME" in result.stdout
+
+    def test_attach_with_socket_option(self) -> None:
+        """Attach passes --socket option to get_session_manager."""
+        mock_manager = _make_mock_manager(exists=True, is_running=True)
+        with patch.object(attach_mod, "get_session_manager", return_value=mock_manager) as mock_gsm:
+            result = runner.invoke(app, ["ops", "attach", "orion", "--socket", "orion"])
+        assert result.exit_code == 0
+        mock_gsm.assert_called_once_with("orion", backend=None, socket_name="orion")
+        mock_manager.attach.assert_called_once()
+
+
+class TestOpsAttachSocketDiscovery:
+    """Tests for auto-discovery of custom tmux sockets on attach."""
+
+    def test_attach_discovers_custom_socket(self) -> None:
+        """Attach auto-discovers session on custom tmux socket."""
+        mock_manager = _make_mock_manager(exists=True, is_running=True)
+        mock_runner = MagicMock()
+        mock_runner.exists.return_value = True
+
+        with (
+            patch.object(common_mod, "discover_tmux_sockets", return_value=["orion"]),
+            patch.object(common_mod, "auto_detect_backend", return_value=None),
+            patch.object(common_mod, "_try_from_config", return_value=None),
+            patch.object(common_mod, "TmuxRunner", return_value=mock_runner),
+            patch.object(common_mod, "SessionManager", return_value=mock_manager) as mock_sm,
+        ):
+            result = runner.invoke(app, ["ops", "attach", "orion"])
+        assert result.exit_code == 0
+        mock_sm.assert_called_once_with(
+            "orion",
+            backend="tmux",
+            socket_name="orion",
+        )
+        mock_manager.attach.assert_called_once()
+
+    def test_attach_no_custom_socket_found(self) -> None:
+        """Attach falls back when session not found on any custom socket."""
+        mock_manager = _make_mock_manager(exists=False)
+        mock_runner = MagicMock()
+        mock_runner.exists.return_value = False
+
+        with (
+            patch.object(common_mod, "discover_tmux_sockets", return_value=["other"]),
+            patch.object(common_mod, "auto_detect_backend", return_value=None),
+            patch.object(common_mod, "_try_from_config", return_value=None),
+            patch.object(common_mod, "TmuxRunner", return_value=mock_runner),
+            patch.object(common_mod, "SessionManager", return_value=mock_manager),
+        ):
+            result = runner.invoke(app, ["ops", "attach", "ghost"])
+        assert result.exit_code == 1
+        assert "not found" in result.stdout.lower()

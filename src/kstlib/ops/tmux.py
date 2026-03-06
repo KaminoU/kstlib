@@ -28,6 +28,7 @@ import logging
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kstlib.ops.exceptions import (
@@ -387,6 +388,28 @@ class TmuxRunner:
         self._run(args)
 
 
+def discover_tmux_sockets() -> list[str]:
+    """Discover non-default tmux socket names.
+
+    Scans the tmux socket directory (``/tmp/tmux-{uid}/``) for socket
+    files other than ``default``. Only works on Unix systems.
+
+    Returns:
+        List of custom socket names found.
+    """
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:
+        return []
+
+    uid = getuid()
+    socket_dir = Path(f"/tmp/tmux-{uid}")  # noqa: S108
+    if not socket_dir.is_dir():
+        return []
+
+    return [entry.name for entry in socket_dir.iterdir() if entry.name != "default"]
+
+
 __all__ = [
     "TmuxRunner",
+    "discover_tmux_sockets",
 ]

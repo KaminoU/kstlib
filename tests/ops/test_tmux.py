@@ -16,7 +16,7 @@ from kstlib.ops.exceptions import (
     TmuxNotFoundError,
 )
 from kstlib.ops.models import BackendType, SessionConfig, SessionState
-from kstlib.ops.tmux import TmuxRunner
+from kstlib.ops.tmux import TmuxRunner, discover_tmux_sockets
 
 if TYPE_CHECKING:
     pass
@@ -700,3 +700,50 @@ class TestTmuxRunnerAttach:
                 "/usr/bin/tmux",
                 ["/usr/bin/tmux", "attach-session", "-t", "test-session"],
             )
+
+
+# ============================================================================
+# discover_tmux_sockets tests
+# ============================================================================
+
+
+class TestDiscoverTmuxSockets:
+    """Tests for the discover_tmux_sockets function."""
+
+    def test_no_getuid(self) -> None:
+        """Return empty if os.getuid is missing (Windows)."""
+        mock_os = MagicMock(spec=[])  # Empty spec -> no getuid attribute
+        with patch("kstlib.ops.tmux.os", mock_os):
+            result = discover_tmux_sockets()
+        assert result == []
+
+    def test_no_socket_dir(self) -> None:
+        """Return empty if socket dir does not exist."""
+        with (
+            patch("kstlib.ops.tmux.os") as mock_os,
+            patch("kstlib.ops.tmux.Path") as mock_path,
+        ):
+            mock_os.getuid.return_value = 1000
+            mock_path.return_value.is_dir.return_value = False
+            result = discover_tmux_sockets()
+        assert result == []
+
+    def test_finds_custom_sockets(self) -> None:
+        """Find custom socket names, exclude 'default'."""
+        mock_entries = [MagicMock(), MagicMock(), MagicMock()]
+        mock_entries[0].name = "default"
+        mock_entries[1].name = "orion"
+        mock_entries[2].name = "astro"
+        with (
+            patch("kstlib.ops.tmux.os") as mock_os,
+            patch("kstlib.ops.tmux.Path") as mock_path,
+        ):
+            mock_os.getuid.return_value = 1000
+            mock_dir = MagicMock()
+            mock_dir.is_dir.return_value = True
+            mock_dir.iterdir.return_value = mock_entries
+            mock_path.return_value = mock_dir
+            result = discover_tmux_sockets()
+        assert "orion" in result
+        assert "astro" in result
+        assert "default" not in result

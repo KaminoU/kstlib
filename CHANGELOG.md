@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.8] - 2026-03-06
+
+### Fixed
+
+- **Oops: `ops attach`/`stop` now auto-discover custom tmux sockets** - v1.7.7 added
+  custom socket discovery for `ops list`, but we didn't follow through: `attach` and `stop`
+  still only checked the default socket, so `kstlib ops attach orion` failed with
+  "Session not found" even though `ops list` showed it just fine. Now `get_session_manager()`
+  scans custom sockets automatically when no `--socket` flag is provided, so `list`, `attach`,
+  and `stop` all share the same discovery logic.
+  - Move `discover_tmux_sockets()` from CLI layer to `kstlib.ops.tmux` (reusable)
+  - `get_session_manager()` scans custom sockets when `socket_name` is None
+  - Validated on EC2: `kstlib ops attach orion` works without `--socket`
+
 ## [1.7.7] - 2026-03-06
 
 ### Fixed
@@ -445,6 +459,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[1.7.8]: https://github.com/KaminoU/kstlib/compare/v1.7.7...v1.7.8
 [1.7.7]: https://github.com/KaminoU/kstlib/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/KaminoU/kstlib/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/KaminoU/kstlib/compare/v1.7.4...v1.7.5

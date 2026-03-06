@@ -548,45 +548,6 @@ class TestOpsListDeepDefense:
 class TestOpsListSocketDiscovery:
     """Tests for tmux socket discovery in session listing."""
 
-    def test_discover_sockets_no_getuid(self) -> None:
-        """Socket discovery returns empty if os.getuid is missing."""
-        mock_os = MagicMock(spec=[])  # Empty spec -> no getuid attribute
-        with patch.object(list_sessions_mod, "os", mock_os):
-            result = list_sessions_mod._discover_tmux_sockets()
-        assert result == []
-
-    def test_discover_sockets_no_dir(self) -> None:
-        """Socket discovery returns empty if socket dir does not exist."""
-        with (
-            patch.object(list_sessions_mod, "os") as mock_os,
-            patch.object(list_sessions_mod, "Path") as mock_path,
-        ):
-            mock_os.getuid.return_value = 1000
-            mock_path.return_value.is_dir.return_value = False
-            result = list_sessions_mod._discover_tmux_sockets()
-        assert result == []
-
-    def test_discover_sockets_finds_custom(self) -> None:
-        """Socket discovery finds custom socket names, excludes 'default'."""
-        mock_entries = [MagicMock(name="default"), MagicMock(name="orion"), MagicMock(name="astro")]
-        # MagicMock(name=...) sets the mock's name, not .name attribute
-        mock_entries[0].name = "default"
-        mock_entries[1].name = "orion"
-        mock_entries[2].name = "astro"
-        with (
-            patch.object(list_sessions_mod, "os") as mock_os,
-            patch.object(list_sessions_mod, "Path") as mock_path,
-        ):
-            mock_os.getuid.return_value = 1000
-            mock_dir = MagicMock()
-            mock_dir.is_dir.return_value = True
-            mock_dir.iterdir.return_value = mock_entries
-            mock_path.return_value = mock_dir
-            result = list_sessions_mod._discover_tmux_sockets()
-        assert "orion" in result
-        assert "astro" in result
-        assert "default" not in result
-
     def test_list_includes_custom_socket_sessions(self) -> None:
         """Sessions from custom sockets appear in list output."""
         default_session = SessionStatus(
@@ -609,7 +570,7 @@ class TestOpsListSocketDiscovery:
             patch.object(list_sessions_mod, "get_config", return_value=config_box),
             patch.object(
                 list_sessions_mod,
-                "_discover_tmux_sockets",
+                "discover_tmux_sockets",
                 return_value=["orion"],
             ),
         ):

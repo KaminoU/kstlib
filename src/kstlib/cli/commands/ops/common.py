@@ -7,9 +7,10 @@ from typing import Any
 import typer
 
 from kstlib.cli.common import CommandResult, CommandStatus, exit_error
-from kstlib.ops import SessionManager
-from kstlib.ops.exceptions import OpsError, SessionAmbiguousError
+from kstlib.ops import SessionManager, TmuxRunner
+from kstlib.ops.exceptions import BackendNotFoundError, OpsError, SessionAmbiguousError
 from kstlib.ops.manager import auto_detect_backend
+from kstlib.ops.tmux import discover_tmux_sockets
 
 # ============================================================================
 # Shared Arguments and Options
@@ -186,7 +187,7 @@ def _try_from_config(
     return manager
 
 
-def get_session_manager(  # noqa: C901, PLR0913
+def get_session_manager(  # noqa: C901, PLR0912, PLR0913
     name: str,
     *,
     backend: str | None = None,
@@ -227,6 +228,18 @@ def get_session_manager(  # noqa: C901, PLR0913
             detected = auto_detect_backend(name, socket_name=socket_name)
             if detected is not None:
                 backend = detected.value
+
+        # If still not found and no explicit socket, scan custom tmux sockets
+        if backend is None and socket_name is None:
+            for sock in discover_tmux_sockets():
+                try:
+                    runner = TmuxRunner(socket_name=sock)
+                    if runner.exists(name):
+                        backend = "tmux"
+                        socket_name = sock
+                        break
+                except BackendNotFoundError:
+                    pass
 
         # Create with explicit options
         kwargs: dict[str, Any] = {}
