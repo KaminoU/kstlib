@@ -4,15 +4,11 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage
-from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
 
 from kstlib.mail.transport import AsyncMailTransport, AsyncTransportWrapper, MailTransport
-
-if TYPE_CHECKING:
-    pass
 
 
 class DummySyncTransport(MailTransport):

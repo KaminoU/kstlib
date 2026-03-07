@@ -35,7 +35,6 @@ class ErrorTransport(MailTransport):
 @pytest.fixture
 def mail_guards(tmp_path: Path) -> MailFilesystemGuards:
     """Provide relaxed guardrails rooted in the temporary workspace."""
-
     return MailFilesystemGuards.relaxed_for_testing(tmp_path)
 
 
@@ -45,7 +44,6 @@ class TestMailBuilder:
     @staticmethod
     def _make_builder(guards: MailFilesystemGuards) -> MailBuilder:
         """Return a builder wired to the provided filesystem guardrails."""
-
         return MailBuilder(filesystem=guards)
 
     def test_builds_plain_message(self, mail_guards: MailFilesystemGuards) -> None:
@@ -230,7 +228,6 @@ class TestMailBuilder:
 
     def test_attachment_outside_guardrail_is_rejected(self, tmp_path: Path, mail_guards: MailFilesystemGuards) -> None:
         """Reject attachments outside the configured guardrail root."""
-
         rogue_path = tmp_path.parent / "rogue.txt"
         rogue_path.write_text("payload", encoding="utf-8")
 

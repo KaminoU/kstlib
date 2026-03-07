@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import pathlib
-from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -20,9 +19,6 @@ from kstlib.monitoring import (
     discover_monitoring_configs,
     load_monitoring_config,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 
 @pytest.fixture

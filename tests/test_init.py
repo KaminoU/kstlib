@@ -104,7 +104,6 @@ def test_cli_app_import() -> None:
 
 def test_traceback_install_respects_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure Rich traceback installation honours the KSTLIB_TRACEBACK flag."""
-
     calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
     def fake_install(*args: Any, **kwargs: Any) -> None:

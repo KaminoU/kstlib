@@ -69,7 +69,7 @@ class TestResolveProviderName:
     def test_exits_when_no_providers_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with error when no providers configured."""
         monkeypatch.setattr(common_mod, "get_default_provider_name", lambda: None)
-        monkeypatch.setattr(common_mod, "list_configured_providers", lambda: [])
+        monkeypatch.setattr(common_mod, "list_configured_providers", list)
 
         with pytest.raises((SystemExit, click.exceptions.Exit)):
             resolve_provider_name(None)
@@ -96,7 +96,7 @@ class TestGetProvider:
 
     def test_exits_when_no_providers_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with helpful message when no providers configured."""
-        monkeypatch.setattr(common_mod, "list_configured_providers", lambda: [])
+        monkeypatch.setattr(common_mod, "list_configured_providers", list)
         monkeypatch.setattr(auth_config_mod, "get_provider_config", lambda n: None)
 
         with pytest.raises((SystemExit, click.exceptions.Exit)):
@@ -186,7 +186,7 @@ class TestAuthProvidersList:
 
     def test_shows_no_providers_message(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Shows message when no providers configured."""
-        monkeypatch.setattr(providers_mod, "list_configured_providers", lambda: [])
+        monkeypatch.setattr(providers_mod, "list_configured_providers", list)
         monkeypatch.setattr(providers_mod, "get_default_provider_name", lambda: None)
 
         result = runner.invoke(auth_app, ["providers"])
@@ -854,7 +854,6 @@ class TestAuthToken:
     def test_token_decode_and_copy_incompatible(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with error when --decode and --copy used together."""
         import base64
-
         import sys
 
         mock_pyperclip_mod = MagicMock()

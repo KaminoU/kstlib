@@ -220,6 +220,7 @@ def _gpg_works_with_temp_dirs() -> bool:
             env = {**os.environ, "GNUPGHOME": tmpdir}
             result = subprocess.run(
                 ["gpg", "--list-keys"],
+                check=False,
                 env=env,
                 capture_output=True,
                 text=True,
@@ -330,6 +331,7 @@ Expire-Date: 0
     # Generate key
     result = subprocess.run(
         ["gpg", "--batch", "--gen-key", str(key_params)],
+        check=False,
         env=env,
         capture_output=True,
         text=True,

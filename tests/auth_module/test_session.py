@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from http import HTTPStatus
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import httpx
@@ -12,10 +11,6 @@ import pytest
 from kstlib.auth.errors import AuthError, TokenExpiredError
 from kstlib.auth.models import Token
 from kstlib.auth.session import AuthSession
-
-if TYPE_CHECKING:
-    pass
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures

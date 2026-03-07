@@ -373,6 +373,28 @@ def test_log_smtp_debug_output_skips_blank_lines(caplog: pytest.LogCaptureFixtur
     assert len(caplog.records) == 0
 
 
+def test_log_smtp_debug_output_redacts_auth_credentials(caplog: pytest.LogCaptureFixture) -> None:
+    """Redact AUTH commands containing base64-encoded credentials."""
+    buffer = io.StringIO("send: 'AUTH PLAIN AGFkbWluAHBhc3N3b3Jk'\n")
+    with caplog.at_level(TRACE_LEVEL, logger="kstlib.mail.transports.smtp"):
+        _log_smtp_debug_output(buffer)
+    records = [r for r in caplog.records if "[SMTP]" in r.message]
+    assert len(records) == 1
+    assert "REDACTED" in records[0].message
+    assert "AGFkbWluAHBhc3N3b3Jk" not in records[0].message
+
+
+def test_log_smtp_debug_output_redacts_auth_login(caplog: pytest.LogCaptureFixture) -> None:
+    """Redact AUTH LOGIN commands."""
+    buffer = io.StringIO("send: 'AUTH LOGIN dXNlcm5hbWU='\n")
+    with caplog.at_level(TRACE_LEVEL, logger="kstlib.mail.transports.smtp"):
+        _log_smtp_debug_output(buffer)
+    records = [r for r in caplog.records if "[SMTP]" in r.message]
+    assert len(records) == 1
+    assert "REDACTED" in records[0].message
+    assert "dXNlcm5hbWU=" not in records[0].message
+
+
 # ---------------------------------------------------------------------------
 # Tests for SMTPTransport with TRACE logging enabled
 # ---------------------------------------------------------------------------

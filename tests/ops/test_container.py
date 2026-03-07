@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Generator
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,10 +17,6 @@ from kstlib.ops.exceptions import (
     SessionStartError,
 )
 from kstlib.ops.models import BackendType, SessionConfig, SessionState
-
-if TYPE_CHECKING:
-    pass
-
 
 # ============================================================================
 # Fixtures

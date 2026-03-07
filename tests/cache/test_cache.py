@@ -70,7 +70,7 @@ class CacheDecorator(Protocol):
     ) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
 
 
-typed_cache = cast(CacheDecorator, cache)
+typed_cache = cast("CacheDecorator", cache)
 
 
 class TestTTLCacheStrategy:
@@ -232,7 +232,7 @@ class TestFileCacheStrategy:
         def fail_dumps(*_args: Any, **_kwargs: Any) -> bytes:
             raise pickle.PicklingError("cannot serialize")
 
-        strategies_any = cast(Any, strategies_module)
+        strategies_any = cast("Any", strategies_module)
         monkeypatch.setattr(strategies_any.pickle, "dumps", fail_dumps)
         strategy.set("unpickleable", "value")
         assert not (tmp_path / "unpickleable.cache").exists()
@@ -284,7 +284,7 @@ class TestCacheDecorator:
             call_count += 1
             return x * 2
 
-        cached_expensive = cast(CachedCallable, expensive)
+        cached_expensive = cast("CachedCallable", expensive)
 
         assert cached_expensive(5) == 10
         assert call_count == 1
@@ -301,7 +301,7 @@ class TestCacheDecorator:
             call_count += 1
             return f"data_{key}"
 
-        cached_get_data = cast(CachedCallable, get_data)
+        cached_get_data = cast("CachedCallable", get_data)
 
         assert cached_get_data("test") == "data_test"
         assert call_count == 1
@@ -320,7 +320,7 @@ class TestCacheDecorator:
                 return n
             return fibonacci(n - 1) + fibonacci(n - 2)
 
-        cached_fibonacci = cast(CachedCallable, fibonacci)
+        cached_fibonacci = cast("CachedCallable", fibonacci)
         info = cached_fibonacci.cache_info()
         assert info["strategy"] == "lru"
         assert info["is_async"] is False
@@ -338,7 +338,7 @@ class TestCacheDecorator:
             await asyncio.sleep(0.01)
             return f"data_from_{url}"
 
-        cached_async_fetch = cast(AsyncCachedCallable, async_fetch)
+        cached_async_fetch = cast("AsyncCachedCallable", async_fetch)
 
         assert await cached_async_fetch("http://example.com") == "data_from_http://example.com"
         assert call_count == 1
@@ -359,7 +359,7 @@ class TestCacheDecorator:
             call_count += 1
             return x
 
-        cached_get_value = cast(CachedCallable, get_value)
+        cached_get_value = cast("CachedCallable", get_value)
         assert cached_get_value(1) == 1
         assert cached_get_value(2) == 2
         assert call_count == 2
@@ -378,7 +378,7 @@ class TestCacheDecorator:
             call_count += 1
             return a + b + c
 
-        cached_process = cast(CachedCallable, process)
+        cached_process = cast("CachedCallable", process)
 
         assert cached_process(1, 2) == 3
         assert call_count == 1
@@ -401,7 +401,7 @@ class TestCacheDecorator:
         def compute(x: int) -> int:
             return x * 2
 
-        cached_compute = cast(CachedCallable, compute)
+        cached_compute = cast("CachedCallable", compute)
 
         assert cached_compute(5) == 10
         assert cached_compute(5) == 10
@@ -437,7 +437,7 @@ class TestCacheDecorator:
                 return self.current
 
         time_stub = TimeStub()
-        strategies_any = cast(Any, strategies_module)
+        strategies_any = cast("Any", strategies_module)
         monkeypatch.setattr(strategies_any.time, "time", time_stub.time)
 
         strategy = strategies_module.TTLCacheStrategy(ttl=2, cleanup_interval=1)
@@ -507,26 +507,22 @@ class TestCacheInternals:
 
     def test_restricted_unpickler_allows_basic_builtins(self) -> None:
         """Ensure whitelisted builtins can be resolved safely."""
-
         unpickler = strategies_module._RestrictedUnpickler(io.BytesIO(b""))
         assert unpickler.find_class("builtins", "dict") is dict
 
     def test_restricted_unpickler_blocks_untrusted_globals(self) -> None:
         """Ensure non-whitelisted globals trigger a ValueError."""
-
         unpickler = strategies_module._RestrictedUnpickler(io.BytesIO(b""))
         with pytest.raises(ValueError):
             unpickler.find_class("os", "system")
 
     def test_file_strategy_rejects_unknown_serializer(self) -> None:
         """Unsupported serializer names must raise immediately."""
-
         with pytest.raises(ValueError):
             FileCacheStrategy(serializer="yaml")
 
     def test_file_strategy_handles_write_failures(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """Disk write failures should not leave cache artifacts behind."""
-
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         cache_file = tmp_path / "fail.cache"
 
@@ -539,7 +535,6 @@ class TestCacheInternals:
 
     def test_auto_serializer_falls_back_to_pickle(self, tmp_path: Path) -> None:
         """Auto serializer should pickle payloads that JSON cannot handle."""
-
         strategy = FileCacheStrategy(cache_dir=str(tmp_path), serializer="auto")
         payload = {"value": {"numbers": {1, 2}}}
         encoded = strategy._serialize_payload(payload)  # pylint: disable=protected-access
@@ -547,7 +542,6 @@ class TestCacheInternals:
 
     def test_serialize_payload_rejects_unknown_serializer(self, tmp_path: Path) -> None:
         """Manual serializer mutations should raise ValueError."""
-
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         strategy.serializer = "unknown"
         with pytest.raises(ValueError):
@@ -555,27 +549,23 @@ class TestCacheInternals:
 
     def test_validate_key_rejects_path_traversal(self) -> None:
         """Cache keys with traversal characters must raise ValueError."""
-
         with pytest.raises(ValueError):
             FileCacheStrategy._validate_key("../secrets")  # pylint: disable=protected-access
 
     def test_json_default_serializes_path_objects(self) -> None:
         """Path objects should serialize as strings for JSON payloads."""
-
         sample_path = Path("data/file.txt")
         result = FileCacheStrategy._json_default(sample_path)  # pylint: disable=protected-access
         assert result == str(sample_path)
 
     def test_deserialize_payload_rejects_empty_data(self, tmp_path: Path) -> None:
         """Empty payloads must raise ValueError during deserialization."""
-
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         with pytest.raises(ValueError):
             strategy._deserialize_payload(b"")  # pylint: disable=protected-access
 
     def test_deserialize_payload_requires_mapping(self, tmp_path: Path) -> None:
         """Non-mapping JSON payloads should raise TypeError."""
-
         strategy = FileCacheStrategy(cache_dir=str(tmp_path))
         with pytest.raises(TypeError):
             strategy._deserialize_payload(b"[]")  # pylint: disable=protected-access

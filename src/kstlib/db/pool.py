@@ -94,7 +94,7 @@ class ConnectionPool:
     acquire_timeout: float = 30.0
     max_retries: int = 3
     retry_delay: float = 0.5
-    cipher_key: str | None = None
+    cipher_key: str | None = field(default=None, repr=False)
     on_connect: Any | None = None  # Callable[[aiosqlite.Connection], Awaitable[None]]
 
     _pool: asyncio.Queue[aiosqlite.Connection] = field(default_factory=lambda: asyncio.Queue(), repr=False)
@@ -278,6 +278,7 @@ class ConnectionPool:
             for conn in self._connections:
                 try:
                     await conn.execute("PRAGMA optimize")
+                    await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     await conn.close()
                 except Exception:
                     # Connection may be already closed - intentional silent catch
@@ -293,6 +294,10 @@ class ConnectionPool:
 
         self._stats.active_connections = 0
         self._stats.idle_connections = 0
+
+        # Clear cipher key reference to reduce exposure window
+        self.cipher_key = None
+
         log.debug("Connection pool closed")
 
     @property

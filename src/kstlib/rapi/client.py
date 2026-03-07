@@ -461,6 +461,14 @@ class RapiClient:
         path = endpoint_config.build_path(*args, **kwargs)
         url = f"{api_config.base_url}{path}"
 
+        # Security: reject null bytes in URL to prevent injection
+        if "\x00" in url:
+            raise RequestError("Null bytes not allowed in URL", retryable=False)
+
+        # Security: validate URL scheme to prevent SSRF via config injection
+        if not url.lower().startswith(("http://", "https://")):
+            raise RequestError(f"Invalid URL scheme (only http/https allowed): {url}", retryable=False)
+
         # Extract query params from kwargs
         query_params = self._extract_query_params(endpoint_config, kwargs)
 
@@ -705,19 +713,22 @@ class RapiClient:
 
             try:
                 start_time = time.monotonic()
-                with httpx.Client(timeout=timeout, verify=self._ssl_context) as client:
+                with httpx.Client(timeout=timeout, verify=self._ssl_context, follow_redirects=False) as client:
                     response = client.send(request)
                 elapsed = time.monotonic() - start_time
 
                 self._log_response(response, elapsed)
 
-                # Check response size
+                # Check response size (header and actual body)
                 content_length = response.headers.get("content-length")
                 if content_length and int(content_length) > self._limits.max_response_size:
                     raise ResponseTooLargeError(
                         int(content_length),
                         self._limits.max_response_size,
                     )
+                actual_size = len(response.content)
+                if actual_size > self._limits.max_response_size:
+                    raise ResponseTooLargeError(actual_size, self._limits.max_response_size)
 
                 # Parse response
                 return self._parse_response(response, endpoint_config, elapsed)
@@ -779,19 +790,24 @@ class RapiClient:
 
             try:
                 start_time = time.monotonic()
-                async with httpx.AsyncClient(timeout=timeout, verify=self._ssl_context) as client:
+                async with httpx.AsyncClient(
+                    timeout=timeout, verify=self._ssl_context, follow_redirects=False
+                ) as client:
                     response = await client.send(request)
                 elapsed = time.monotonic() - start_time
 
                 self._log_response(response, elapsed)
 
-                # Check response size
+                # Check response size (header and actual body)
                 content_length = response.headers.get("content-length")
                 if content_length and int(content_length) > self._limits.max_response_size:
                     raise ResponseTooLargeError(
                         int(content_length),
                         self._limits.max_response_size,
                     )
+                actual_size = len(response.content)
+                if actual_size > self._limits.max_response_size:
+                    raise ResponseTooLargeError(actual_size, self._limits.max_response_size)
 
                 # Parse response
                 return self._parse_response(response, endpoint_config, elapsed)
@@ -836,13 +852,13 @@ class RapiClient:
         text = response.text
         data: Any = None
 
-        # Try to parse as JSON
+        # Try to parse as JSON (only when content-type confirms it)
         content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type or text.startswith(("{", "[")):
+        if "application/json" in content_type or ("application/vnd." in content_type and "+json" in content_type):
             try:
                 data = response.json()
             except json.JSONDecodeError:
-                log.debug("Response is not valid JSON")
+                log.debug("Response is not valid JSON despite content-type")
 
         return RapiResponse(
             status_code=response.status_code,

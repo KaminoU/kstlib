@@ -6,7 +6,7 @@ import importlib
 import json
 import sys
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,9 +20,6 @@ importlib.import_module("kstlib.cli.commands.ops.list_sessions")
 importlib.import_module("kstlib.cli.commands.ops.status")
 list_sessions_mod = sys.modules["kstlib.cli.commands.ops.list_sessions"]
 status_mod = sys.modules["kstlib.cli.commands.ops.status"]
-
-if TYPE_CHECKING:
-    pass
 
 
 runner = CliRunner()

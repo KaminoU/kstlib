@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
-import typer
 import pytest
+import typer
 
 from kstlib.cli.commands.secrets.doctor import (
     _build_backend_mismatch_hint,
@@ -19,8 +20,6 @@ from kstlib.cli.commands.secrets.doctor import (
     _resolve_init_backend,
     _scan_available_backends,
 )
-
-import importlib
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
@@ -308,7 +307,7 @@ class TestResolveInitBackend:
 
     def test_auto_nothing_available_errors(self, monkeypatch: MonkeyPatch) -> None:
         """Exits with error when no backends are available."""
-        monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: [])
+        monkeypatch.setattr(doctor_mod, "_scan_available_backends", list)
 
         with pytest.raises(typer.Exit):
             _resolve_init_backend(None)

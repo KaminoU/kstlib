@@ -117,6 +117,12 @@ class SesTransport(AsyncMailTransport):
         self._timeout = timeout
         self._last_response: SesResponse | None = None
 
+    def __repr__(self) -> str:
+        """Redact AWS credentials from repr output."""
+        return (
+            f"SesTransport(region={self._region!r}, aws_access_key_id={'***' if self._aws_access_key_id else None!r})"
+        )
+
     @property
     def last_response(self) -> SesResponse | None:
         """Return the response from the last successful send."""

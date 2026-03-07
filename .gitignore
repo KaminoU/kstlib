@@ -112,6 +112,16 @@ docs/.doctrees/
 # Auth tokens (plaintext only - SOPS encrypted tokens are safe to commit)
 *.token.json
 
+# Secrets and credentials (never commit plaintext keys/certs)
+*.env
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.*
+!credentials.*.example
+
 # Lock file check artifacts
 pylock.check.toml
 pylock.body*.tmp

@@ -179,7 +179,7 @@ def validate_step_config(  # noqa: PLR0913
     if step_type == "shell":
         if not command:
             raise PipelineConfigError(f"Step '{name}': shell step requires a 'command'")
-        validate_command(command)
+        validate_command(command, strict=False)
     elif step_type == "python":
         if not module:
             raise PipelineConfigError(f"Step '{name}': python step requires a 'module'")

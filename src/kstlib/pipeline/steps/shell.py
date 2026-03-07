@@ -71,6 +71,8 @@ class ShellStep:
 
         # Resolve working directory
         workdir = os.path.expandvars(config.working_dir) if config.working_dir else None
+        if workdir and "\x00" in workdir:
+            raise ValueError(f"Null bytes not allowed in working_dir for step '{config.name}'")
 
         start = time.monotonic()
         try:

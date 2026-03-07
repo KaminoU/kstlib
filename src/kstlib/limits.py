@@ -22,6 +22,7 @@ from typing import Any
 from kstlib.utils.formatting import format_bytes, parse_size_string
 
 __all__ = [
+    "HARD_MAX_CONFIG_FILE_SIZE",
     "HARD_MAX_DATETIME_FORMAT_LENGTH",
     "HARD_MAX_DISPLAY_VALUE_LENGTH",
     "HARD_MAX_ENDPOINT_REF_LENGTH",
@@ -64,6 +65,9 @@ HARD_MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024
 
 #: Absolute maximum attachments per message - protects against resource exhaustion.
 HARD_MAX_ATTACHMENTS = 50
+
+#: Absolute maximum config file size (10 MiB) - protects against OOM on parse.
+HARD_MAX_CONFIG_FILE_SIZE = 10 * 1024 * 1024
 
 #: Absolute maximum cache file size (100 MiB) - protects against OOM.
 HARD_MAX_CACHE_FILE_SIZE = 100 * 1024 * 1024

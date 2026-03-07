@@ -100,7 +100,6 @@ def test_app_invalid_command() -> None:
 
 def test_cli_module_guard_executes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure the CLI module guard invokes the Typer app when executed directly."""
-
     calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
 
     def fake_call(_self: object, *args: object, **kwargs: object) -> None:

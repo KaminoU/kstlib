@@ -123,6 +123,10 @@ class ResendTransport(AsyncMailTransport):
         self._timeout = timeout
         self._last_response: ResendResponse | None = None
 
+    def __repr__(self) -> str:
+        """Redact API key from repr output."""
+        return f"ResendTransport(api_key='***', base_url={self._base_url!r})"
+
     @property
     def last_response(self) -> ResendResponse | None:
         """Return the response from the last successful send."""

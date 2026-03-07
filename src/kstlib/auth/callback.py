@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import html
 import secrets
 import socket
@@ -315,7 +316,7 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
                 break
 
     def stop(self) -> None:
-        """Stop the callback server."""
+        """Stop the callback server and clear shared state."""
         self._stop_flag = True
         if self._server is not None:
             self._server.server_close()
@@ -323,6 +324,9 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
         if self._thread is not None:
             self._thread.join(timeout=2)
             self._thread = None
+        # Clear class-level result to prevent leaking between instances
+        CallbackHandler.callback_result = None
+        CallbackHandler.expected_state = None
         logger.debug("Callback server stopped")
 
     def wait_for_callback(self, timeout: float = 120.0) -> CallbackResult:
@@ -346,8 +350,10 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
                 result = CallbackHandler.callback_result
                 CallbackHandler.callback_result = None  # Clear for next use
 
-                # Validate state if we generated one
-                if self._state and result.state != self._state:
+                # Validate state (mandatory CSRF protection)
+                if not self._state:
+                    logger.warning("[SECURITY] No state generated for CSRF validation")
+                if self._state and not hmac.compare_digest(result.state or "", self._state):
                     if logger.isEnabledFor(TRACE_LEVEL):
                         logger.log(
                             TRACE_LEVEL,

@@ -26,7 +26,7 @@ def test_load_default_config_reads_packaged_file() -> None:
         config_path = Path("src/kstlib/kstlib.conf.yml").resolve()
         assert config_path.is_file(), "Missing packaged default configuration"
 
-        load_default_config = cast(LoadDefaultConfigFn, module._load_default_config)
+        load_default_config = cast("LoadDefaultConfigFn", module._load_default_config)
         data = load_default_config()
         assert isinstance(data, dict)
         # Ensure a known key from the sample config is present.
@@ -58,8 +58,8 @@ def test_load_toml_file_raises_without_tomli(monkeypatch: pytest.MonkeyPatch, tm
     sample.write_text("key = 'value'", encoding="utf-8")
 
     try:
-        config_format_error = cast(type[Exception], module.ConfigFormatError)
-        load_toml_file = cast(TomlLoaderFn, module._load_toml_file)
+        config_format_error = cast("type[Exception]", module.ConfigFormatError)
+        load_toml_file = cast("TomlLoaderFn", module._load_toml_file)
 
         with pytest.raises(config_format_error):
             load_toml_file(sample)

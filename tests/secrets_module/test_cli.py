@@ -34,15 +34,11 @@ from kstlib.cli.commands.secrets.doctor import (
     _check_age_key,
     _check_sops_config,
     _create_sops_config,
-    _create_sops_config_gpg,
     _ensure_age_key,
     _ensure_sops_config,
     _generate_age_key,
     _get_default_sops_paths,
-    _get_gpg_fingerprint,
     _read_existing_public_key,
-    _resolve_init_backend,
-    _scan_available_backends,
 )
 from kstlib.cli.commands.secrets.encrypt import (
     _build_encrypt_args,
@@ -154,7 +150,7 @@ def test_doctor_fails_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runner:
     """Ensure doctor exits with code 1 and reports error when sops is absent."""
     monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: None)
     monkeypatch.setattr(doctor_mod, "get_config", lambda: SimpleNamespace(secrets=None))
-    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: [])
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", list)
 
     original_import = __import__
 
@@ -676,7 +672,7 @@ def test_shred_command_passes_options(monkeypatch: pytest.MonkeyPatch, runner: C
 def test_doctor_reports_missing_keyring_as_warning(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
     """Keyring missing is a warning (optional), not an error."""
     monkeypatch.setattr(doctor_mod.shutil, "which", lambda _: "/usr/bin/sops")
-    monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: [])
+    monkeypatch.setattr(doctor_mod, "_scan_available_backends", list)
 
     def fake_import(name: str) -> Any:
         if name == "keyring":
@@ -877,7 +873,6 @@ def test_shred_quiet_mode_exits_cleanly(
 
 def test_maybe_print_encrypt_output_skips_when_out(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     """Ensure stdout from sops is ignored when an output file is set."""
-
     captured: list[str] = []
     monkeypatch.setattr(encrypt_mod.console, "print", lambda *args, **kwargs: captured.append(str(args[0])))
 
@@ -911,7 +906,6 @@ def test_check_sops_config_warns_for_missing_env(
     tmp_path: Any,
 ) -> None:
     """Ensure SOPS_CONFIG pointing to a missing file reports a warning."""
-
     missing = tmp_path / "missing.sops.yaml"
     monkeypatch.setenv("SOPS_CONFIG", str(missing))
     monkeypatch.setattr(doctor_mod.Path, "home", lambda: tmp_path)
@@ -947,7 +941,6 @@ def test_check_age_key_warns_for_missing_env(
     tmp_path: Any,
 ) -> None:
     """Ensure SOPS_AGE_KEY_FILE pointing to a missing file emits a warning."""
-
     missing = tmp_path / "missing-age-key"
     monkeypatch.setenv("SOPS_AGE_KEY_FILE", str(missing))
     monkeypatch.delenv("APPDATA", raising=False)  # Disable Windows path check
@@ -961,7 +954,6 @@ def test_check_age_key_warns_for_missing_env(
 
 def test_check_age_key_detects_default_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     """Ensure ~/.config/sops/age/keys.txt is detected when present."""
-
     keys_path = tmp_path / ".config" / "sops" / "age" / "keys.txt"
     keys_path.parent.mkdir(parents=True, exist_ok=True)
     keys_path.write_text("age-key", encoding="utf-8")
@@ -977,7 +969,6 @@ def test_check_age_key_detects_default_file(monkeypatch: pytest.MonkeyPatch, tmp
 
 def test_shred_file_reports_invalid_passes(tmp_path: Any) -> None:
     """Ensure shred_file reports invalid secure delete passes."""
-
     target = tmp_path / "secrets.yml"
     target.write_text("token", encoding="utf-8")
 
@@ -992,7 +983,6 @@ def test_shred_file_reports_secure_delete_value_error(
     tmp_path: Any,
 ) -> None:
     """Ensure shred_file propagates secure_delete errors as reports."""
-
     target = tmp_path / "secrets.yml"
     target.write_text("token", encoding="utf-8")
 
@@ -1009,7 +999,6 @@ def test_shred_file_reports_secure_delete_value_error(
 
 def test_resolve_secure_delete_settings_rejects_invalid_passes() -> None:
     """Ensure passes lower than one are rejected."""
-
     with pytest.raises(ValueError):
         _resolve_secure_delete_settings(
             method=None,
@@ -1021,7 +1010,6 @@ def test_resolve_secure_delete_settings_rejects_invalid_passes() -> None:
 
 def test_resolve_secure_delete_settings_rejects_invalid_chunk_size() -> None:
     """Ensure chunk sizes lower than one raise errors."""
-
     with pytest.raises(ValueError):
         _resolve_secure_delete_settings(
             method=None,
@@ -1033,7 +1021,6 @@ def test_resolve_secure_delete_settings_rejects_invalid_chunk_size() -> None:
 
 def test_normalize_method_variants() -> None:
     """Ensure _normalize_method handles enums, strings, and errors."""
-
     assert _normalize_method(None) is SecureDeleteMethod.AUTO
     assert _normalize_method(SecureDeleteMethod.COMMAND) is SecureDeleteMethod.COMMAND
     assert _normalize_method("overwrite") is SecureDeleteMethod.OVERWRITE
@@ -1043,7 +1030,6 @@ def test_normalize_method_variants() -> None:
 
 def test_get_secure_delete_settings_handles_missing_config(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure missing global config returns an empty mapping."""
-
     monkeypatch.setattr(
         secrets_common_mod,
         "get_config",
@@ -1055,7 +1041,6 @@ def test_get_secure_delete_settings_handles_missing_config(monkeypatch: pytest.M
 
 def test_get_secure_delete_settings_skips_unknown_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure nodes without dict/to_dict are ignored while merging settings."""
-
     utilities = SimpleNamespace(secure_delete=object())
     secrets = SimpleNamespace(secure_delete=SimpleNamespace(to_dict=lambda: {"passes": 7}))
     monkeypatch.setattr(

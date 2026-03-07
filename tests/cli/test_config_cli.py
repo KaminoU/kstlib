@@ -30,7 +30,7 @@ def _default_config_text() -> str:
 
 def _load_packaged_yaml() -> dict[str, Any]:
     data = yaml.safe_load(_default_config_text()) or {}
-    return cast(dict[str, Any], data)
+    return cast("dict[str, Any]", data)
 
 
 def _wrap_section(path: str, value: Any) -> Any:
@@ -42,7 +42,6 @@ def _wrap_section(path: str, value: Any) -> Any:
 
 def test_export_default_config_to_directory(tmp_path: Path) -> None:
     """Export without a section writes the full YAML into the target directory."""
-
     result = runner.invoke(app, ["config", "export", "--out", str(tmp_path)])
 
     assert result.exit_code == 0
@@ -54,7 +53,6 @@ def test_export_default_config_to_directory(tmp_path: Path) -> None:
 
 def test_export_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
     """Existing files require --force to be overwritten."""
-
     target_dir = tmp_path / "out"
     target_dir.mkdir()
     destination = target_dir / CONFIG_FILENAME
@@ -69,7 +67,6 @@ def test_export_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
 
 def test_export_with_force_overwrites(tmp_path: Path) -> None:
     """Using --force overwrites existing files."""
-
     destination = tmp_path / CONFIG_FILENAME
     destination.write_text("placeholder", encoding="utf-8")
 
@@ -81,7 +78,6 @@ def test_export_with_force_overwrites(tmp_path: Path) -> None:
 
 def test_export_section_to_stdout() -> None:
     """Exporting a section to stdout returns YAML content."""
-
     result = runner.invoke(app, ["config", "export", "--section", "utilities.secure_delete", "--stdout"])
 
     assert result.exit_code == 0
@@ -93,7 +89,6 @@ def test_export_section_to_stdout() -> None:
 
 def test_export_section_to_json(tmp_path: Path) -> None:
     """Exporting to a .json path serializes as JSON."""
-
     destination = tmp_path / "secure.json"
 
     result = runner.invoke(
@@ -111,7 +106,6 @@ def test_export_section_to_json(tmp_path: Path) -> None:
 
 def test_export_section_missing_fails() -> None:
     """Requesting an unknown section fails with exit code 1."""
-
     result = runner.invoke(app, ["config", "export", "--section", "does.not.exist"])
 
     assert result.exit_code == 1
@@ -120,7 +114,6 @@ def test_export_section_missing_fails() -> None:
 
 def test_export_section_expanduser(tmp_path: Path) -> None:
     """Paths with ~ are expanded before export."""
-
     home_base = Path.home() / ".kstlib-test-exports"
     target_dir = home_base / tmp_path.name
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -152,7 +145,6 @@ def test_export_section_expanduser(tmp_path: Path) -> None:
 
 def test_export_full_config_to_json(tmp_path: Path) -> None:
     """Exporting the full config to JSON yields serializable data."""
-
     destination = tmp_path / "config.json"
 
     result = runner.invoke(app, ["config", "export", "--out", str(destination)])
@@ -164,7 +156,6 @@ def test_export_full_config_to_json(tmp_path: Path) -> None:
 
 def test_stdout_and_out_cannot_be_combined(tmp_path: Path) -> None:
     """Combining stdout with --out should fail."""
-
     result = runner.invoke(
         app,
         [

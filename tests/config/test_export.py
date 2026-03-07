@@ -22,7 +22,6 @@ from kstlib.config.export import (
 
 def _prepare_packaged_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, payload: dict[str, Any]) -> Path:
     """Create a temporary packaged configuration and patch the importlib resources."""
-
     config_path = tmp_path / "kstlib.conf.yml"
     config_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
@@ -34,13 +33,11 @@ def _prepare_packaged_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, pa
 
         def joinpath(self, _: str) -> Path:
             """Return the fixed configuration path regardless of the requested name."""
-
             return self._path
 
     @contextmanager
     def fake_as_file(candidate: Path) -> Iterator[Path]:
         """Yield the candidate path directly (no copy necessary)."""
-
         yield candidate
 
     monkeypatch.setattr("kstlib.config.export.resources.files", lambda *_: DummyResources(config_path))
@@ -150,7 +147,6 @@ def test_write_text_refuses_overwrite_without_force(tmp_path: Path) -> None:
 
 def test_export_section_stdout_wraps_requested_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Ensure section exports keep the dotted path hierarchy when dumping to stdout."""
-
     payload = {
         "ui": {
             "tables": {
@@ -169,15 +165,14 @@ def test_export_section_stdout_wraps_requested_path(monkeypatch: pytest.MonkeyPa
     assert result.format_name == "yaml"
     assert result.destination is None
     exported = yaml.safe_load(result.content or "")
-    ui_payload = cast(dict[str, Any], payload["ui"])
-    tables_payload = cast(dict[str, Any], ui_payload["tables"])
+    ui_payload = cast("dict[str, Any]", payload["ui"])
+    tables_payload = cast("dict[str, Any]", ui_payload["tables"])
     defaults_payload = tables_payload["defaults"]
     assert exported == {"ui": {"tables": {"defaults": defaults_payload}}}
 
 
 def test_export_section_writes_json_subset(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Write the selected configuration subset to disk using JSON serialization."""
-
     payload = {
         "service": {
             "endpoints": [
@@ -199,7 +194,6 @@ def test_export_section_writes_json_subset(monkeypatch: pytest.MonkeyPatch, tmp_
 
 def test_export_full_config_copies_yaml_when_format_matches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Verify that YAML destinations trigger a direct file copy for the full config export."""
-
     payload = {"app": {"feature": {"enabled": True}}}
     config_path = _prepare_packaged_config(monkeypatch, tmp_path, payload)
     destination = tmp_path / "mirror.yaml"
@@ -212,7 +206,6 @@ def test_export_full_config_copies_yaml_when_format_matches(monkeypatch: pytest.
 
 def test_export_full_config_transcodes_to_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Ensure non-YAML outputs serialise the entire configuration payload."""
-
     payload = {"service": {"host": "127.0.0.1", "port": 9000}}
     _prepare_packaged_config(monkeypatch, tmp_path, payload)
     destination = tmp_path / "config.json"
@@ -226,7 +219,6 @@ def test_export_full_config_transcodes_to_json(monkeypatch: pytest.MonkeyPatch, 
 
 def test_export_configuration_missing_section_errors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Raise a descriptive error when the requested section path cannot be resolved."""
-
     payload = {"service": {"host": "localhost"}}
     _prepare_packaged_config(monkeypatch, tmp_path, payload)
 

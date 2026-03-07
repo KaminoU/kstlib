@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pendulum
@@ -16,9 +15,6 @@ from kstlib.helpers.time_trigger import (
     TimeTriggerStats,
     _parse_modulo,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 class TestParseModulo:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 from email.message import EmailMessage
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,9 +11,6 @@ import pytest
 from kstlib.mail.exceptions import MailConfigurationError, MailTransportError
 from kstlib.mail.transport import AsyncMailTransport
 from kstlib.mail.transports.resend import RESEND_API_URL, ResendResponse, ResendTransport
-
-if TYPE_CHECKING:
-    pass
 
 
 class TestResendResponse:

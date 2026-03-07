@@ -58,7 +58,7 @@ def test_mail_guards_overrides_and_external_flags(tmp_path: Path) -> None:
     template_file = outside_dir / "template.html"
     template_file.write_text("template", encoding="utf-8")
 
-    attachments_override = cast(Path, overrides.attachments)
+    attachments_override = cast("Path", overrides.attachments)
     assert guards.attachments_root == attachments_override.resolve()
     assert guards.resolve_inline(inline_file) == inline_file.resolve()
     with pytest.raises(MailValidationError):

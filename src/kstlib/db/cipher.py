@@ -94,6 +94,9 @@ def apply_cipher_key(conn: sqlite3.Connection, key: str) -> None:
     Raises:
         EncryptionError: If key application fails.
     """
+    if "\x00" in key:
+        raise EncryptionError("Null bytes are not allowed in cipher key")
+
     try:
         # SQLCipher PRAGMA to set key
         # Escape single quotes to prevent SQL injection

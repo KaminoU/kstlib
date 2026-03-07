@@ -551,7 +551,6 @@ class TestTraceLogging:
 
     def test_token_storage_trace_logging(self) -> None:
         """Test TRACE logging in get_token_storage_from_config."""
-
         from kstlib.logging import TRACE_LEVEL
 
         config = {"token_storage": "memory", "providers": {}}

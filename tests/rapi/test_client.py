@@ -7,8 +7,7 @@ import httpx
 import pytest
 
 from kstlib.rapi.client import RapiClient, RapiResponse
-from kstlib.rapi.config import RapiConfigManager
-from kstlib.rapi.config import SafeguardConfig
+from kstlib.rapi.config import RapiConfigManager, SafeguardConfig
 from kstlib.rapi.exceptions import (
     ConfirmationRequiredError,
     EndpointNotFoundError,
@@ -301,6 +300,7 @@ class TestRapiClientCall:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"ip": "1.2.3.4"}'
+        mock_response.content = b'{"ip": "1.2.3.4"}'
         mock_response.json.return_value = {"ip": "1.2.3.4"}
 
         mock_client = mock.Mock()
@@ -333,6 +333,7 @@ class TestRapiClientCall:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"success": true}'
+        mock_response.content = b'{"success": true}'
         mock_response.json.return_value = {"success": True}
 
         mock_client = mock.Mock()
@@ -400,6 +401,7 @@ class TestRapiClientCall:
         mock_response.status_code = 404
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"error": "not found"}'
+        mock_response.content = b'{"error": "not found"}'
         mock_response.json.return_value = {"error": "not found"}
 
         mock_client = mock.Mock()
@@ -953,6 +955,7 @@ class TestRapiClientCallAsync:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"result": "ok"}'
+        mock_response.content = b'{"result": "ok"}'
         mock_response.json.return_value = {"result": "ok"}
 
         mock_client = mock.AsyncMock()
@@ -986,6 +989,7 @@ class TestRapiClientCallAsync:
         mock_response.status_code = 201
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"created": true}'
+        mock_response.content = b'{"created": true}'
         mock_response.json.return_value = {"created": True}
 
         mock_client = mock.AsyncMock()
@@ -1121,6 +1125,7 @@ class TestRapiClientCallAsync:
         mock_response.status_code = 400
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"error": "bad request"}'
+        mock_response.content = b'{"error": "bad request"}'
         mock_response.json.return_value = {"error": "bad request"}
 
         mock_client = mock.AsyncMock()
@@ -1497,6 +1502,7 @@ endpoints:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"balance": "100.0"}'
+        mock_response.content = b'{"balance": "100.0"}'
         mock_response.json.return_value = {"balance": "100.0"}
 
         mock_client = mock.Mock()
@@ -1578,6 +1584,7 @@ class TestRapiClientSafeguard:
             mock_response.status_code = 200
             mock_response.headers = {"content-type": "application/json"}
             mock_response.text = '{"ok": true}'
+            mock_response.content = b'{"ok": true}'
             mock_response.json.return_value = {"ok": True}
 
             mock_client = mock.Mock()
@@ -1649,6 +1656,7 @@ class TestRapiClientSafeguard:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"deleted": true}'
+        mock_response.content = b'{"deleted": true}'
         mock_response.json.return_value = {"deleted": True}
 
         mock_client = mock.Mock()
@@ -1716,6 +1724,7 @@ class TestRapiClientSafeguard:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = '{"deleted": true}'
+        mock_response.content = b'{"deleted": true}'
         mock_response.json.return_value = {"deleted": True}
 
         mock_client = mock.AsyncMock()
@@ -1796,3 +1805,28 @@ class TestRapiClientSafeguard:
         # Wrong case
         with pytest.raises(ConfirmationRequiredError):
             client.call("api.delete", id="123", confirm="delete item 123")
+
+
+class TestBuildRequestSecurity:
+    """Security tests for URL validation in _build_request."""
+
+    def test_rejects_null_bytes_in_base_url(self) -> None:
+        """Reject null bytes injected via base_url config."""
+        config = {
+            "api": {
+                "test": {
+                    "base_url": "http://example.com\x00evil.com",
+                    "endpoints": {
+                        "ep": {
+                            "path": "/users",
+                            "method": "GET",
+                        },
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        with pytest.raises(RequestError, match="Null bytes"):
+            client.call("test.ep")

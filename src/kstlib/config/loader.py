@@ -26,6 +26,7 @@ Examples:
 from __future__ import annotations
 
 import json
+import math
 import os
 import pathlib
 import time
@@ -48,6 +49,7 @@ from kstlib.config.exceptions import (
     ConfigIncludeDepthError,
     ConfigNotLoadedError,
 )
+from kstlib.limits import HARD_MAX_CONFIG_FILE_SIZE
 from kstlib.utils.dict import deep_merge
 
 CONFIG_FILENAME = "kstlib.conf.yml"
@@ -223,6 +225,36 @@ def _warn_encrypted_values(data: dict[str, Any], path: pathlib.Path) -> None:
         )
 
 
+def _sanitize_config_values(data: Any, path: str = "", *, _depth: int = 0) -> None:
+    """Reject dangerous values (NaN, Inf) in parsed config data.
+
+    YAML allows ``NaN``, ``.inf``, ``-.inf`` as float values. These can cause
+    subtle bugs (NaN != NaN) or unexpected behavior downstream. This function
+    raises early so the user can fix their config.
+
+    Args:
+        data: Parsed config data to inspect.
+        path: Current key path (for error messages).
+        _depth: Internal recursion counter.
+
+    Raises:
+        ConfigFormatError: If NaN or Inf values are found.
+    """
+    if _depth > 32:
+        return
+    if isinstance(data, float):
+        if math.isnan(data):
+            raise ConfigFormatError(f"NaN value not allowed in config at '{path or '<root>'}'")
+        if math.isinf(data):
+            raise ConfigFormatError(f"Inf value not allowed in config at '{path or '<root>'}'")
+    elif isinstance(data, dict):
+        for k, v in data.items():
+            _sanitize_config_values(v, f"{path}.{k}" if path else k, _depth=_depth + 1)
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            _sanitize_config_values(item, f"{path}[{i}]", _depth=_depth + 1)
+
+
 def _load_any_config_file(
     path: pathlib.Path,
     encoding: str = DEFAULT_ENCODING,
@@ -247,6 +279,14 @@ def _load_any_config_file(
     """
     from kstlib.config.sops import get_real_extension, is_sops_file
 
+    # Security: reject oversized files before parsing to prevent OOM
+    if path.is_file():
+        file_size = path.stat().st_size
+        if file_size > HARD_MAX_CONFIG_FILE_SIZE:
+            raise ConfigFormatError(
+                f"Config file too large ({file_size} bytes > {HARD_MAX_CONFIG_FILE_SIZE} bytes): {path.name}"
+            )
+
     content: str | None = None
     is_sops = is_sops_file(path)
 
@@ -263,6 +303,9 @@ def _load_any_config_file(
     else:
         data = _load_file_by_format(path, ext, encoding)
         _warn_encrypted_values(data, path)
+
+    # Security: reject NaN/Inf values that can cause subtle bugs
+    _sanitize_config_values(data)
 
     return data
 
@@ -322,6 +365,18 @@ def _load_with_includes(
     merged: dict[str, Any] = {}
     for inc in includes:
         inc_path = (path.parent / inc).resolve()
+
+        # Security: reject symlinks in includes (TOCTOU risk: target can be swapped
+        # between resolve() and read, bypassing the path confinement check below)
+        raw_inc_path = path.parent / inc
+        if raw_inc_path.is_symlink():
+            raise ConfigFormatError(f"Symlinks not allowed in includes (security): {inc}")
+
+        # Security: prevent path traversal outside the config directory
+        try:
+            inc_path.relative_to(path.parent.resolve())
+        except ValueError:
+            raise ConfigFormatError(f"Include path escapes config directory (path traversal blocked): {inc}") from None
 
         # Validate format consistency if strict mode enabled
         if strict_format:

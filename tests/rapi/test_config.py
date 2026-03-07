@@ -129,6 +129,36 @@ class TestEndpointConfig:
         result = config.build_path(10)
         assert result == "/delay/10"
 
+    def test_build_path_rejects_path_traversal(self) -> None:
+        """Reject path traversal in parameter values."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/files/{filename}",
+        )
+        with pytest.raises(ValueError, match="Path traversal"):
+            config.build_path(filename="../../etc/passwd")
+
+    def test_build_path_rejects_null_bytes(self) -> None:
+        """Reject null bytes in parameter values."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/users/{id}",
+        )
+        with pytest.raises(ValueError, match="Null bytes"):
+            config.build_path(id="123\x00admin")
+
+    def test_build_path_rejects_traversal_positional(self) -> None:
+        """Reject path traversal in positional parameter values."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/items/{0}",
+        )
+        with pytest.raises(ValueError, match="Path traversal"):
+            config.build_path("../secret")
+
     def test_safeguard_none_by_default(self) -> None:
         """Safeguard is None by default."""
         config = EndpointConfig(

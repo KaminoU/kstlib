@@ -91,6 +91,8 @@ def connect(
     """
     if not cipher_key:
         raise EncryptionError("cipher_key is required for encrypted connections")
+    if "\x00" in cipher_key:
+        raise EncryptionError("Null bytes are not allowed in cipher key")
 
     # Import sqlcipher3 (fail early if not installed)
     try:

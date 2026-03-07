@@ -65,7 +65,7 @@ class AsyncDatabase:
     """
 
     path: str | Path
-    cipher_key: str | None = None
+    cipher_key: str | None = field(default=None, repr=False)
     cipher_env: str | None = None
     cipher_sops: str | Path | None = None
     cipher_sops_key: str = "db_key"

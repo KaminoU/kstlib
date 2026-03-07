@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import secrets
 import time
 from http import HTTPStatus
@@ -217,12 +218,18 @@ class OAuth2Provider(AbstractAuthProvider):
         """Generate the authorization URL.
 
         Args:
-            state: Optional state parameter. Generated if not provided.
+            state: Optional state parameter. If provided, a warning is logged
+                since caller-supplied state weakens CSRF protection.
+                Generated securely if not provided.
 
         Returns:
             Tuple of (authorization_url, state).
         """
-        if state is None:
+        if state is not None:
+            logger.warning(
+                "[SECURITY] Caller-supplied state for CSRF - prefer auto-generated state for stronger protection"
+            )
+        else:
             state = secrets.token_urlsafe(32)
 
         self._pending_state = state
@@ -264,8 +271,10 @@ class OAuth2Provider(AbstractAuthProvider):
         Raises:
             TokenExchangeError: If exchange fails.
         """
-        # Validate state
-        if self._pending_state and state != self._pending_state:
+        # Validate state (mandatory CSRF protection)
+        if not self._pending_state:
+            logger.warning("[SECURITY] No pending state for CSRF validation - call get_authorization_url() first")
+        if self._pending_state and not hmac.compare_digest(state or "", self._pending_state):
             msg = "State mismatch - possible CSRF attack"
             raise TokenExchangeError(msg, error_code="state_mismatch")
 

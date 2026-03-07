@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 
 from kstlib.utils.http_trace import DEFAULT_SENSITIVE_KEYS, HTTPTraceLogger
-
-if TYPE_CHECKING:
-    pass
 
 
 class TestDefaultSensitiveKeys:

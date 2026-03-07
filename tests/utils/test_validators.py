@@ -53,7 +53,6 @@ class TestParseEmailAddress:
 
     def test_rejects_domains_with_empty_labels(self) -> None:
         """Disallow domains containing empty labels (e.g. consecutive dots)."""
-
         with pytest.raises(ValidationError):
             parse_email_address("user@example..com")
 
@@ -98,7 +97,6 @@ class TestEmailAddress:
 
     def test_formatted_property_ignores_blank_display_name(self) -> None:
         """Return the raw address when sanitization leaves an empty name."""
-
         address = EmailAddress(name="  \r\n  ", address="blank@example.org")
 
         assert address.formatted == "blank@example.org"

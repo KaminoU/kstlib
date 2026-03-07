@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import shutil
+import time
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -42,7 +43,8 @@ class SOPSProvider(SecretProvider):
         self._document_format = document_format
         self._limits = limits or get_sops_limits()
         self._max_cache_entries = self._limits.max_cache_entries
-        self._cache: OrderedDict[Path, tuple[float, Any]] = OrderedDict()
+        self._cache_ttl = 300.0  # 5 minutes TTL for decrypted secrets
+        self._cache: OrderedDict[Path, tuple[float, float, Any]] = OrderedDict()
 
     def configure(self, settings: Mapping[str, Any] | None = None) -> None:
         """Apply overrides supplied by configuration files."""
@@ -96,9 +98,13 @@ class SOPSProvider(SecretProvider):
 
         cached = self._cache.get(path)
         if cached and cached[0] == mtime:
-            # Move to end for LRU tracking
-            self._cache.move_to_end(path)
-            return cached[1]
+            # Check TTL: evict if expired
+            if (time.monotonic() - cached[1]) > self._cache_ttl:
+                del self._cache[path]
+            else:
+                # Move to end for LRU tracking
+                self._cache.move_to_end(path)
+                return cached[2]
 
         binary_path = shutil.which(self._binary)
         if binary_path is None:
@@ -127,7 +133,7 @@ class SOPSProvider(SecretProvider):
             )
 
         document = self._parse_document(process.stdout)
-        self._cache[path] = (mtime, document)
+        self._cache[path] = (mtime, time.monotonic(), document)
         self._cache.move_to_end(path)
         # Evict oldest entries (LRU) if cache exceeds limit
         while len(self._cache) > self._max_cache_entries:

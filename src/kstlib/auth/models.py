@@ -71,14 +71,14 @@ class Token:  # pylint: disable=too-many-instance-attributes
         True
     """
 
-    access_token: str
+    access_token: str = field(repr=False)
     token_type: TokenType | str = TokenType.BEARER
     expires_at: datetime | None = None
-    refresh_token: str | None = None
+    refresh_token: str | None = field(default=None, repr=False)
     scope: list[str] = field(default_factory=list)
-    id_token: str | None = None
+    id_token: str | None = field(default=None, repr=False)
     issued_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
     def is_expired(self) -> bool:

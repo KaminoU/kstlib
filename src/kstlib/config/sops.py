@@ -96,7 +96,11 @@ def get_real_extension(path: pathlib.Path) -> str:
     return path.suffix.lower()
 
 
-def has_encrypted_values(data: Any, path: str = "") -> list[str]:
+#: Maximum recursion depth for has_encrypted_values to prevent stack overflow.
+_MAX_SCAN_DEPTH = 32
+
+
+def has_encrypted_values(data: Any, path: str = "", *, _depth: int = 0) -> list[str]:
     """Recursively find keys containing ENC[AES256_GCM,...] values.
 
     This function detects SOPS-encrypted values that were not decrypted,
@@ -105,6 +109,7 @@ def has_encrypted_values(data: Any, path: str = "") -> list[str]:
     Args:
         data: The parsed configuration data to inspect.
         path: Current key path (for recursion, start with empty string).
+        _depth: Internal recursion counter (do not set manually).
 
     Returns:
         List of dotted key paths containing encrypted values.
@@ -117,15 +122,17 @@ def has_encrypted_values(data: Any, path: str = "") -> list[str]:
         >>> has_encrypted_values({"normal": "value"})
         []
     """
+    if _depth > _MAX_SCAN_DEPTH:
+        return []
     found: list[str] = []
     if isinstance(data, str) and ENC_MARKER in data:
         found.append(path or "<root>")
     elif isinstance(data, dict):
         for k, v in data.items():
-            found.extend(has_encrypted_values(v, f"{path}.{k}" if path else k))
+            found.extend(has_encrypted_values(v, f"{path}.{k}" if path else k, _depth=_depth + 1))
     elif isinstance(data, list):
         for i, item in enumerate(data):
-            found.extend(has_encrypted_values(item, f"{path}[{i}]"))
+            found.extend(has_encrypted_values(item, f"{path}[{i}]", _depth=_depth + 1))
     return found
 
 
@@ -193,6 +200,10 @@ class SopsDecryptor:
             self._cache.move_to_end(resolved)
             logger.debug("SOPS cache hit for: %s", path.name)
             return cached[1]
+
+        # Security: reject absolute/relative paths to prevent binary override via config
+        if "/" in self._binary or "\\" in self._binary:
+            raise ConfigSopsError(f"SOPS binary must be a simple name (not a path): {self._binary!r}")
 
         # Find binary
         binary_path = shutil.which(self._binary)

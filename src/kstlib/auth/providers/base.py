@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from typing_extensions import Self
 
@@ -106,6 +108,17 @@ class AuthProviderConfig:  # pylint: disable=too-many-instance-attributes
             msg = "Either 'issuer' (OIDC with discovery) or both 'authorize_url' and 'token_url' (manual) required"
             raise ValueError(msg)
 
+        # Validate redirect_uri scheme and host
+        parsed_redirect = urlparse(self.redirect_uri)
+        if parsed_redirect.scheme not in ("http", "https"):
+            msg = f"redirect_uri must use http or https scheme, got: {parsed_redirect.scheme!r}"
+            raise ValueError(msg)
+        if parsed_redirect.hostname not in ("127.0.0.1", "localhost", "::1"):
+            logger.warning(
+                "[SECURITY] redirect_uri host '%s' is not localhost - ensure this is intentional",
+                parsed_redirect.hostname,
+            )
+
         # SSL/TLS validation (delegated to kstlib.ssl for DRY)
         validate_ssl_verify(self.ssl_verify)
 
@@ -157,6 +170,7 @@ class AbstractAuthProvider(ABC):
         self.config = config
         self.token_storage = token_storage
         self._current_token: Token | None = None
+        self._refresh_lock = threading.Lock()
 
     # ─────────────────────────────────────────────────────────────────────────
     # Properties
@@ -260,26 +274,33 @@ class AbstractAuthProvider(ABC):
 
         if self._current_token.should_refresh and auto_refresh:
             if self._current_token.is_refreshable:
-                if logger.isEnabledFor(TRACE_LEVEL):
-                    logger.log(TRACE_LEVEL, "[AUTH] Token needs refresh for '%s'", self.name)
-                try:
-                    self._current_token = self.refresh(self._current_token)
-                    self.token_storage.save(self.name, self._current_token)
-                    if logger.isEnabledFor(TRACE_LEVEL):
-                        logger.log(TRACE_LEVEL, "[AUTH] Token refreshed successfully for '%s'", self.name)
-                except Exception as e:  # pylint: disable=broad-exception-caught
-                    # Best-effort refresh, return potentially expired token
-                    # Clean warning for user, full traceback in DEBUG only
-                    logger.warning(
-                        "Token refresh failed for '%s': %s. Using cached token.",
-                        self.name,
-                        e,
-                    )
-                    logger.debug("Token refresh traceback:", exc_info=True)
+                self._try_refresh_token()
             else:
                 logger.debug("Token expired and not refreshable for provider '%s'", self.name)
 
         return self._current_token
+
+    def _try_refresh_token(self) -> None:
+        """Attempt to refresh the current token with thread-safety."""
+        # Lock to prevent concurrent refresh attempts (e.g. multi-threaded bots)
+        with self._refresh_lock:
+            # Re-check after acquiring lock (another thread may have refreshed)
+            if not self._current_token or not self._current_token.should_refresh:
+                return
+            if logger.isEnabledFor(TRACE_LEVEL):
+                logger.log(TRACE_LEVEL, "[AUTH] Token needs refresh for '%s'", self.name)
+            try:
+                self._current_token = self.refresh(self._current_token)
+                self.token_storage.save(self.name, self._current_token)
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, "[AUTH] Token refreshed successfully for '%s'", self.name)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "Token refresh failed for '%s': %s. Using cached token.",
+                    self.name,
+                    e,
+                )
+                logger.debug("Token refresh traceback:", exc_info=True)
 
     def save_token(self, token: Token) -> None:
         """Save a token to storage.

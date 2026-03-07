@@ -225,6 +225,7 @@ class TestSOPSTokenStorage:
         # Generate Age key
         result = subprocess.run(
             ["age-keygen", "-o", str(key_file)],
+            check=False,
             capture_output=True,
             text=True,
         )

@@ -26,7 +26,6 @@ from kstlib.pipeline.runner import (
     _parse_pipeline_config,
 )
 
-
 # ============================================================================
 # PipelineRunner tests
 # ============================================================================
@@ -332,12 +331,14 @@ class TestPipelineRunnerFromConfig:
 
     def test_pipeline_not_found(self) -> None:
         """Raise error when pipeline name not in config."""
-        with patch(
-            "kstlib.pipeline.runner._load_pipeline_config",
-            side_effect=PipelineConfigError("Pipeline 'nonexistent' not found in config. Available: (none)"),
+        with (
+            patch(
+                "kstlib.pipeline.runner._load_pipeline_config",
+                side_effect=PipelineConfigError("Pipeline 'nonexistent' not found in config. Available: (none)"),
+            ),
+            pytest.raises(PipelineConfigError, match="not found"),
         ):
-            with pytest.raises(PipelineConfigError, match="not found"):
-                PipelineRunner.from_config("nonexistent")
+            PipelineRunner.from_config("nonexistent")
 
     def test_valid_config(self) -> None:
         """Load pipeline from config successfully."""

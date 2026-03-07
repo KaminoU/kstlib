@@ -21,7 +21,6 @@ from kstlib.secrets.resolver import SecretResolver, get_secret_resolver, resolve
 @pytest.fixture(autouse=True)
 def reset_provider_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure provider registry mutations do not leak between tests."""
-
     monkeypatch.setattr(
         providers_module,
         "_REGISTRY",
@@ -352,7 +351,6 @@ def test_resolve_secret_uses_global_config(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_resolve_secret_rejects_unexpected_kwargs() -> None:
     """Ensure resolve_secret raises when unsupported kwargs are provided."""
-
     with pytest.raises(TypeError) as excinfo:
         resolve_secret(
             "smtp.password",

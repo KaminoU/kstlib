@@ -54,7 +54,7 @@ class SecretRecord:
         metadata: Provider specific metadata (e.g. timestamp, path, ttl).
     """
 
-    value: Any
+    value: Any = field(repr=False)
     source: SecretSource
     metadata: Mapping[str, Any] = field(default_factory=dict)
 

@@ -146,6 +146,10 @@ class GmailTransport(AsyncMailTransport):
         self._timeout = timeout
         self._last_response: GmailResponse | None = None
 
+    def __repr__(self) -> str:
+        """Redact token from repr output."""
+        return f"GmailTransport(base_url={self._base_url!r})"
+
     @property
     def token(self) -> Token:
         """Return the current OAuth2 token."""

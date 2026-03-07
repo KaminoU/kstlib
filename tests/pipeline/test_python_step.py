@@ -137,8 +137,8 @@ class TestPythonStepExecute:
             timeout=0.1,
         )
         # python -m time doesn't block, but let's use subprocess mock
-        from unittest.mock import patch
         import subprocess
+        from unittest.mock import patch
 
         with patch("kstlib.pipeline.steps.python.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired(cmd="python", timeout=0.1)

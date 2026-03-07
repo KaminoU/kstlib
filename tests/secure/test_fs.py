@@ -14,7 +14,6 @@ from kstlib.secure import RELAXED_POLICY, STRICT_POLICY, GuardPolicy, PathGuardr
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission semantics only")
 def test_permission_enforcement_auto_hardens_world_writable(tmp_path: Path) -> None:
     """Guardrails should tighten world-writable directories when possible."""
-
     root = tmp_path / "guard"
     root.mkdir()
     os.chmod(root, 0o777)
@@ -34,7 +33,6 @@ def test_permission_enforcement_auto_hardens_world_writable(tmp_path: Path) -> N
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission semantics only")
 def test_permission_enforcement_raises_when_hardening_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Permission errors during hardening should surface as ``PathSecurityError``."""
-
     root = tmp_path / "guard"
     root.mkdir()
     os.chmod(root, 0o777)
@@ -55,7 +53,6 @@ def test_permission_enforcement_raises_when_hardening_fails(tmp_path: Path, monk
 
 def test_resolves_relative_paths_within_root(tmp_path: Path) -> None:
     """Relative paths should resolve within the configured root."""
-
     root = tmp_path / "guard"
     (root / "reports").mkdir(parents=True)
     target = root / "reports" / "daily.txt"
@@ -69,7 +66,6 @@ def test_resolves_relative_paths_within_root(tmp_path: Path) -> None:
 
 def test_rejects_path_traversal(tmp_path: Path) -> None:
     """Paths escaping the root should trigger security errors."""
-
     root = tmp_path / "guard"
     root.mkdir()
     outside = tmp_path / "outside.txt"
@@ -83,7 +79,6 @@ def test_rejects_path_traversal(tmp_path: Path) -> None:
 
 def test_relax_helper_allows_external_access(tmp_path: Path) -> None:
     """``relax()`` should opt-in to external file resolution when requested."""
-
     root = tmp_path / "guard"
     root.mkdir()
     outside = tmp_path / "outside.txt"

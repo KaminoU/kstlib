@@ -10,7 +10,6 @@ Tests cover:
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -18,7 +17,6 @@ from kstlib.auth.config import build_provider_config
 from kstlib.auth.providers.base import AuthProviderConfig
 from kstlib.auth.providers.oauth2 import OAuth2Provider
 from kstlib.auth.token import MemoryTokenStorage
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Test fixtures

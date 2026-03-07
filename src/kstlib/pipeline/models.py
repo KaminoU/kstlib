@@ -139,7 +139,7 @@ class StepConfig:
         if self.type == StepType.SHELL:
             if not self.command:
                 raise PipelineConfigError(f"Step '{self.name}': shell step requires a 'command'")
-            validate_command(self.command)
+            validate_command(self.command, strict=False)
         elif self.type == StepType.PYTHON:
             if not self.module:
                 raise PipelineConfigError(f"Step '{self.name}': python step requires a 'module'")

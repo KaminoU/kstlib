@@ -198,13 +198,22 @@ def _log_smtp_debug_output(buffer: io.StringIO) -> None:
     if not content:
         return
 
+    # Patterns that may contain credentials in SMTP debug output
+    _sensitive_patterns = ("AUTH ", "AUTH=", "ATRN ", "PASS ")
+
     for line in content.strip().split("\n"):
         line = line.strip()
         if not line:
             continue
         # smtplib debug format: "send: 'EHLO ...'" or "reply: retcode (...);"
         if line.startswith("send:"):
-            log.log(TRACE_LEVEL, "[SMTP] >>> %s", line[5:].strip().strip("'\""))
+            payload = line[5:].strip().strip("'\"")
+            # Redact AUTH commands that contain base64-encoded credentials
+            upper = payload.upper()
+            if any(upper.startswith(p) for p in _sensitive_patterns):
+                log.log(TRACE_LEVEL, "[SMTP] >>> %s ***REDACTED***", payload.split()[0])
+            else:
+                log.log(TRACE_LEVEL, "[SMTP] >>> %s", payload)
         elif line.startswith("reply:"):
             log.log(TRACE_LEVEL, "[SMTP] <<< %s", line[6:].strip())
         else:
@@ -217,6 +226,10 @@ class SMTPCredentials:
 
     username: str
     password: str | None = None
+
+    def __repr__(self) -> str:
+        """Redact password from repr output."""
+        return f"SMTPCredentials(username={self.username!r}, password={'***' if self.password else None!r})"
 
 
 @dataclass(frozen=True, slots=True)

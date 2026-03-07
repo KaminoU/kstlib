@@ -6,16 +6,12 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from kstlib.resilience.exceptions import HeartbeatError
 from kstlib.resilience.heartbeat import Heartbeat, HeartbeatState
-
-if TYPE_CHECKING:
-    pass
 
 
 class TestHeartbeatState:

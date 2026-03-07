@@ -75,7 +75,7 @@ def test_sensitive_purges_provider_cache_with_path_hint() -> None:
     secret_path = Path("secrets.enc.yaml")
     record = SecretRecord(value="token", source=SecretSource.SOPS, metadata={"path": secret_path})
 
-    with sensitive(record, providers=[cast(CachePurgeProtocol, provider)]):
+    with sensitive(record, providers=[cast("CachePurgeProtocol", provider)]):
         pass
 
     assert provider.calls == [secret_path]
@@ -86,7 +86,7 @@ def test_sensitive_calls_legacy_purge_signature() -> None:
     legacy_provider = LegacyProvider()
     record = SecretRecord(value="token", source=SecretSource.SOPS, metadata={})
 
-    with sensitive(record, providers=[cast(CachePurgeProtocol, legacy_provider)]):
+    with sensitive(record, providers=[cast("CachePurgeProtocol", legacy_provider)]):
         pass
 
     assert legacy_provider.invoked
@@ -136,7 +136,7 @@ def test_sensitive_scrubs_mutable_sequence_payload() -> None:
 
 def test_sensitive_skips_non_callable_purge_attribute() -> None:
     """Ensure provider entries without callable purge attributes are ignored."""
-    provider = cast(CachePurgeProtocol, NonCallableProvider())
+    provider = cast("CachePurgeProtocol", NonCallableProvider())
     record = SecretRecord(value="token", source=SecretSource.SOPS, metadata={})
 
     with sensitive(record, providers=[provider]):
@@ -148,7 +148,7 @@ def test_sensitive_logs_provider_errors(caplog: pytest.LogCaptureFixture) -> Non
     provider = ValueErrorProvider()
     record = SecretRecord(value="token", source=SecretSource.SOPS, metadata={"path": Path("secret.yml")})
 
-    with caplog.at_level("DEBUG"), sensitive(record, providers=[cast(CachePurgeProtocol, provider)]):
+    with caplog.at_level("DEBUG"), sensitive(record, providers=[cast("CachePurgeProtocol", provider)]):
         pass
 
     assert "Provider cache purge failed" in caplog.text
@@ -156,7 +156,6 @@ def test_sensitive_logs_provider_errors(caplog: pytest.LogCaptureFixture) -> Non
 
 def test_sensitive_handles_none_value() -> None:
     """Ensure secrets set to None do not trigger scrubbing work."""
-
     record = SecretRecord(value=None, source=SecretSource.KWARGS, metadata={})
 
     with sensitive(record):

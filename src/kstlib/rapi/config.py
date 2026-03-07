@@ -34,6 +34,25 @@ log = logging.getLogger(__name__)
 # Pattern for path parameters: {param} or {0}, {1}
 _PATH_PARAM_PATTERN = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*|\d+)\}")
 
+# Patterns that indicate path traversal or injection in URL path parameters
+_DANGEROUS_PATH_SEGMENTS = ("../", "..\\", "..")
+
+
+def _validate_path_param(name: str, value: str) -> None:
+    """Validate a path parameter value for injection attacks.
+
+    Args:
+        name: Parameter name (for error messages).
+        value: Substituted value to check.
+
+    Raises:
+        ValueError: If the value contains path traversal or null bytes.
+    """
+    if "\x00" in value:
+        raise ValueError(f"Null bytes not allowed in path parameter '{name}'")
+    if any(seg in value for seg in _DANGEROUS_PATH_SEGMENTS):
+        raise ValueError(f"Path traversal not allowed in parameter '{name}': {value!r}")
+
 
 # Deep defense: allowed values for HMAC config (hardcoded limits)
 _ALLOWED_HMAC_ALGORITHMS = frozenset({"sha256", "sha512"})
@@ -643,15 +662,21 @@ class EndpointConfig:
                 # Positional: {0}, {1}
                 idx = int(placeholder)
                 if idx < len(args):
-                    path = path.replace(f"{{{placeholder}}}", str(args[idx]))
+                    value = str(args[idx])
+                    _validate_path_param(placeholder, value)
+                    path = path.replace(f"{{{placeholder}}}", value)
                 else:
                     raise ValueError(f"Missing positional argument {idx} for path {self.path}")
             elif placeholder in kwargs:
                 # Named: {name}
-                path = path.replace(f"{{{placeholder}}}", str(kwargs[placeholder]))
+                value = str(kwargs[placeholder])
+                _validate_path_param(placeholder, value)
+                path = path.replace(f"{{{placeholder}}}", value)
             elif len(args) > 0:
                 # Try to use first positional arg for first named placeholder
-                path = path.replace(f"{{{placeholder}}}", str(args[0]))
+                value = str(args[0])
+                _validate_path_param(placeholder, value)
+                path = path.replace(f"{{{placeholder}}}", value)
                 args = args[1:]
             else:
                 raise ValueError(f"Missing parameter '{placeholder}' for path {self.path}")

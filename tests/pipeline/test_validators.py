@@ -18,7 +18,6 @@ from kstlib.pipeline.validators import (
     validate_step_name,
 )
 
-
 # ============================================================================
 # validate_step_name tests
 # ============================================================================
@@ -217,13 +216,21 @@ class TestValidateStepConfig:
                 args=args,
             )
 
-    def test_dangerous_command_blocked(self) -> None:
-        """Reject dangerous command patterns."""
-        with pytest.raises(ValueError, match="dangerous"):
+    def test_shell_allows_metacharacters(self) -> None:
+        """Pipeline shell steps allow shell metacharacters (trusted config)."""
+        validate_step_config(
+            name="chained",
+            step_type="shell",
+            command="echo hello; echo world",
+        )
+
+    def test_shell_blocks_null_bytes(self) -> None:
+        """Pipeline shell steps still block null bytes."""
+        with pytest.raises(ValueError, match="Null bytes"):
             validate_step_config(
                 name="bad",
                 step_type="shell",
-                command="echo hello; rm -rf /",
+                command="echo\x00evil",
             )
 
 

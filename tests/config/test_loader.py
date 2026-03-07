@@ -797,3 +797,73 @@ def test_config_loader_auto_file_source_resolves_path(tmp_path: Any) -> None:
 
     assert loader.auto.source == "file"
     assert loader.auto.path == candidate.resolve()
+
+
+# ============================================================================
+# Security: file size limit (M1)
+# ============================================================================
+
+
+def test_load_rejects_oversized_config_file(tmp_path: Any) -> None:
+    """Reject config files exceeding HARD_MAX_CONFIG_FILE_SIZE."""
+    from kstlib.config.loader import _load_any_config_file
+    from kstlib.limits import HARD_MAX_CONFIG_FILE_SIZE
+
+    big_file = tmp_path / "huge.yml"
+    big_file.write_text("x: " + "a" * (HARD_MAX_CONFIG_FILE_SIZE + 1))
+    with pytest.raises(ConfigFormatError, match="too large"):
+        _load_any_config_file(big_file)
+
+
+# ============================================================================
+# Security: NaN/Inf rejection (M3)
+# ============================================================================
+
+
+def test_load_rejects_nan_in_config(tmp_path: Any) -> None:
+    """Reject NaN values in YAML config."""
+    nan_file = tmp_path / "nan.yml"
+    nan_file.write_text("value: .nan\n")
+    from kstlib.config.loader import _load_any_config_file
+
+    with pytest.raises(ConfigFormatError, match="NaN"):
+        _load_any_config_file(nan_file)
+
+
+def test_load_rejects_inf_in_config(tmp_path: Any) -> None:
+    """Reject Inf values in YAML config."""
+    inf_file = tmp_path / "inf.yml"
+    inf_file.write_text("value: .inf\n")
+    from kstlib.config.loader import _load_any_config_file
+
+    with pytest.raises(ConfigFormatError, match="Inf"):
+        _load_any_config_file(inf_file)
+
+
+def test_include_rejects_path_traversal(tmp_path: Any) -> None:
+    """Include paths escaping the config directory are blocked."""
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    secret = tmp_path / "secret.yml"
+    secret.write_text("leaked: true\n", encoding="utf-8")
+
+    main = sub / "main.yml"
+    main.write_text('include: ["../secret.yml"]\napp: true\n', encoding="utf-8")
+
+    with pytest.raises(ConfigFormatError, match="path traversal"):
+        load_config(path=main)
+
+
+def test_include_rejects_symlinks(tmp_path: Any) -> None:
+    """Symlinks in includes are rejected to prevent TOCTOU bypass."""
+    real_file = tmp_path / "real.yml"
+    real_file.write_text("extra: true\n", encoding="utf-8")
+
+    link = tmp_path / "link.yml"
+    link.symlink_to(real_file)
+
+    main = tmp_path / "main.yml"
+    main.write_text('include: ["link.yml"]\napp: true\n', encoding="utf-8")
+
+    with pytest.raises(ConfigFormatError, match="[Ss]ymlink"):
+        load_config(path=main)

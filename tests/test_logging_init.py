@@ -10,7 +10,7 @@ import pytest
 
 import kstlib.logging as kstlib_logging
 from kstlib.logging import LogManager, get_logger, init_logging
-from kstlib.logging.manager import TRACE_LEVEL, SUCCESS_LEVEL
+from kstlib.logging.manager import TRACE_LEVEL
 
 
 class TestInitLogging:

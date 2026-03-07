@@ -34,6 +34,7 @@ Example:
 
 import asyncio
 import logging
+import re
 import shutil
 from functools import partial
 from logging.handlers import TimedRotatingFileHandler
@@ -441,6 +442,27 @@ class LogManager(logging.Logger):
         icon = icons.get(level, "")
         return f"{icon}  {msg}" if icon else msg
 
+    @staticmethod
+    def _sanitize_log_value(value: Any) -> str:
+        """Strip control characters from log values to prevent log injection.
+
+        Removes CRLF sequences and ANSI escape codes that could be used
+        to forge log entries or manipulate terminal output.
+
+        Args:
+            value: Value to sanitize.
+
+        Returns:
+            Sanitized string representation.
+        """
+        text = str(value)
+        # Strip ANSI escape sequences (CSI and OSC)
+        text = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", text)
+        text = re.sub(r"\x1b\][^\x07]*\x07", "", text)
+        # Replace control characters (CR, LF, tab, etc.) with space
+        text = re.sub(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text)
+        return text
+
     def _format_structured(self, msg: str, **context: Any) -> str:
         """Format message with structured context.
 
@@ -453,8 +475,8 @@ class LogManager(logging.Logger):
         """
         if not context:
             return msg
-        ctx_str = " | ".join(f"{k}={v}" for k, v in context.items())
-        return f"{msg} | {ctx_str}"
+        ctx_str = " | ".join(f"{k}={self._sanitize_log_value(v)}" for k, v in context.items())
+        return f"{self._sanitize_log_value(msg)} | {ctx_str}"
 
     @staticmethod
     def _split_log_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -576,17 +598,18 @@ class LogManager(logging.Logger):
         super().critical(formatted, *args, **log_kwargs)
 
     def traceback(self, exc: BaseException) -> None:
-        """Print Rich traceback with locals.
+        """Print Rich traceback, respecting the configured show_locals setting.
 
         Args:
             exc: Exception to display
         """
+        show_locals = self._config.console.get("tracebacks_show_locals", False)
         self.console.print(
             Traceback.from_exception(
                 type(exc),
                 exc,
                 exc.__traceback__,
-                show_locals=True,
+                show_locals=show_locals,
                 width=self.width,
                 extra_lines=13,
             )

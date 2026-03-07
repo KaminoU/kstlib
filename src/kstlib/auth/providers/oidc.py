@@ -465,14 +465,9 @@ class OIDCProvider(OAuth2Provider):
         # Clear code_verifier after use
         self._code_verifier = None
 
-        # Validate ID token if present
+        # Validate ID token if present (mandatory for OIDC security)
         if token.id_token:
-            try:
-                self._validate_id_token(token.id_token)
-            except TokenValidationError as e:
-                logger.warning("ID token validation failed: %s", e)
-                # Don't fail the exchange, just log warning
-                # Application can decide whether to reject
+            self._validate_id_token(token.id_token)
 
         return token
 
@@ -529,10 +524,10 @@ class OIDCProvider(OAuth2Provider):
                 )
 
             return dict(claims)
-        except ImportError:
-            # Fallback: decode without verification (not recommended for production)
-            logger.warning("authlib not available, skipping ID token signature verification")
-            return self._decode_jwt_unverified(id_token)
+        except ImportError as e:
+            raise TokenValidationError(
+                "authlib is required for ID token signature verification. Install with: pip install kstlib[auth]"
+            ) from e
         except JoseError as e:
             raise TokenValidationError(str(e)) from e
 

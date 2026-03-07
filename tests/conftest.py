@@ -28,7 +28,6 @@ import kstlib.config.loader as _cfg_loader
 @pytest.fixture(scope="session")
 def fixtures_root() -> Path:
     """Return the root directory containing persistent test fixtures."""
-
     return pathlib.Path(__file__).parent / "fixtures"
 
 
@@ -38,7 +37,6 @@ def get_fixture_path(fixtures_root: Path) -> Callable[[str], Path]:
 
     def _get(subdir: str) -> Path:
         """Return the absolute path for a given fixture subdirectory."""
-
         return fixtures_root / subdir
 
     return _get
@@ -53,7 +51,6 @@ def copy_fixture(
 
     def _copy(subdir: str, fixture_name: str, dest_name: str | None = None) -> Path:
         """Copy the requested fixture file and return the destination path."""
-
         src = get_fixture_path(subdir) / fixture_name
         dst = tmp_path / (dest_name or fixture_name)
         shutil.copyfile(src, dst)

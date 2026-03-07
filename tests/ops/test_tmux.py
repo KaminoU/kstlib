@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Generator
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,10 +16,6 @@ from kstlib.ops.exceptions import (
 )
 from kstlib.ops.models import BackendType, SessionConfig, SessionState
 from kstlib.ops.tmux import TmuxRunner, discover_tmux_sockets
-
-if TYPE_CHECKING:
-    pass
-
 
 # ============================================================================
 # Fixtures

@@ -40,7 +40,7 @@ from kstlib.ops.exceptions import (
     TmuxNotFoundError,
 )
 from kstlib.ops.models import BackendType, SessionConfig, SessionState, SessionStatus
-from kstlib.ops.validators import validate_session_name
+from kstlib.ops.validators import validate_send_keys, validate_session_name
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -83,6 +83,10 @@ class TmuxRunner:
         """
         self._binary_name = binary
         self._binary_path: str | None = None
+        if socket_name is not None and (
+            not socket_name or "/" in socket_name or "\\" in socket_name or "\x00" in socket_name
+        ):
+            raise ValueError(f"Invalid socket name: {socket_name!r}")
         self._socket_name = socket_name
 
     @property
@@ -145,6 +149,10 @@ class TmuxRunner:
             SessionExistsError: If session already exists.
             SessionStartError: If session failed to start.
             TmuxNotFoundError: If tmux is not installed.
+
+        Note:
+            The exists() check is subject to TOCTOU but provides a clear
+            error message. tmux itself will reject duplicate session names.
         """
         if self.exists(config.name):
             raise SessionExistsError(config.name, "tmux")
@@ -378,6 +386,7 @@ class TmuxRunner:
             SessionNotFoundError: If session doesn't exist.
         """
         validate_session_name(name)
+        validate_send_keys(keys)
         if not self.exists(name):
             raise SessionNotFoundError(name, "tmux")
 

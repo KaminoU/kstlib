@@ -96,8 +96,12 @@ class AbstractTokenStorage(ABC):
     def sensitive_token(self, provider_name: str) -> Iterator[Token | None]:
         """Context manager for secure token access.
 
-        Loads the token and yields it. On exit, clears the reference.
-        Subclasses may implement additional cleanup (e.g., memory scrubbing).
+        Loads the token and yields it. On exit, clears the local reference.
+
+        .. note::
+            Python strings are immutable, so the actual token bytes cannot
+            be scrubbed from memory. This context manager minimizes the
+            exposure window by deleting the reference as soon as possible.
 
         Args:
             provider_name: Provider identifier.
@@ -333,6 +337,7 @@ class SOPSTokenStorage(AbstractTokenStorage):
 
     def save(self, provider_name: str, token: Token) -> None:
         """Save token encrypted with SOPS."""
+        import os
         import tempfile
 
         path = self._token_path(provider_name)
@@ -344,15 +349,12 @@ class SOPSTokenStorage(AbstractTokenStorage):
         json_data = json.dumps(data, indent=2)
 
         try:
-            # Write plaintext to temp file, then encrypt to target
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                suffix=".json",
-                delete=False,
-                encoding="utf-8",
-            ) as tmp:
+            # Write plaintext to temp file with restrictive permissions
+            # mkstemp creates with mode 0o600 (owner-only), then encrypt to target
+            fd, tmp_name = tempfile.mkstemp(suffix=".json")
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp:
                 tmp.write(json_data)
-                tmp_path = Path(tmp.name)
+            tmp_path = Path(tmp_name)
 
             try:
                 from kstlib.secure.permissions import FilePermissions

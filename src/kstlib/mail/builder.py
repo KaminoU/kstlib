@@ -180,6 +180,11 @@ class MailBuilder:
     ) -> MailBuilder:
         """Populate the message body either via raw content or a template.
 
+        .. warning::
+            HTML content is **not** sanitized. The caller is responsible for
+            ensuring the HTML is safe. This is by design: mail templates are
+            authored by the application developer, not by end users.
+
         Raises:
             MailValidationError: If content_type is unsupported.
         """

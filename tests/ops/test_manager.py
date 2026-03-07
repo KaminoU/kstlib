@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,10 +15,6 @@ from kstlib.ops.exceptions import (
 )
 from kstlib.ops.manager import SessionConfigError, SessionManager, auto_detect_backend
 from kstlib.ops.models import BackendType, SessionState, SessionStatus
-
-if TYPE_CHECKING:
-    pass
-
 
 # ============================================================================
 # Fixtures

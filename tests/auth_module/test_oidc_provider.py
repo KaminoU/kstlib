@@ -768,15 +768,12 @@ class TestExchangeCodeOIDC:
         with pytest.raises(TokenExchangeError, match="PKCE is enabled but no code_verifier"):
             oidc_provider.exchange_code(code="auth-code", state="test-state")
 
-    def test_exchange_code_id_token_validation_failure_logged(
+    def test_exchange_code_id_token_validation_failure_raises(
         self,
         oidc_provider: OIDCProvider,
         mock_discovery_doc: dict,
-        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Test that ID token validation failure is logged but doesn't fail exchange."""
-        import logging
-
+        """Test that ID token validation failure raises (mandatory for OIDC)."""
         oidc_provider._pending_state = "test-state"
         oidc_provider._code_verifier = "test-verifier"
         oidc_provider._discovery_doc = mock_discovery_doc
@@ -795,14 +792,9 @@ class TestExchangeCodeOIDC:
         with (
             patch.object(oidc_provider.http_client, "post", return_value=mock_response),
             patch.object(oidc_provider, "_validate_id_token", side_effect=mock_validate_id_token),
-            caplog.at_level(logging.WARNING),
+            pytest.raises(TokenValidationError, match="Invalid signature"),
         ):
-            token = oidc_provider.exchange_code(code="auth-code", state="test-state")
-
-        # Exchange should still succeed
-        assert token.access_token == "access-token"
-        # But warning should be logged
-        assert "ID token validation failed" in caplog.text
+            oidc_provider.exchange_code(code="auth-code", state="test-state")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1417,17 +1409,13 @@ class TestOIDCCoverage:
             del sys.modules["authlib.jose"]
             del sys.modules["authlib.jose.errors"]
 
-    def test_validate_id_token_authlib_import_error(
+    def test_validate_id_token_authlib_import_error_raises(
         self,
         oidc_provider: OIDCProvider,
         mock_jwks: dict,
-        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Test ID token validation fallback when authlib is not available."""
-        import base64
+        """Test ID token validation raises when authlib is not available."""
         import builtins
-        import json
-        import logging
 
         # Set up provider with JWKS
         oidc_provider._jwks = mock_jwks
@@ -1435,16 +1423,6 @@ class TestOIDCCoverage:
             "issuer": "https://auth.example.com",
             "jwks_uri": "https://auth.example.com/.well-known/jwks.json",
         }
-
-        # Create a valid JWT structure (header.payload.signature)
-        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256"}).encode()).rstrip(b"=").decode()
-        payload = (
-            base64.urlsafe_b64encode(json.dumps({"sub": "user123", "iss": "https://auth.example.com"}).encode())
-            .rstrip(b"=")
-            .decode()
-        )
-        signature = "fake_signature"
-        jwt_token = f"{header}.{payload}.{signature}"
 
         original_import = builtins.__import__
 
@@ -1455,14 +1433,9 @@ class TestOIDCCoverage:
 
         with (
             patch.object(builtins, "__import__", side_effect=mock_import),
-            caplog.at_level(logging.WARNING),
+            pytest.raises(TokenValidationError, match="authlib is required"),
         ):
-            result = oidc_provider._validate_id_token(jwt_token)
-
-        # Should fall back to unverified decode
-        assert result["sub"] == "user123"
-        assert result["iss"] == "https://auth.example.com"
-        assert "authlib not available" in caplog.text
+            oidc_provider._validate_id_token("header.payload.signature")
 
     def test_validate_id_token_uses_discovered_issuer(
         self,

@@ -224,7 +224,6 @@ def test_secure_delete_reports_overwrite_failure(monkeypatch: pytest.MonkeyPatch
 
 def test_secure_delete_command_fallback_preserves_method(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Ensure COMMAND mode keeps its method when overwrite fallback fails."""
-
     target = tmp_path / "secret.bin"
     target.write_bytes(b"classified")
 
@@ -252,7 +251,6 @@ def test_build_platform_command_returns_none_without_tools(
     tmp_path: Path,
 ) -> None:
     """Ensure _build_platform_command returns None when no helper binaries exist."""
-
     monkeypatch.setattr(SECURE_DELETE_MODULE.platform, "system", lambda: "Linux")
     monkeypatch.setattr(SECURE_DELETE_MODULE.shutil, "which", lambda _: None)
 

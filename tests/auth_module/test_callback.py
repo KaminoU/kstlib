@@ -7,7 +7,6 @@ import os
 import socket
 import time
 from io import BytesIO
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
@@ -18,10 +17,6 @@ from kstlib.auth.callback import (
     CallbackServer,
 )
 from kstlib.auth.errors import AuthorizationError, CallbackServerError
-
-if TYPE_CHECKING:
-    pass
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CallbackResult tests

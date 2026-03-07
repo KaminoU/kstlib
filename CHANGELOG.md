@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-03-07
+
+### Breaking Changes
+
+> **Major version bump** due to security hardening that changes runtime behavior.
+> Rollback: `pip install "kstlib<2.0.0"`
+
+- **`validate_command()` strict blocklist** - Now blocks `;`, `&&`, `||`, `|`, `>`, `<`,
+  `eval`, `source`, `exec`, null bytes in ops commands (container run/exec).
+  Pipeline steps use `strict=False` and are not affected.
+- **`validate_env()` dangerous keys denylist** - Blocks `LD_PRELOAD`, `PYTHONPATH`,
+  `NODE_OPTIONS` and similar environment variables in ops functions.
+- **`send_keys()` input validation** - Blocks pipes, semicolons, redirections in tmux
+  send_keys. Tmux control sequences (C-c, Enter, Escape) remain allowed.
+- **OIDC ID token validation mandatory** - `exchange_code()` now raises
+  `TokenValidationError` on validation failure instead of logging a warning.
+- **authlib required for OIDC** - Missing `authlib` raises `TokenValidationError`
+  instead of falling back to unverified JWT decode.
+- **Config `include` path traversal blocked** - Include paths escaping the config
+  directory raise `ConfigFormatError`. Symlinks in includes are also rejected
+  to prevent TOCTOU bypass of the path confinement check.
+- **SOPS binary must be a simple name** - Paths in `sops_binary` raise `ConfigSopsError`.
+- **RAPI URL scheme validation** - Only `http://` and `https://` accepted.
+- **JSON heuristic removed** - Response body parsed as JSON only when content-type
+  confirms it (`application/json` or `application/vnd.*+json`).
+- **`shlex.split()` for container commands** - Replaces `str.split()` for proper
+  quoting support.
+- **Redirect URI validation** - `AuthProviderConfig` validates scheme (http/https)
+  and warns on non-localhost hosts.
+- **TmuxRunner socket_name validation** - Rejects paths and null bytes in socket names.
+
+### Security
+
+- **47 security items hardened** across 9 phases (8 CRITICAL, 17 HIGH, 15 MEDIUM, 7 LOW)
+- Timing-safe CSRF state comparison (`hmac.compare_digest`)
+- Thread-safe token refresh with double-checked locking
+- Config file size limit (10 MiB) before YAML/JSON parse
+- Bounded recursion depth (max 32) for `deep_merge` and SOPS scan
+- NaN/Inf rejection in config values
+- Path traversal and null byte checks in RAPI parameters
+- SOPS decrypted secrets cache TTL (5 minutes)
+- WAL checkpoint forced on DB pool close
+- Log injection sanitization (CRLF/ANSI/null stripped)
+- SMTP AUTH/PASS redacted in debug trace
+- Token/SecretRecord/SMTPCredentials `repr=False`
+- Explicit `follow_redirects=False` in httpx clients
+- CallbackHandler state cleared on stop
+- `.gitignore` patterns for secrets (`*.env`, `*.key`, `*.pem`, `credentials.*`)
+
 ## [1.7.8] - 2026-03-06
 
 ### Fixed
@@ -459,6 +508,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[2.0.0]: https://github.com/KaminoU/kstlib/compare/v1.7.8...v2.0.0
 [1.7.8]: https://github.com/KaminoU/kstlib/compare/v1.7.7...v1.7.8
 [1.7.7]: https://github.com/KaminoU/kstlib/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/KaminoU/kstlib/compare/v1.7.5...v1.7.6

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shlex
 import shutil
 import subprocess
 from typing import TYPE_CHECKING, Any
@@ -225,7 +226,7 @@ class ContainerRunner:
 
         # Command (optional)
         if config.command:
-            args.extend(config.command.split())
+            args.extend(shlex.split(config.command))
 
         return args
 
@@ -569,7 +570,7 @@ class ContainerRunner:
         if interactive:
             args.append("-it")
         args.append(name)
-        args.extend(command.split())
+        args.extend(shlex.split(command))
 
         return self._run(args)
 

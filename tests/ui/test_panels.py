@@ -85,7 +85,7 @@ def test_render_panel_rejects_unsupported_payload() -> None:
     manager = PanelManager(config={})
 
     with pytest.raises(PanelRenderingError):
-        manager.render_panel(payload=cast(PanelPayload, object()))
+        manager.render_panel(payload=cast("PanelPayload", object()))
 
 
 def test_render_panel_merges_box_config() -> None:
@@ -206,7 +206,6 @@ def test_prepare_config_missing_global_config(monkeypatch: pytest.MonkeyPatch) -
 
 def test_prepare_config_ignores_invalid_ui_section() -> None:
     """Ignore invalid UI sections in user-provided configuration."""
-
     manager_invalid_ui = PanelManager(config={"ui": "oops"})
     panel_invalid_ui = manager_invalid_ui.render_panel(payload="noop")
     assert panel_invalid_ui.border_style == DEFAULT_PANEL_CONFIG["defaults"]["panel"]["border_style"]
@@ -218,7 +217,6 @@ def test_prepare_config_ignores_invalid_ui_section() -> None:
 
 def test_prepare_config_handles_box_panels() -> None:
     """Support Box instances for deeply nested panel configuration."""
-
     config_box = {
         "ui": {
             "panels": Box(
@@ -240,7 +238,6 @@ def test_prepare_config_handles_box_panels() -> None:
 
 def test_render_panel_defaults_requires_mapping() -> None:
     """Raise when defaults section is not a mapping."""
-
     manager = PanelManager(config={"ui": {"panels": {"defaults": []}}})
 
     with pytest.raises(PanelRenderingError):
@@ -249,7 +246,6 @@ def test_render_panel_defaults_requires_mapping() -> None:
 
 def test_resolve_panel_config_accepts_direct_keys() -> None:
     """Ensure direct override keys populate the proper sections."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(
         payload={"item": "value"},
@@ -258,13 +254,12 @@ def test_resolve_panel_config_accepts_direct_keys() -> None:
     )
 
     assert panel.border_style == "yellow"
-    table = cast(Table, panel.renderable)
+    table = cast("Table", panel.renderable)
     assert table.columns[1].style == "green"
 
 
 def test_render_panel_none_payload_creates_blank_text() -> None:
     """Return empty text objects when the payload is missing."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(payload=None)
 
@@ -274,7 +269,6 @@ def test_render_panel_none_payload_creates_blank_text() -> None:
 
 def test_render_panel_renderable_payload_passthrough() -> None:
     """Reuse renderables that already satisfy the Rich protocol."""
-
     manager = PanelManager(config={})
     payload = Text("native")
     panel = manager.render_panel(payload=payload)
@@ -284,7 +278,6 @@ def test_render_panel_renderable_payload_passthrough() -> None:
 
 def test_render_panel_string_respects_markup_flag() -> None:
     """Fallback to plain text when markup is disabled."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(payload="[bold]raw[/bold]", content={"use_markup": False})
 
@@ -294,24 +287,22 @@ def test_render_panel_string_respects_markup_flag() -> None:
 
 def test_render_panel_table_preserves_renderable_values() -> None:
     """Keep pre-rendered values untouched inside tables."""
-
     manager = PanelManager(config={})
     value = Text("rich", style="bold")
     panel = manager.render_panel(payload=[("key", value)])
-    table = cast(Table, panel.renderable)
+    table = cast("Table", panel.renderable)
     value_cell = next(iter(table.columns[1].cells))
     assert value_cell is value
 
 
 def test_render_panel_table_applies_markup_value_style() -> None:
     """Apply markup styling when value markup is enabled."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(
         payload={"msg": "[bold]hi[/bold]"},
         content={"value_style": "italic", "show_header": False},
     )
-    table = cast(Table, panel.renderable)
+    table = cast("Table", panel.renderable)
     value_cell = next(iter(table.columns[1].cells))
 
     assert isinstance(value_cell, Text)
@@ -321,13 +312,12 @@ def test_render_panel_table_applies_markup_value_style() -> None:
 
 def test_render_panel_table_plain_value_style_without_markup() -> None:
     """Style plain text values when markup support is disabled."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(
         payload={"msg": "plain"},
         content={"use_markup": False, "value_style": "yellow"},
     )
-    table = cast(Table, panel.renderable)
+    table = cast("Table", panel.renderable)
     value_cell = next(iter(table.columns[1].cells))
 
     assert isinstance(value_cell, Text)
@@ -337,13 +327,12 @@ def test_render_panel_table_plain_value_style_without_markup() -> None:
 
 def test_render_panel_table_plain_without_style() -> None:
     """Render plain text without styling when markup is disabled."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(
         payload={"msg": "bare"},
         content={"use_markup": False},
     )
-    table = cast(Table, panel.renderable)
+    table = cast("Table", panel.renderable)
     value_cell = next(iter(table.columns[1].cells))
 
     assert isinstance(value_cell, Text)
@@ -353,13 +342,12 @@ def test_render_panel_table_plain_without_style() -> None:
 
 def test_render_panel_table_repr_style_when_pretty_disabled() -> None:
     """Render repr strings with styling when pretty formatting is off."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(
         payload={"data": {"a": 1}},
         content={"use_pretty": False, "value_style": "dim"},
     )
-    table = cast(Table, panel.renderable)
+    table = cast("Table", panel.renderable)
     value_cell = next(iter(table.columns[1].cells))
 
     assert isinstance(value_cell, Text)
@@ -369,7 +357,6 @@ def test_render_panel_table_repr_style_when_pretty_disabled() -> None:
 
 def test_render_panel_icon_only_title() -> None:
     """Render icon-only titles without an explicit heading."""
-
     manager = PanelManager(config={})
     panel = manager.render_panel(payload="hi", panel={"icon": "[warn]", "title": None})
 
@@ -378,7 +365,6 @@ def test_render_panel_icon_only_title() -> None:
 
 def test_print_panel_initializes_console() -> None:
     """Create a console lazily when none was supplied."""
-
     manager = PanelManager(config={})
     assert manager.console is None
 
@@ -390,7 +376,6 @@ def test_print_panel_initializes_console() -> None:
 
 def test_print_panel_raises_when_console_creation_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """Propagate an error if the fallback console cannot be built."""
-
     manager = PanelManager(config={})
 
     monkeypatch.setattr("kstlib.ui.panels.Console", lambda: None)
@@ -402,8 +387,7 @@ def test_print_panel_raises_when_console_creation_fails(monkeypatch: pytest.Monk
 
 def test_render_panel_invalid_sequence_payload_raises() -> None:
     """Reject sequence payloads that do not contain key/value pairs."""
-
     manager = PanelManager(config={})
 
     with pytest.raises(PanelRenderingError):
-        manager.render_panel(payload=cast(PanelPayload, [("solo",)]))
+        manager.render_panel(payload=cast("PanelPayload", [("solo",)]))

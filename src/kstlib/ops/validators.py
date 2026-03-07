@@ -46,12 +46,34 @@ MAX_COMMAND_LENGTH = 4096
 
 # Dangerous patterns to block in commands
 DANGEROUS_PATTERNS = [
-    r";\s*rm\s+-rf",  # rm -rf after semicolon
-    r"\$\(.*\)",  # Command substitution
+    r";",  # Command chaining (semicolon)
+    r"&&",  # Logical AND chaining
+    r"\|\|",  # Logical OR chaining
+    r"\|",  # Pipe to another command
+    r"\$\(.*\)",  # Command substitution $(...)
     r"`.*`",  # Backtick substitution
-    r"\|\s*sh\b",  # Pipe to shell
-    r"\|\s*bash\b",  # Pipe to bash
+    r">\s*[/\w]",  # Output redirection to file
+    r"<\s*[/\w]",  # Input redirection from file
+    r"\beval\b",  # eval command
+    r"\bsource\b",  # source command
+    r"\bexec\b",  # exec command
+    r"\x00",  # Null byte injection
 ]
+
+# Environment variables that could be abused for code injection
+DANGEROUS_ENV_KEYS = frozenset(
+    {
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+        "NODE_OPTIONS",
+        "PERL5OPT",
+        "RUBYOPT",
+    }
+)
 
 
 # ============================================================================
@@ -211,6 +233,7 @@ def validate_env(env: dict[str, str]) -> dict[str, str]:
     - Key max 128 characters
     - Value max 32KB
     - Key must be valid identifier
+    - Dangerous keys blocked (LD_PRELOAD, PYTHONPATH, etc.)
 
     Args:
         env: Dictionary of environment variables to validate.
@@ -234,18 +257,26 @@ def validate_env(env: dict[str, str]) -> dict[str, str]:
             raise ValueError(f"Env value too long (max {MAX_ENV_VALUE_LENGTH}) for key: {key}")
         if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
             raise ValueError(f"Invalid env key format: {key}")
+        if key in DANGEROUS_ENV_KEYS:
+            raise ValueError(f"Environment variable '{key}' is blocked for security reasons")
     return env
 
 
-def validate_command(command: str | None) -> str | None:
+def validate_command(command: str | None, *, strict: bool = True) -> str | None:
     """Validate command string.
 
     Rules:
-    - Max 4096 characters
-    - No dangerous shell patterns
+
+    - Max 4096 characters.
+    - No null bytes.
+    - ``strict=True`` (default): block dangerous shell patterns
+      like semicolons, pipes, redirections, eval, source, etc.
+    - ``strict=False``: only basic checks (length, null bytes)
+      for trusted contexts like pipeline config files.
 
     Args:
         command: Command string to validate (can be None).
+        strict: If True, block shell metacharacters. Default True.
 
     Returns:
         The validated command (unchanged).
@@ -258,18 +289,68 @@ def validate_command(command: str | None) -> str | None:
         'python -m app'
         >>> validate_command(None) is None
         True
+        >>> validate_command("echo a; echo b", strict=False)
+        'echo a; echo b'
     """
     if command is None:
         return None
     if len(command) > MAX_COMMAND_LENGTH:
         raise ValueError(f"Command too long (max {MAX_COMMAND_LENGTH} chars)")
-    for pattern in DANGEROUS_PATTERNS:
-        if re.search(pattern, command, re.IGNORECASE):
-            raise ValueError("Potentially dangerous command pattern detected")
+    if "\x00" in command:
+        raise ValueError("Null bytes are not allowed in commands")
+    if strict:
+        for pattern in DANGEROUS_PATTERNS:
+            if re.search(pattern, command, re.IGNORECASE):
+                raise ValueError(f"Potentially dangerous command pattern detected: {pattern}")
     return command
 
 
+# Max length for tmux send-keys input
+MAX_SEND_KEYS_LENGTH = 4096
+
+# Allowed tmux control sequences (e.g. C-c, C-z, Enter, Escape)
+_TMUX_CONTROL_PATTERN = re.compile(r"^(C-[a-zA-Z]|M-[a-zA-Z]|Enter|Escape|Space|Tab|BSpace)$")
+
+
+def validate_send_keys(keys: str) -> str:
+    """Validate input for tmux send-keys.
+
+    Allows either a single tmux control sequence (C-c, Enter, etc.)
+    or a text string with no shell metacharacters.
+
+    Args:
+        keys: Keys or text to send.
+
+    Returns:
+        The validated keys string.
+
+    Raises:
+        ValueError: If keys are invalid or contain dangerous patterns.
+
+    Examples:
+        >>> validate_send_keys("C-c")
+        'C-c'
+        >>> validate_send_keys("echo hello")
+        'echo hello'
+    """
+    if not keys:
+        raise ValueError("Keys cannot be empty")
+    if len(keys) > MAX_SEND_KEYS_LENGTH:
+        raise ValueError(f"Keys too long (max {MAX_SEND_KEYS_LENGTH} chars)")
+    if "\x00" in keys:
+        raise ValueError("Null bytes are not allowed in keys")
+    # Single control sequence is always safe
+    if _TMUX_CONTROL_PATTERN.match(keys):
+        return keys
+    # For text input, block dangerous shell patterns
+    for pattern in DANGEROUS_PATTERNS:
+        if re.search(pattern, keys, re.IGNORECASE):
+            raise ValueError(f"Potentially dangerous pattern in keys: {pattern}")
+    return keys
+
+
 __all__ = [
+    "DANGEROUS_ENV_KEYS",
     "MAX_COMMAND_LENGTH",
     "MAX_ENV_KEY_LENGTH",
     "MAX_ENV_VALUE_LENGTH",
@@ -282,6 +363,7 @@ __all__ = [
     "validate_env",
     "validate_image_name",
     "validate_ports",
+    "validate_send_keys",
     "validate_session_name",
     "validate_volumes",
 ]

@@ -94,6 +94,39 @@ def test_logmanager_structured_logging() -> None:
     logger.error("Connection failed", host="localhost", port=5432, retry=3)
 
 
+def test_logmanager_sanitize_log_value_strips_crlf() -> None:
+    """Sanitize CRLF sequences from log values to prevent log injection."""
+    result = LogManager._sanitize_log_value("line1\r\nline2\nline3")
+    assert "\r" not in result
+    assert "\n" not in result
+    assert "line1" in result
+    assert "line2" in result
+
+
+def test_logmanager_sanitize_log_value_strips_ansi() -> None:
+    """Sanitize ANSI escape codes from log values."""
+    result = LogManager._sanitize_log_value("\x1b[31mRED\x1b[0m")
+    assert "\x1b" not in result
+    assert "RED" in result
+
+
+def test_logmanager_sanitize_log_value_strips_null() -> None:
+    """Sanitize null bytes from log values."""
+    result = LogManager._sanitize_log_value("before\x00after")
+    assert "\x00" not in result
+    assert "before" in result
+    assert "after" in result
+
+
+def test_logmanager_format_structured_sanitizes_values() -> None:
+    """Structured context values are sanitized against injection."""
+    logger = LogManager(name="test_sanitize")
+    result = logger._format_structured("msg", key="val\r\ninjected: FAKE")
+    assert "\r" not in result
+    assert "\n" not in result
+    assert "val" in result
+
+
 def test_logmanager_traceback() -> None:
     """Test traceback logging."""
     logger = LogManager(name="test_traceback")
@@ -209,7 +242,6 @@ def test_logmanager_multiple_instances() -> None:
 
 def test_logmanager_uses_global_config(monkeypatch: MonkeyPatch) -> None:
     """Ensure logger section from global config is merged."""
-
     fake_global = Box({"logger": {"defaults": {"output": "console"}, "icons": {"show": False}}}, default_box=True)
     monkeypatch.setattr(logging_manager_module, "get_config", lambda: fake_global)
 
@@ -226,7 +258,6 @@ def test_logmanager_uses_global_config(monkeypatch: MonkeyPatch) -> None:
 
 def test_format_with_icon_missing_level() -> None:
     """Formatter should return message unchanged when icon missing."""
-
     logger = LogManager(name="test_missing_icon")
     assert logger._format_with_icon("nonexistent", "plain message") == "plain message"  # pylint: disable=protected-access
 
@@ -257,7 +288,6 @@ async def test_async_logging_methods(monkeypatch: MonkeyPatch) -> None:
 
 def test_logmanager_config_defaults(monkeypatch: MonkeyPatch) -> None:
     """Defaults from configuration file should override built-in fallback."""
-
     fake_global = Box(
         {
             "logger": {
@@ -280,7 +310,6 @@ def test_logmanager_config_defaults(monkeypatch: MonkeyPatch) -> None:
 
 def test_logmanager_config_presets(monkeypatch: MonkeyPatch) -> None:
     """Presets defined in configuration file should override fallback presets."""
-
     fake_global = Box(
         {
             "logger": {
@@ -315,7 +344,6 @@ def test_logmanager_handles_missing_global_config(monkeypatch: MonkeyPatch) -> N
 
 def test_logmanager_reserved_kwargs_passthrough() -> None:
     """Reserved logging kwargs should bypass structured context formatting."""
-
     logger = LogManager(name="test_reserved", config={"output": "console"})
     # exc_info is a reserved kwarg and should not appear in structured context
     logger.info("reserved kwargs handled", exc_info=True)
@@ -323,6 +351,5 @@ def test_logmanager_reserved_kwargs_passthrough() -> None:
 
 def test_logmanager_has_native_async_support_property() -> None:
     """Expose the HAS_ASYNC flag via property for coverage."""
-
     logger = LogManager(name="test_async_flag")
     assert logger.has_native_async_support is False

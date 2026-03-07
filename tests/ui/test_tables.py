@@ -20,7 +20,6 @@ class ExposedTableBuilder(TableBuilder):
     @staticmethod
     def normalize_overrides(overrides: Mapping[str, Any]) -> dict[str, Any]:
         """Proxy to the protected normalization logic for coverage-friendly assertions."""
-
         return TableBuilder._normalize_overrides(overrides)
 
 
@@ -137,7 +136,6 @@ class TestTableBuilder:
 
     def test_builder_handles_missing_runtime_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Gracefully fall back to defaults when global config is unavailable."""
-
         monkeypatch.setattr("kstlib.ui.tables.get_config", lambda: (_ for _ in ()).throw(ConfigNotLoadedError()))
 
         builder = TableBuilder()
@@ -147,7 +145,6 @@ class TestTableBuilder:
 
     def test_non_mapping_ui_config_is_ignored(self) -> None:
         """Reject configurations where the ui subtree is not a mapping."""
-
         builder = TableBuilder(config={"ui": "nope"})
         table = builder.render_table(data=[{"key": "status", "value": "ok"}])
 
@@ -155,7 +152,6 @@ class TestTableBuilder:
 
     def test_tables_config_box_is_converted(self) -> None:
         """Accept Box instances under the tables subtree."""
-
         box_tables = Box({"defaults": {"table": {"caption": "from box"}}})
         builder = TableBuilder(config={"ui": {"tables": box_tables}})
 
@@ -165,7 +161,6 @@ class TestTableBuilder:
 
     def test_tables_config_non_mapping_is_ignored(self) -> None:
         """Fallback to defaults when tables configuration is not a mapping."""
-
         builder = TableBuilder(config={"ui": {"tables": "invalid"}})
         table = builder.render_table(data=[{"key": "status", "value": "ok"}])
 
@@ -212,7 +207,6 @@ class TestTableBuilder:
 
     def test_override_columns_sequence_is_normalized(self) -> None:
         """Allow ``columns`` overrides to replace config columns."""
-
         result = ExposedTableBuilder.normalize_overrides(
             {
                 "columns": [{"header": "Runtime", "key": "runtime", "ratio": 2}],
@@ -277,7 +271,6 @@ class TestTableBuilder:
 
     def test_render_table_allows_empty_columns(self) -> None:
         """Skip column creation when an explicit empty sequence is provided."""
-
         builder = TableBuilder()
         table = builder.render_table(columns=[], data=[{}])
 
@@ -285,7 +278,6 @@ class TestTableBuilder:
 
     def test_column_ratio_is_forwarded(self) -> None:
         """Ensure ratio metadata is propagated to Rich columns."""
-
         builder = TableBuilder()
         columns = [{"header": "Name", "key": "name", "ratio": 2}]
         data = [{"name": "alpha"}]
@@ -296,7 +288,6 @@ class TestTableBuilder:
 
     def test_blank_column_definition_returns_empty_string(self) -> None:
         """Fallback to empty strings when both key and header are missing."""
-
         builder = TableBuilder()
         columns: list[dict[str, Any]] = [{}]
         data: list[dict[str, Any]] = [{}]
