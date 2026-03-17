@@ -605,7 +605,7 @@ class EndpointConfig:
     api_name: str
     path: str
     method: str = "GET"
-    query: dict[str, str] = field(default_factory=dict)
+    query: dict[str, str | None] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     body_template: dict[str, Any] | None = None
     auth: bool = True

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-03-17
+
+### Fixed
+
+- **RAPI: null query params no longer sent as empty strings** - YAML query parameters
+  with `null` value (e.g. `filter: null`) were converted to empty strings by httpx,
+  causing server-side errors (SAS Viya error 1104: `The filter '' is not valid`).
+  Null params are now excluded from the HTTP request. Kwargs can still override them
+  at call time (e.g. `filter="name eq 'foo'"`), and passing `None` as a kwarg
+  explicitly removes a default param.
+  - `_extract_query_params()` filters out `None` values from endpoint config
+  - `EndpointConfig.query` type hint corrected to `dict[str, str | None]`
+
 ## [2.0.0] - 2026-03-07
 
 ### Breaking Changes

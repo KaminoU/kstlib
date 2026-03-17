@@ -386,7 +386,8 @@ class RapiClient:
         """Extract query parameters from kwargs (excluding path params)."""
         import re
 
-        query_params = dict(endpoint_config.query)
+        # Start with non-None defaults; None means "available but not sent"
+        query_params = {k: v for k, v in endpoint_config.query.items() if v is not None}
         path_params: set[str] = set()
 
         for match in re.finditer(r"\{([a-zA-Z_][a-zA-Z0-9_]*|\d+)\}", endpoint_config.path):
@@ -396,7 +397,10 @@ class RapiClient:
 
         for key, value in kwargs.items():
             if key not in path_params:
-                query_params[key] = str(value)
+                if value is None:
+                    query_params.pop(key, None)
+                else:
+                    query_params[key] = str(value)
 
         return query_params
 

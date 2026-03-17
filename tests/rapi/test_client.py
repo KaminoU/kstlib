@@ -247,6 +247,102 @@ class TestRapiClientBuildRequest:
         assert "version=1" in url_str
         assert "q=test" in url_str
 
+    def test_build_excludes_null_query_params(self) -> None:
+        """Null query params from YAML config are excluded from the request."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.com",
+                    "endpoints": {
+                        "list": {
+                            "path": "/items",
+                            "query": {
+                                "start": "0",
+                                "limit": "20",
+                                "filter": None,
+                                "sortBy": None,
+                            },
+                        }
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        api, endpoint = manager.resolve("api.list")
+        request = client._build_request(api, endpoint, (), {}, None, None)
+
+        url_str = str(request.url)
+        assert "start=0" in url_str
+        assert "limit=20" in url_str
+        assert "filter" not in url_str
+        assert "sortBy" not in url_str
+
+    def test_build_kwargs_override_null_query_param(self) -> None:
+        """Kwargs can override a null default query param."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.com",
+                    "endpoints": {
+                        "list": {
+                            "path": "/items",
+                            "query": {"filter": None, "start": "0"},
+                        }
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        api, endpoint = manager.resolve("api.list")
+        request = client._build_request(
+            api,
+            endpoint,
+            (),
+            {"filter": "name eq 'foo'"},
+            None,
+            None,
+        )
+
+        url_str = str(request.url)
+        assert "filter=name" in url_str
+        assert "start=0" in url_str
+
+    def test_build_kwargs_none_removes_default_query_param(self) -> None:
+        """Passing None as kwarg removes a default query param."""
+        config = {
+            "api": {
+                "api": {
+                    "base_url": "https://api.com",
+                    "endpoints": {
+                        "list": {
+                            "path": "/items",
+                            "query": {"start": "0", "limit": "20"},
+                        }
+                    },
+                }
+            }
+        }
+        manager = RapiConfigManager(config)
+        client = RapiClient(config_manager=manager)
+
+        api, endpoint = manager.resolve("api.list")
+        request = client._build_request(
+            api,
+            endpoint,
+            (),
+            {"limit": None},
+            None,
+            None,
+        )
+
+        url_str = str(request.url)
+        assert "start=0" in url_str
+        assert "limit" not in url_str
+
     def test_build_with_runtime_headers(self) -> None:
         """Build request with runtime headers."""
         config = {
