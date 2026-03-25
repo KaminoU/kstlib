@@ -194,6 +194,29 @@ class HmacConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MultipartConfig:
+    """Multipart upload configuration for an endpoint.
+
+    Attributes:
+        field_name: Form field name for the file (default: "file").
+        content_type: Override MIME type (auto-detected from filename if None).
+
+    Examples:
+        >>> config = MultipartConfig(field_name="dataFile")
+        >>> config.field_name
+        'dataFile'
+    """
+
+    field_name: str = "file"
+    content_type: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate multipart config values."""
+        if not self.field_name or len(self.field_name) > _MAX_FIELD_NAME_LENGTH:
+            raise ValueError(f"field_name must be 1-{_MAX_FIELD_NAME_LENGTH} chars, got: {self.field_name!r}")
+
+
+@dataclass(frozen=True, slots=True)
 class SafeguardConfig:
     """Global safeguard configuration for dangerous HTTP methods.
 
@@ -519,16 +542,29 @@ def _check_endpoint_collisions(
     new_endpoints = set(api_data.get("endpoints", {}).keys())
     collisions = existing_endpoints & new_endpoints
 
+    if collisions:
+        log.warning(
+            "API '%s': %d endpoint collision(s) in '%s' (already loaded from previous files). "
+            "Tip: check for overlapping includes or duplicate API names. "
+            "Use rapi.strict: true to raise an error instead.",
+            api_name,
+            len(collisions),
+            path.name,
+        )
     for ep_name in collisions:
         full_ref = f"{api_name}.{ep_name}"
+        first_source = (
+            endpoint_sources.get(full_ref, ["unknown"])[0] if full_ref in endpoint_sources else "earlier file"
+        )
         if full_ref not in endpoint_sources:
             endpoint_sources[full_ref] = []
         endpoint_sources[full_ref].append(str(path))
         if strict:
             raise EndpointCollisionError(full_ref, endpoint_sources[full_ref])
         log.warning(
-            "Endpoint '%s' redefined in %s, overwriting (use rapi.strict: true to error)",
+            "  - %s (first: %s, now: %s, overwriting)",
             full_ref,
+            first_source,
             path.name,
         )
 
@@ -547,9 +583,21 @@ def _merge_api_endpoints(
         api_data: New API data from current file (modified in place).
         path: Current file path (for logging).
     """
+    existing_count = len(existing_api.get("endpoints", {}))
+    new_count = len(api_data.get("endpoints", {}))
     merged_endpoints = {**existing_api.get("endpoints", {}), **api_data.get("endpoints", {})}
     api_data["endpoints"] = merged_endpoints
-    log.warning("API '%s' redefined in %s, merging endpoints", api_name, path.name)
+    log.warning(
+        "API '%s' redefined in '%s': merging %d existing + %d new = %d endpoints. "
+        "This usually means two files declare name: '%s'. "
+        "Consider using include: in a single root file instead.",
+        api_name,
+        path.name,
+        existing_count,
+        new_count,
+        len(merged_endpoints),
+        api_name,
+    )
 
 
 def _track_endpoint_sources(
@@ -611,6 +659,13 @@ class EndpointConfig:
     auth: bool = True
     safeguard: str | None = None
     description: str | None = None
+    multipart: MultipartConfig | None = None
+
+    @property
+    def is_multipart(self) -> bool:
+        """Check if endpoint is configured for multipart/form-data upload."""
+        ct = self.headers.get("Content-Type", "")
+        return "multipart/form-data" in ct.lower()
 
     def __post_init__(self) -> None:
         """Validate safeguard field (deep defense)."""
@@ -1010,6 +1065,17 @@ class RapiConfigManager:
                 method = ep_data.get("method", "GET").upper()
                 safeguard = ep_data.get("safeguard")
 
+                # Parse optional multipart config
+                multipart_data = ep_data.get("multipart")
+                multipart_config: MultipartConfig | None = None
+                if isinstance(multipart_data, dict):
+                    multipart_config = MultipartConfig(
+                        field_name=multipart_data.get("field_name", "file"),
+                        content_type=multipart_data.get("content_type"),
+                    )
+                elif multipart_data is True:
+                    multipart_config = MultipartConfig()
+
                 endpoint = EndpointConfig(
                     name=ep_name,
                     api_name=api_name,
@@ -1021,6 +1087,7 @@ class RapiConfigManager:
                     auth=ep_data.get("auth", True),
                     safeguard=safeguard,
                     description=ep_data.get("description"),
+                    multipart=multipart_config,
                 )
 
                 # Validate safeguard requirement
@@ -1092,6 +1159,14 @@ class RapiConfigManager:
         new_endpoints = set(api_config.endpoints.keys())
         collisions = existing_endpoints & new_endpoints
 
+        if collisions:
+            log.warning(
+                "API '%s': %d endpoint(s) from included files conflict with inline config (keeping inline). "
+                "Colliding: %s",
+                api_name,
+                len(collisions),
+                ", ".join(sorted(f"{api_name}.{ep}" for ep in collisions)),
+            )
         for ep_name in collisions:
             full_ref = f"{api_name}.{ep_name}"
             sources = ["inline config"]
@@ -1099,15 +1174,13 @@ class RapiConfigManager:
                 sources.append(other._endpoint_sources[full_ref])
             if self._strict:
                 raise EndpointCollisionError(full_ref, sources)
-            log.warning(
-                "Endpoint '%s' in include conflicts with inline config, keeping inline",
-                full_ref,
-            )
 
-        log.warning(
-            "API '%s' in include conflicts with inline config, keeping inline",
-            api_name,
-        )
+        if not collisions:
+            log.warning(
+                "API '%s' defined in both inline config and included files (no endpoint overlap, keeping inline). "
+                "Consider removing one definition to avoid confusion.",
+                api_name,
+            )
 
     def _update_endpoint_index(self, api_name: str, api_config: ApiConfig) -> None:
         """Update endpoint index for an API.
@@ -1418,6 +1491,7 @@ __all__ = [
     "ApiConfig",
     "EndpointConfig",
     "HmacConfig",
+    "MultipartConfig",
     "RapiConfigManager",
     "SafeguardConfig",
     "load_rapi_config",

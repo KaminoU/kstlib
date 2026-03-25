@@ -29,6 +29,7 @@ __all__ = [
     "HARD_MAX_EPOCH_TIMESTAMP",
     "HARD_MAX_PIPELINE_STEPS",
     "HARD_MAX_PIPELINE_TIMEOUT",
+    "HARD_MAX_RAPI_UPLOAD_SIZE",
     "HARD_MAX_STEP_ARGS",
     "HARD_MAX_TIMEZONE_LENGTH",
     "HARD_MIN_EPOCH_TIMESTAMP",
@@ -138,6 +139,9 @@ HARD_MAX_RAPI_RETRY_DELAY = 60.0
 #: RAPI backoff multiplier bounds - protects against too aggressive or too slow backoff.
 HARD_MIN_RAPI_BACKOFF = 1.0
 HARD_MAX_RAPI_BACKOFF = 5.0
+
+#: RAPI max upload file size (100 MiB) - protects against memory exhaustion on multipart uploads.
+HARD_MAX_RAPI_UPLOAD_SIZE = 100 * 1024 * 1024
 
 #: Alert throttle rate bounds - protects against too permissive or impossible thresholds.
 HARD_MIN_THROTTLE_RATE = 1
@@ -658,11 +662,17 @@ class RapiLimits:
     max_retries: int
     retry_delay: float
     retry_backoff: float
+    max_upload_size: int = HARD_MAX_RAPI_UPLOAD_SIZE
 
     @property
     def max_response_size_display(self) -> str:
         """Human-readable response size limit."""
         return format_bytes(self.max_response_size)
+
+    @property
+    def max_upload_size_display(self) -> str:
+        """Human-readable upload size limit."""
+        return format_bytes(self.max_upload_size)
 
 
 def get_rapi_limits(
@@ -698,6 +708,18 @@ def get_rapi_limits(
 
     max_response_size = min(configured_size, HARD_MAX_RAPI_RESPONSE_SIZE)
 
+    # Parse max_upload_size (supports human-readable strings like "50M")
+    raw_upload_size = _get_nested(config, "rapi", "limits", "max_upload_size")
+    if raw_upload_size is not None:
+        try:
+            configured_upload = parse_size_string(raw_upload_size)
+        except ValueError:
+            configured_upload = HARD_MAX_RAPI_UPLOAD_SIZE
+    else:
+        configured_upload = HARD_MAX_RAPI_UPLOAD_SIZE
+
+    max_upload_size = min(configured_upload, HARD_MAX_RAPI_UPLOAD_SIZE)
+
     return RapiLimits(
         timeout=_parse_float_config(
             _get_nested(config, "rapi", "limits", "timeout"),
@@ -724,6 +746,7 @@ def get_rapi_limits(
             HARD_MIN_RAPI_BACKOFF,
             HARD_MAX_RAPI_BACKOFF,
         ),
+        max_upload_size=max_upload_size,
     )
 
 

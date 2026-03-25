@@ -79,11 +79,12 @@ Configuration:
             path: "/user/repos"
 """
 
-from kstlib.rapi.client import RapiClient, RapiResponse, call, call_async
+from kstlib.rapi.client import FilePayload, RapiClient, RapiResponse, call, call_async
 from kstlib.rapi.config import (
     ApiConfig,
     EndpointConfig,
     HmacConfig,
+    MultipartConfig,
     RapiConfigManager,
     SafeguardConfig,
     load_rapi_config,
@@ -111,7 +112,9 @@ __all__ = [
     "EndpointConfig",
     "EndpointNotFoundError",
     "EnvVarError",
+    "FilePayload",
     "HmacConfig",
+    "MultipartConfig",
     "RapiClient",
     "RapiConfigManager",
     "RapiError",

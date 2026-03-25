@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-03-25
+
+### Added
+
+- **RAPI: multipart/form-data upload** - Endpoints with `Content-Type: multipart/form-data`
+  in their headers now auto-handle file uploads via httpx native `files=` parameter.
+  MIME type auto-detected from extension, boundary auto-generated.
+  - `MultipartConfig` dataclass for fine-tuning (field_name, content_type)
+  - `FilePayload` dataclass for programmatic uploads without files on disk
+  - `EndpointConfig.is_multipart` property, optional `multipart:` YAML section
+  - TRACE-level logging: boundary, parts, field names, sizes (`-vvv`)
+  - `HARD_MAX_RAPI_UPLOAD_SIZE` (100 MiB) deep defense limit
+
+- **RAPI CLI: `--raw` flag** - Output raw JSON without Rich formatting, pipeable to `jq`
+
+- **RAPI CLI: `--minify` flag** - Output compact single-line JSON, combinable with `--out`
+
+### Improved
+
+- **RAPI: endpoint collision warnings** - Now show collision count, first source file,
+  and actionable tips instead of just the endpoint name
+
+### Documentation
+
+- Multipart upload section with YAML config and Python examples
+- `--raw` and `--minify` in CLI options tables
+- `FilePayload` and `MultipartConfig` in API reference autodoc
+
 ## [2.0.1] - 2026-03-17
 
 ### Fixed
@@ -521,6 +549,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[2.1.0]: https://github.com/KaminoU/kstlib/compare/v2.0.1...v2.1.0
+[2.0.1]: https://github.com/KaminoU/kstlib/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/KaminoU/kstlib/compare/v1.7.8...v2.0.0
 [1.7.8]: https://github.com/KaminoU/kstlib/compare/v1.7.7...v1.7.8
 [1.7.7]: https://github.com/KaminoU/kstlib/compare/v1.7.6...v1.7.7

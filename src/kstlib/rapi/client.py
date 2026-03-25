@@ -22,6 +22,7 @@ from kstlib.rapi.config import (
     ApiConfig,
     EndpointConfig,
     HmacConfig,
+    MultipartConfig,
     RapiConfigManager,
     load_rapi_config,
 )
@@ -44,6 +45,34 @@ log = get_logger(__name__)
 def _log_trace(msg: str, *args: Any) -> None:
     """Log at TRACE level."""
     log.log(TRACE_LEVEL, msg, *args)
+
+
+@dataclass
+class FilePayload:
+    """Carrier for file upload data (multipart mode).
+
+    Use this to upload file content programmatically without a file on disk.
+
+    Attributes:
+        filename: Original filename (used in Content-Disposition).
+        data: Raw file bytes.
+        content_type: MIME type of the file.
+        field_name: Form field name for the file part.
+
+    Examples:
+        >>> payload = FilePayload(
+        ...     filename="report.csv",
+        ...     data=b"col1,col2",
+        ...     content_type="text/csv",
+        ... )
+        >>> payload.field_name
+        'file'
+    """
+
+    filename: str
+    data: bytes
+    content_type: str
+    field_name: str = "file"
 
 
 def _validate_safeguard(
@@ -434,6 +463,80 @@ class RapiClient:
 
         return content
 
+    def _prepare_multipart(
+        self,
+        body: Any,
+        endpoint_config: EndpointConfig,
+    ) -> list[tuple[str, tuple[str, bytes, str]]]:
+        """Prepare multipart file upload from body.
+
+        Args:
+            body: Body value (expected: "@filepath" string or FilePayload).
+            endpoint_config: Endpoint configuration with optional multipart config.
+
+        Returns:
+            httpx files parameter: list of (field_name, (filename, data, content_type)).
+
+        Raises:
+            RequestError: If body is not a valid file reference for multipart.
+        """
+        import mimetypes
+        from pathlib import Path
+
+        mp_config = endpoint_config.multipart or MultipartConfig()
+
+        if isinstance(body, FilePayload):
+            _log_trace(
+                "Multipart upload (FilePayload): field=%s, file=%s, type=%s, size=%d",
+                body.field_name,
+                body.filename,
+                body.content_type,
+                len(body.data),
+            )
+            return [(body.field_name, (body.filename, body.data, body.content_type))]
+
+        if not isinstance(body, str) or not body.startswith("@"):
+            raise RequestError(
+                f"Multipart endpoint '{endpoint_config.full_ref}' requires a file body "
+                f"(@/path/to/file) or FilePayload, got: {type(body).__name__}",
+                retryable=False,
+            )
+
+        filepath = Path(body[1:])
+        if not filepath.exists():
+            raise RequestError(
+                f"File not found for multipart upload: {filepath}",
+                retryable=False,
+            )
+
+        file_data = filepath.read_bytes()
+
+        # Validate file size
+        limits = get_rapi_limits()
+        if len(file_data) > limits.max_upload_size:
+            raise RequestError(
+                f"File too large for upload: {len(file_data)} bytes (max: {limits.max_upload_size_display})",
+                retryable=False,
+            )
+
+        filename = filepath.name
+        content_type = mp_config.content_type
+        if content_type is None:
+            guessed, _ = mimetypes.guess_type(filename)
+            content_type = guessed or "application/octet-stream"
+
+        field_name = mp_config.field_name
+
+        _log_trace(
+            "Multipart upload: field=%s, file=%s, type=%s, size=%d bytes",
+            field_name,
+            filename,
+            content_type,
+            len(file_data),
+        )
+
+        return [(field_name, (filename, file_data, content_type))]
+
     def _build_request(
         self,
         api_config: ApiConfig,
@@ -487,22 +590,57 @@ class RapiClient:
             dict(runtime_headers) if runtime_headers else {},
         )
 
-        # Prepare body first (needed for HMAC signing if sign_body=True)
-        content = self._prepare_body(body, merged_headers)
+        # Detect multipart mode from merged Content-Type header
+        is_multipart = "multipart/form-data" in merged_headers.get("Content-Type", "").lower()
 
-        # Apply authentication (may modify headers and query_params for HMAC)
-        # Skip auth if endpoint explicitly disables it (auth: false)
-        if api_config.credentials and endpoint_config.auth:
-            self._apply_auth(merged_headers, api_config, query_params, content)
+        if is_multipart:
+            _log_trace("Multipart mode detected from Content-Type header")
+            # Multipart file upload: use httpx files= parameter
+            files_param = self._prepare_multipart(body, endpoint_config)
 
-        # Create request
-        request = httpx.Request(
-            method=endpoint_config.method,
-            url=url,
-            params=query_params if query_params else None,
-            headers=merged_headers,
-            content=content,
-        )
+            # Remove Content-Type: httpx generates it with the boundary
+            merged_headers.pop("Content-Type", None)
+            merged_headers.pop("content-type", None)
+
+            # Apply auth (no body content for HMAC signing in multipart mode)
+            if api_config.credentials and endpoint_config.auth:
+                self._apply_auth(merged_headers, api_config, query_params, None)
+
+            request = httpx.Request(
+                method=endpoint_config.method,
+                url=url,
+                params=query_params if query_params else None,
+                headers=merged_headers,
+                files=files_param,
+            )
+
+            # Log multipart request structure at TRACE level
+            generated_ct = request.headers.get("content-type", "")
+            _log_trace("Multipart Content-Type (generated): %s", generated_ct)
+            for field_name, (filename, data, ct) in files_param:
+                _log_trace(
+                    "Multipart part: field=%s, filename=%s, content_type=%s, size=%d bytes",
+                    field_name,
+                    filename,
+                    ct,
+                    len(data),
+                )
+        else:
+            # Normal body processing
+            content = self._prepare_body(body, merged_headers)
+
+            # Apply authentication (may modify headers and query_params for HMAC)
+            # Skip auth if endpoint explicitly disables it (auth: false)
+            if api_config.credentials and endpoint_config.auth:
+                self._apply_auth(merged_headers, api_config, query_params, content)
+
+            request = httpx.Request(
+                method=endpoint_config.method,
+                url=url,
+                params=query_params if query_params else None,
+                headers=merged_headers,
+                content=content,
+            )
 
         self._log_request(request)
         return request

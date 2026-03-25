@@ -248,6 +248,8 @@ kstlib rapi list --verbose  # show methods and auth
 | `--body` | `-b` | JSON body or `@filename` |
 | `--header` | `-H` | Custom header (repeatable) |
 | `--quiet` | `-q` | Suppress status messages |
+| `--raw` | | Output raw JSON without Rich formatting (pipeable) |
+| `--minify` | | Output compact single-line JSON |
 
 ### Verbosity and Tracing
 
@@ -566,6 +568,11 @@ kstlib -vvv rapi binance.balance   # TRACE mode to see signature details
    :show-inheritance:
    :no-index:
 
+.. autoclass:: kstlib.rapi.FilePayload
+   :members:
+   :show-inheritance:
+   :no-index:
+
 .. autofunction:: kstlib.rapi.call
 
 .. autofunction:: kstlib.rapi.call_async
@@ -584,6 +591,11 @@ kstlib -vvv rapi binance.balance   # TRACE mode to see signature details
    :no-index:
 
 .. autoclass:: kstlib.rapi.EndpointConfig
+   :members:
+   :show-inheritance:
+   :no-index:
+
+.. autoclass:: kstlib.rapi.MultipartConfig
    :members:
    :show-inheritance:
    :no-index:

@@ -50,6 +50,15 @@ kstlib rapi myapi.create -b '{"name": "test"}'
 # Body from file (curl-like syntax)
 kstlib rapi myapi.create -b @payload.json
 
+# Multipart file upload (auto-detected from Content-Type)
+kstlib rapi transfer.packages-upload -b @package.json
+
+# Raw output (no Rich, pipeable to jq)
+kstlib rapi github.user --raw | jq '.login'
+
+# Minified JSON (compact single-line)
+kstlib rapi github.user --minify --out user.json
+
 # Output to file (for scripting)
 kstlib rapi github.user -o user.json
 
@@ -83,6 +92,8 @@ kstlib -vvv rapi github.user
 | `--body` | `-b` | JSON body or `@filename` to read from file |
 | `--header` | `-H` | Custom header (repeatable) |
 | `--quiet` | `-q` | Suppress status messages |
+| `--raw` | | Output raw JSON without Rich formatting (pipeable) |
+| `--minify` | | Output compact single-line JSON |
 
 ### Verbosity Levels
 
@@ -182,6 +193,7 @@ client = RapiClient.discover()  # Auto-discover *.rapi.yml in cwd
 | `max_retries` | 3 | 0 | 10 |
 | `retry_delay` | 1.0 | 0.1 | 60.0 |
 | `retry_backoff` | 2.0 | 1.0 | 5.0 |
+| `max_upload_size` | 100MB | - | 100MB |
 
 ## Key Features
 
@@ -191,6 +203,8 @@ client = RapiClient.discover()  # Auto-discover *.rapi.yml in cwd
 - **External Files**: `*.rapi.yml` for modular API definitions
 - **Auto-Discovery**: `RapiClient.discover()` finds local configs
 - **Multi-Source Credentials**: SOPS, environment, files, keyring
+- **Multipart Upload**: Auto-detected from Content-Type, uses httpx native `files=`
+- **Output Modes**: `--raw` (pipeable), `--minify` (compact), `--quiet` (no Rich)
 - **File Output**: `-o file.json` for scripting
 - **TRACE Logging**: `-vvv` for detailed debugging
 
@@ -272,6 +286,52 @@ kstlib rapi myapi.create -b '{"name": "test", "value": 42}'
 
 # CLI: from file (curl-like)
 kstlib rapi myapi.create -b @data.json
+```
+
+## Multipart File Upload
+
+For endpoints that expect `multipart/form-data` (file uploads), set the `Content-Type` header:
+
+```yaml
+endpoints:
+  packages-upload:
+    path: /transfer/packages
+    method: POST
+    headers:
+      Content-Type: multipart/form-data
+      Accept: application/vnd.sas.summary+json
+```
+
+kstlib auto-detects multipart mode from the Content-Type header and handles boundary generation via httpx:
+
+```bash
+# Upload a file (auto-detected as multipart from endpoint config)
+kstlib rapi transfer.packages-upload -b @package.json
+```
+
+```python
+# Python: pass @filepath string
+response = client.call("transfer.packages-upload", body="@package.json")
+
+# Python: pass FilePayload for in-memory data
+from kstlib.rapi import FilePayload
+
+payload = FilePayload(filename="data.csv", data=b"a,b\n1,2", content_type="text/csv")
+response = client.call("transfer.packages-upload", body=payload)
+```
+
+Optional fine-tuning via `multipart:` section:
+
+```yaml
+endpoints:
+  upload:
+    path: /upload
+    method: POST
+    headers:
+      Content-Type: multipart/form-data
+    multipart:
+      field_name: dataFile           # default: "file"
+      content_type: application/zip  # default: auto-detected from extension
 ```
 
 ## Common Patterns

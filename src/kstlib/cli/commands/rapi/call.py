@@ -116,25 +116,41 @@ def _parse_body(body: str | None) -> dict[str, Any] | list[Any] | None:
         exit_error(f"Invalid JSON body: {e}")
 
 
-def _format_output(
+def _serialize_json(data: Any, *, minify: bool = False, indent: int = 2) -> str:
+    """Serialize data to JSON string.
+
+    Args:
+        data: Data to serialize.
+        minify: If True, output compact single-line JSON.
+        indent: Indentation level for pretty-print.
+
+    Returns:
+        JSON string.
+    """
+    if minify:
+        return json.dumps(data, separators=(",", ":"), default=str)
+    return to_json(data, indent=indent)
+
+
+def _build_content(
     response: RapiResponse,
     fmt: str,
-    quiet: bool,
-    out_file: str | None = None,
-) -> None:
-    """Format and print response output.
+    minify: bool,
+) -> str:
+    """Build formatted content string from response.
 
     Args:
         response: The API response to format.
         fmt: Output format (json, text, full).
-        quiet: Whether to suppress rich formatting.
-        out_file: Optional file path to write output to.
+        minify: Output compact single-line JSON.
+
+    Returns:
+        Formatted content string.
     """
-    # Load render config for pretty-print settings
     render_config = get_rapi_render_config()
     content_type = response.headers.get("content-type", "")
+    indent = render_config.json_indent or 2
 
-    # Build output content
     if fmt == "full":
         result_data = {
             "endpoint": response.endpoint_ref,
@@ -144,22 +160,41 @@ def _format_output(
             "headers": dict(response.headers),
             "data": response.data,
         }
-        content = to_json(result_data, indent=render_config.json_indent or 2)
-    elif fmt == "text":
-        # Text format: apply XML pretty-print if enabled and content is XML
+        return _serialize_json(result_data, minify=minify, indent=indent)
+
+    if fmt == "text":
         if render_config.xml_pretty and is_xml_content(response.text, content_type):
-            content = to_xml(response.text)
-        else:
-            content = response.text
-    elif response.data is not None:
-        # JSON data available: format with configured indent
-        content = to_json(response.data, indent=render_config.json_indent or 2)
-    elif render_config.xml_pretty and is_xml_content(response.text, content_type):
-        # No JSON data but XML detected: pretty-print if enabled
-        content = to_xml(response.text)
-    else:
-        # Raw text fallback
-        content = response.text
+            return to_xml(response.text)
+        return response.text
+
+    # fmt == "json" (default)
+    if response.data is not None:
+        return _serialize_json(response.data, minify=minify, indent=indent)
+    if render_config.xml_pretty and is_xml_content(response.text, content_type):
+        return to_xml(response.text)
+    return response.text
+
+
+def _format_output(
+    response: RapiResponse,
+    fmt: str,
+    quiet: bool,
+    out_file: str | None = None,
+    *,
+    raw: bool = False,
+    minify: bool = False,
+) -> None:
+    """Format and print response output.
+
+    Args:
+        response: The API response to format.
+        fmt: Output format (json, text, full).
+        quiet: Whether to suppress rich formatting.
+        out_file: Optional file path to write output to.
+        raw: Output raw JSON without Rich formatting (pipeable).
+        minify: Output compact single-line JSON.
+    """
+    content = _build_content(response, fmt, minify)
 
     # Write to file or print
     if out_file:
@@ -168,7 +203,7 @@ def _format_output(
         Path(out_file).write_text(content, encoding="utf-8")
         if not quiet:
             console.print(f"[green]Output written to:[/green] {out_file}")
-    elif quiet or fmt == "text" or (fmt == "json" and response.data is None):
+    elif quiet or raw or fmt == "text" or (fmt == "json" and response.data is None):
         print(content)
     else:
         console.print_json(content)
@@ -225,6 +260,20 @@ def call(
             help="Suppress status messages, only output response.",
         ),
     ] = False,
+    raw: Annotated[
+        bool,
+        typer.Option(
+            "--raw",
+            help="Output raw JSON without Rich formatting (pipeable).",
+        ),
+    ] = False,
+    minify: Annotated[
+        bool,
+        typer.Option(
+            "--minify",
+            help="Output compact single-line JSON.",
+        ),
+    ] = False,
 ) -> None:
     """Make an API call to a configured endpoint.
 
@@ -249,20 +298,35 @@ def call(
 
         # Quiet mode (JSON only, no formatting)
         kstlib rapi github.rate-limit -q
+
+        # Raw output (no Rich, pipeable to jq)
+        kstlib rapi github.user --raw | jq '.login'
+
+        # Minified JSON (compact single-line)
+        kstlib rapi github.user --minify --out user.json
     """
     # Parse arguments
     positional_args, keyword_args = _parse_args(args or [])
     headers = _parse_headers(header or [])
-    parsed_body = _parse_body(body)
 
     # Validate output format
     if fmt not in ("json", "text", "full"):
         exit_error(f"Invalid output format: '{fmt}'\nValid formats: json, text, full")
 
     try:
-        # Create client and make call
+        # Create client and resolve endpoint before body parsing
         config_manager = load_rapi_config()
         client = RapiClient(config_manager=config_manager)
+
+        # Resolve endpoint to check if multipart
+        _, endpoint_config = config_manager.resolve(endpoint)
+
+        # For multipart endpoints with @file body, pass raw string to client
+        # (client reads file as binary instead of CLI parsing as JSON)
+        if endpoint_config.is_multipart and body is not None and body.startswith("@"):
+            parsed_body: Any = body
+        else:
+            parsed_body = _parse_body(body)
 
         response = client.call(
             endpoint,
@@ -273,7 +337,7 @@ def call(
         )
 
         # Format and print output
-        _format_output(response, fmt, quiet, out)
+        _format_output(response, fmt, quiet, out, raw=raw, minify=minify)
 
         # Exit with appropriate code
         if not response.ok:

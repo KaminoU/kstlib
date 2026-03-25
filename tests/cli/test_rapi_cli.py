@@ -429,9 +429,10 @@ class TestRapiCall:
             patch.object(call_module, "load_rapi_config") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
-            mock_load.return_value = _mock_config_manager()
+            mock_manager = MagicMock()
+            mock_manager.resolve.side_effect = EndpointAmbiguousError("users", ["api1", "api2"])
+            mock_load.return_value = mock_manager
             mock_client = MagicMock()
-            mock_client.call.side_effect = EndpointAmbiguousError("users", ["api1", "api2"])
             mock_client_cls.return_value = mock_client
 
             result = runner.invoke(app, ["rapi", "call", "users"])
