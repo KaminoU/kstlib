@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.2] - 2026-03-29
+
+### Fixed
+
+- **deps: enforce transitive dep lower bounds for CVE remediation** -
+  Previous CVE fixes only bumped lockfiles (uv.lock, pylock.toml) but did not
+  set minimum versions in pyproject.toml. Users installing via `pip install kstlib`
+  could resolve vulnerable transitive dependencies. Now pyproject.toml enforces
+  patched versions for all security-critical transitive deps.
+
+  **Runtime dependencies added:**
+  - `cryptography>=46.0.6`
+    ([CVE-2026-26007](https://nvd.nist.gov/vuln/detail/CVE-2026-26007),
+    [CVE-2026-34073](https://nvd.nist.gov/vuln/detail/CVE-2026-34073)) -
+    SECT curve subgroup validation + DNS name constraint enforcement (via authlib)
+  - `requests>=2.33.0`
+    ([CVE-2024-47081](https://nvd.nist.gov/vuln/detail/CVE-2024-47081),
+    [CVE-2026-25645](https://nvd.nist.gov/vuln/detail/CVE-2026-25645)) -
+    cookie handling + temp path replacement (via httpx)
+  - `urllib3>=2.6.3`
+    ([CVE-2025-50182](https://nvd.nist.gov/vuln/detail/CVE-2025-50182),
+    [CVE-2025-50181](https://nvd.nist.gov/vuln/detail/CVE-2025-50181),
+    [CVE-2025-66418](https://nvd.nist.gov/vuln/detail/CVE-2025-66418),
+    [CVE-2025-66471](https://nvd.nist.gov/vuln/detail/CVE-2025-66471),
+    [CVE-2026-21441](https://nvd.nist.gov/vuln/detail/CVE-2026-21441)) -
+    5 vulnerabilities in HTTP client (via requests)
+
+  **Dev dependencies added:**
+  - `filelock>=3.20.3`
+    ([CVE-2026-22701](https://nvd.nist.gov/vuln/detail/CVE-2026-22701)) - via tox/virtualenv
+  - `jaraco-context>=6.1.0`
+    ([CVE-2026-23949](https://nvd.nist.gov/vuln/detail/CVE-2026-23949)) - via keyring
+  - `virtualenv>=20.36.1`
+    ([CVE-2026-22702](https://nvd.nist.gov/vuln/detail/CVE-2026-22702)) - via tox
+  - `wheel>=0.46.2`
+    ([CVE-2026-24049](https://nvd.nist.gov/vuln/detail/CVE-2026-24049)) - build-system
+
 ## [2.1.1] - 2026-03-26
 
 ### Fixed
@@ -559,6 +596,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[2.1.2]: https://github.com/KaminoU/kstlib/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/KaminoU/kstlib/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/KaminoU/kstlib/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/KaminoU/kstlib/compare/v2.0.0...v2.0.1

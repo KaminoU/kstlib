@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 80.0.0", "wheel"]
+requires = ["setuptools >= 80.0.0", "wheel >= 0.46.2"]  # wheel: CVE-2026-24049
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -58,6 +58,11 @@ dependencies = [
 
     # --- Time & Scheduling ---
     "pendulum>=3.0,<4", # Modern datetime library with timezone support
+
+    # --- Security: transitive dep lower bounds (CVE) ---
+    "cryptography>=46.0.6",  # CVE-2026-26007 + CVE-2026-34073 (via authlib)
+    "requests>=2.33.0",      # CVE-2024-47081 + CVE-2026-25645 (via httpx)
+    "urllib3>=2.6.3",         # CVE-2025-50182/50181 + CVE-2025-66418/66471 + CVE-2026-21441 (via requests)
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -99,6 +104,11 @@ dev = [
 
     # Git hooks
     "pre-commit>=4.0,<5", # Git pre-commit hooks for local CI checks
+
+    # Security: transitive dep lower bounds (CVE)
+    "filelock>=3.20.3",       # CVE-2026-22701 (via tox/virtualenv)
+    "jaraco-context>=6.1.0",  # CVE-2026-23949 (via keyring)
+    "virtualenv>=20.36.1",    # CVE-2026-22702 (via tox)
 
     # Optional providers (for integration tests)
     "boto3>=1.35,<2", # AWS SDK (for KMS provider tests)
@@ -158,6 +168,10 @@ all = [
     "boto3>=1.35,<2",
     "moto[ses]>=5.0,<6",
     "awscli-local>=0.22,<1",
+    # Security: transitive dep lower bounds (CVE)
+    "filelock>=3.20.3",
+    "jaraco-context>=6.1.0",
+    "virtualenv>=20.36.1",
 ]
 
 [tool.setuptools.dynamic]
