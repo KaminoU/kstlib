@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.3] - 2026-04-01
+
+### Fixed
+
+- **deps: bump Pygments >= 2.20.0**
+  ([CVE-2026-4539](https://nvd.nist.gov/vuln/detail/CVE-2026-4539)) -
+  Regular Expression Denial of Service (ReDoS) due to inefficient regex for
+  GUID matching. Transitive dependency via Sphinx. Lower bound enforced in
+  dev, docs, and all extras.
+
 ## [2.1.2] - 2026-03-29
 
 ### Fixed
@@ -596,6 +606,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[2.1.3]: https://github.com/KaminoU/kstlib/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/KaminoU/kstlib/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/KaminoU/kstlib/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/KaminoU/kstlib/compare/v2.0.1...v2.1.0

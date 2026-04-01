@@ -109,6 +109,7 @@ dev = [
     "filelock>=3.20.3",       # CVE-2026-22701 (via tox/virtualenv)
     "jaraco-context>=6.1.0",  # CVE-2026-23949 (via keyring)
     "virtualenv>=20.36.1",    # CVE-2026-22702 (via tox)
+    "Pygments>=2.20.0",       # CVE-2026-4539 ReDoS (via sphinx)
 
     # Optional providers (for integration tests)
     "boto3>=1.35,<2", # AWS SDK (for KMS provider tests)
@@ -128,6 +129,8 @@ docs = [
     "sphinx-autodoc-typehints>=3.0,<4",
     "sphinx-togglebutton>=0.3,<1",
     "sphinx-design>=0.6,<0.7",
+    # Security: transitive dep lower bounds (CVE)
+    "Pygments>=2.20.0",  # CVE-2026-4539 ReDoS (via sphinx)
 ]
 
 # Build & release
@@ -172,6 +175,7 @@ all = [
     "filelock>=3.20.3",
     "jaraco-context>=6.1.0",
     "virtualenv>=20.36.1",
+    "Pygments>=2.20.0",  # CVE-2026-4539 ReDoS (via sphinx)
 ]
 
 [tool.setuptools.dynamic]
