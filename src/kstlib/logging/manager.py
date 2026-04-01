@@ -55,6 +55,11 @@ from kstlib.config import get_config
 # =============================================================================
 # These limits are enforced regardless of user configuration to prevent abuse.
 
+# Pre-compiled patterns for log sanitization (hot path)
+_ANSI_CSI_PATTERN = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+_ANSI_OSC_PATTERN = re.compile(r"\x1b\][^\x07]*\x07")
+_CONTROL_CHAR_PATTERN = re.compile(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
 # Maximum log file path length (prevents filesystem issues)
 HARD_MAX_FILE_PATH_LENGTH: int = 4096
 
@@ -457,10 +462,10 @@ class LogManager(logging.Logger):
         """
         text = str(value)
         # Strip ANSI escape sequences (CSI and OSC)
-        text = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", text)
-        text = re.sub(r"\x1b\][^\x07]*\x07", "", text)
+        text = _ANSI_CSI_PATTERN.sub("", text)
+        text = _ANSI_OSC_PATTERN.sub("", text)
         # Replace control characters (CR, LF, tab, etc.) with space
-        text = re.sub(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text)
+        text = _CONTROL_CHAR_PATTERN.sub(" ", text)
         return text
 
     def _format_structured(self, msg: str, **context: Any) -> str:

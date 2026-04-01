@@ -72,6 +72,33 @@ def _format_decoded(
     return "\n".join(lines)
 
 
+def _validate_token_options(
+    *,
+    decode: bool,
+    as_json: bool,
+    header: bool,
+    copy: bool,
+    show_refresh: bool,
+) -> None:
+    """Validate mutually exclusive token command options.
+
+    Args:
+        decode: Whether JWT decoding was requested.
+        as_json: Whether JSON output was requested.
+        header: Whether Authorization header format was requested.
+        copy: Whether clipboard copy was requested.
+        show_refresh: Whether refresh token display was requested.
+    """
+    if as_json and not decode:
+        exit_error("--json requires --decode.")
+    if decode and header:
+        exit_error("--decode and --header cannot be used together.")
+    if decode and copy:
+        exit_error("--decode and --copy cannot be used together.")
+    if show_refresh and header:
+        exit_error("--header cannot be used with --show-refresh (refresh tokens are not used in headers).")
+
+
 def token(
     provider: str | None = PROVIDER_ARGUMENT,
     copy: bool = typer.Option(
@@ -139,18 +166,10 @@ def token(
     if current_token is None:
         exit_error(f"Not authenticated with {provider_name}.\nRun 'kstlib auth login {provider_name}' first.")
 
-    # Validate incompatible options
-    if as_json and not decode:
-        exit_error("--json requires --decode.")
-    if decode and header:
-        exit_error("--decode and --header cannot be used together.")
-    if decode and copy:
-        exit_error("--decode and --copy cannot be used together.")
+    _validate_token_options(decode=decode, as_json=as_json, header=header, copy=copy, show_refresh=show_refresh)
 
     # Handle --show-refresh
     if show_refresh:
-        if header:
-            exit_error("--header cannot be used with --show-refresh (refresh tokens are not used in headers).")
         if not current_token.refresh_token:
             exit_error("No refresh token available for this session.")
         raw_token = current_token.refresh_token

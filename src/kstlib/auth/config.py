@@ -294,6 +294,43 @@ def get_token_storage_from_config(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+_DEFAULT_SCOPES = ["openid", "profile", "email"]
+
+
+def _normalize_scopes(raw: Any) -> list[str]:
+    """Normalize scopes from config into a list of strings.
+
+    YAML may parse scopes as a single string or a list. This function
+    handles both formats uniformly.
+
+    Args:
+        raw: Scopes value from config (str, list, or None).
+
+    Returns:
+        List of scope strings.
+    """
+    if isinstance(raw, str):
+        return raw.split() if " " in raw else [raw]
+    return list(raw) if raw else list(_DEFAULT_SCOPES)
+
+
+def _normalize_redirect_uri(raw: Any) -> str | None:
+    """Normalize redirect_uri from config into a string.
+
+    YAML may accidentally parse a redirect_uri as a list. This function
+    extracts the first element in that case.
+
+    Args:
+        raw: Redirect URI value from config (str, list, or None).
+
+    Returns:
+        Normalized URI string or None.
+    """
+    if isinstance(raw, list | tuple):
+        return str(raw[0]) if raw else None
+    return str(raw) if raw else None
+
+
 def build_provider_config(
     provider_name: str,
     *,
@@ -355,22 +392,8 @@ def build_provider_config(
             f"both 'authorization_endpoint' and 'token_endpoint' (OAuth2)"
         )
 
-    # Normalize scopes: ensure it's always a list (YAML may parse as string)
-    scopes_raw = merged.get("scopes", ["openid", "profile", "email"])
-    if isinstance(scopes_raw, str):
-        # Single scope as string, or space-separated scopes
-        scopes = scopes_raw.split() if " " in scopes_raw else [scopes_raw]
-    else:
-        scopes = list(scopes_raw) if scopes_raw else ["openid", "profile", "email"]
-
-    # Normalize redirect_uri: ensure it's a string (YAML may parse as list by mistake)
-    redirect_uri_raw = merged.get("redirect_uri")
-    if isinstance(redirect_uri_raw, list | tuple):
-        redirect_uri = str(redirect_uri_raw[0]) if redirect_uri_raw else None
-    elif redirect_uri_raw:
-        redirect_uri = str(redirect_uri_raw)
-    else:
-        redirect_uri = None
+    scopes = _normalize_scopes(merged.get("scopes", _DEFAULT_SCOPES))
+    redirect_uri = _normalize_redirect_uri(merged.get("redirect_uri"))
 
     return AuthProviderConfig(
         client_id=merged["client_id"],

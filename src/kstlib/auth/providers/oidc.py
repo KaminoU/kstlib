@@ -188,6 +188,7 @@ class OIDCProvider(OAuth2Provider):
         self._discovered_issuer: str | None = None  # Issuer from discovery (authoritative)
         self._code_verifier: str | None = None
         self._jwks: dict[str, Any] | None = None
+        self._jwks_fetched_at: datetime | None = None
 
         # Ensure 'openid' scope is included
         if "openid" not in config.scopes:
@@ -553,13 +554,21 @@ class OIDCProvider(OAuth2Provider):
         except Exception as e:
             raise TokenValidationError(f"Failed to decode JWT: {e}") from e
 
+    # JWKS keys rotate periodically; re-fetch after this TTL (seconds)
+    _JWKS_TTL_SECONDS: int = 3600
+
     def _get_jwks(self) -> dict[str, Any]:
         """Fetch JSON Web Key Set for ID token verification.
 
         Uses explicit jwks_uri if configured, otherwise gets it from discovery.
+        Results are cached for ``_JWKS_TTL_SECONDS`` seconds.
         """
         if self._jwks:
-            return self._jwks
+            if self._jwks_fetched_at is None:
+                return self._jwks  # externally provided, no TTL
+            age = (datetime.now(timezone.utc) - self._jwks_fetched_at).total_seconds()
+            if age < self._JWKS_TTL_SECONDS:
+                return self._jwks
 
         # Try explicit config first (manual/hybrid mode)
         jwks_uri = self.config.jwks_uri
@@ -582,6 +591,7 @@ class OIDCProvider(OAuth2Provider):
             response = self.http_client.get(jwks_uri)
             response.raise_for_status()
             self._jwks = response.json()
+            self._jwks_fetched_at = datetime.now(timezone.utc)
             assert self._jwks is not None
 
             if logger.isEnabledFor(TRACE_LEVEL):

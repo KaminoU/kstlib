@@ -52,6 +52,11 @@ MAX_SUBJECT_LENGTH = 200  # Maximum email subject length
 # Filename validation pattern (alphanumeric, dash, underscore, dot)
 SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
+# Pre-compiled patterns for delivery processing
+_UNSAFE_CHAR_PATTERN = re.compile(r"[^a-zA-Z0-9_\-]")
+_HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+_WHITESPACE_PATTERN = re.compile(r"\s+")
+
 
 class DeliveryError(MonitoringError):
     """Base exception for delivery errors."""
@@ -119,7 +124,7 @@ def _validate_path_safety(path: pathlib.Path, base_dir: pathlib.Path) -> None:
 def _sanitize_filename(name: str, timestamp: datetime) -> str:
     """Create a safe filename from name and timestamp."""
     # Remove unsafe characters
-    safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", name)
+    safe_name = _UNSAFE_CHAR_PATTERN.sub("_", name)
     # Limit length
     safe_name = safe_name[:50]
     # Add timestamp
@@ -215,7 +220,7 @@ class FileDelivery(DeliveryBackend):
         """Generate filename from template."""
         ts_str = timestamp.strftime("%Y%m%d_%H%M%S")
         # Sanitize name
-        safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", name)[:50]
+        safe_name = _UNSAFE_CHAR_PATTERN.sub("_", name)[:50]
         filename = self._config.filename_template.format(
             name=safe_name,
             timestamp=ts_str,
@@ -490,8 +495,8 @@ class MailDelivery(DeliveryBackend):
         if self._config.include_plain_text:
             # Create multipart message with plain and HTML
             # Simple HTML to text conversion (strip tags)
-            plain_text = re.sub(r"<[^>]+>", "", html)
-            plain_text = re.sub(r"\s+", " ", plain_text).strip()
+            plain_text = _HTML_TAG_PATTERN.sub("", html)
+            plain_text = _WHITESPACE_PATTERN.sub(" ", plain_text).strip()
 
             msg.set_content(plain_text)
             msg.add_alternative(html, subtype="html")

@@ -189,7 +189,7 @@ exclude = ["docs*", "examples*", "resources*", "tests*"]
 kstlib = "kstlib.__main__:main"
 
 [tool.setuptools.package-data]
-kstlib = ["*.conf.toml", "*.conf.yml"]
+kstlib = ["py.typed", "*.conf.toml", "*.conf.yml"]
 
 # =============================================================================
 # TOOLING CONFIGURATION

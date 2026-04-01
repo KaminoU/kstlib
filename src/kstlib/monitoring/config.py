@@ -52,7 +52,7 @@ BLOCKED_MODULE_PREFIXES = (
     "marshal",
     "__",
 )
-ALLOWED_MODULE_PATTERN = r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$"
+ALLOWED_MODULE_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
 
 
 class MonitoringConfigFileNotFoundError(MonitoringConfigError, FileNotFoundError):
@@ -122,7 +122,7 @@ class CollectorConfig:
                 f"Collector '{self.name}' type='callable' requires 'module' and 'function'"
             )
         # Deep defense: Validate module name format
-        if not re.match(ALLOWED_MODULE_PATTERN, self.module):
+        if not ALLOWED_MODULE_PATTERN.match(self.module):
             raise MonitoringConfigCollectorError(f"Invalid module name format: '{self.module}'")
         # Deep defense: Block dangerous modules
         for prefix in BLOCKED_MODULE_PREFIXES:

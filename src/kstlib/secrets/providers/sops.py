@@ -23,6 +23,12 @@ from kstlib.secrets.providers.base import SecretProvider
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled patterns for sensitive output redaction
+_REDACT_ARN_PATTERN = re.compile(r"arn:aws:[^\s]+", re.IGNORECASE)
+_REDACT_AKIA_PATTERN = re.compile(r"AKIA[0-9A-Z]{16}")
+_REDACT_PATH_PATTERN = re.compile(r"(?:/home/|/Users/)[^\s]+")
+_REDACT_PATTERNS = (_REDACT_ARN_PATTERN, _REDACT_AKIA_PATTERN, _REDACT_PATH_PATTERN)
+
 
 class SOPSProvider(SecretProvider):
     """Load secrets from SOPS encrypted documents."""
@@ -184,13 +190,8 @@ class SOPSProvider(SecretProvider):
     @staticmethod
     def _redact_sensitive_output(message: str) -> str:
         """Redact known sensitive substrings from diagnostic output."""
-        patterns = [
-            re.compile(r"arn:aws:[^\s]+", re.IGNORECASE),
-            re.compile(r"AKIA[0-9A-Z]{16}"),
-            re.compile(r"(?:/home/|/Users/)[^\s]+"),
-        ]
         redacted = message
-        for pattern in patterns:
+        for pattern in _REDACT_PATTERNS:
             redacted = pattern.sub("[REDACTED]", redacted)
         return redacted
 

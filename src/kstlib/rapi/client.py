@@ -821,6 +821,51 @@ class RapiClient:
         except Exception:
             _log_trace("<<< Body: [unable to decode]")
 
+    def _check_response_size(self, response: httpx.Response) -> None:
+        """Validate response size against configured limits.
+
+        Args:
+            response: HTTP response to check.
+
+        Raises:
+            ResponseTooLargeError: If response exceeds max size.
+        """
+        content_length = response.headers.get("content-length")
+        if content_length and int(content_length) > self._limits.max_response_size:
+            raise ResponseTooLargeError(
+                int(content_length),
+                self._limits.max_response_size,
+            )
+        actual_size = len(response.content)
+        if actual_size > self._limits.max_response_size:
+            raise ResponseTooLargeError(actual_size, self._limits.max_response_size)
+
+    def _handle_retry_error(
+        self,
+        exc: Exception,
+        attempt: int,
+        endpoint_config: EndpointConfig,
+    ) -> RapiResponse | None:
+        """Handle a retryable error, returning a response for 4xx or None to continue.
+
+        Args:
+            exc: The caught exception.
+            attempt: Current attempt number (1-based).
+            endpoint_config: Endpoint configuration for parsing 4xx responses.
+
+        Returns:
+            RapiResponse for 4xx client errors, None to continue retrying.
+        """
+        if isinstance(exc, httpx.TimeoutException):
+            log.warning("Request timeout (attempt %d): %s", attempt, exc)
+        elif isinstance(exc, httpx.NetworkError):
+            log.warning("Network error (attempt %d): %s", attempt, exc)
+        elif isinstance(exc, httpx.HTTPStatusError):
+            if 400 <= exc.response.status_code < 500:
+                return self._parse_response(exc.response, endpoint_config, 0.0)
+            log.warning("HTTP error (attempt %d): %s", attempt, exc)
+        return None
+
     def _execute_with_retry(
         self,
         request: httpx.Request,
@@ -860,37 +905,17 @@ class RapiClient:
                 elapsed = time.monotonic() - start_time
 
                 self._log_response(response, elapsed)
-
-                # Check response size (header and actual body)
-                content_length = response.headers.get("content-length")
-                if content_length and int(content_length) > self._limits.max_response_size:
-                    raise ResponseTooLargeError(
-                        int(content_length),
-                        self._limits.max_response_size,
-                    )
-                actual_size = len(response.content)
-                if actual_size > self._limits.max_response_size:
-                    raise ResponseTooLargeError(actual_size, self._limits.max_response_size)
-
-                # Parse response
+                self._check_response_size(response)
                 return self._parse_response(response, endpoint_config, elapsed)
 
-            except httpx.TimeoutException as e:
-                log.warning("Request timeout (attempt %d): %s", attempt + 1, e)
-                last_error = e
-            except httpx.NetworkError as e:
-                log.warning("Network error (attempt %d): %s", attempt + 1, e)
-                last_error = e
             except ResponseTooLargeError:
                 raise
-            except httpx.HTTPStatusError as e:
-                # Don't retry client errors (4xx), only server errors (5xx)
-                if 400 <= e.response.status_code < 500:
-                    return self._parse_response(e.response, endpoint_config, 0.0)
-                log.warning("HTTP error (attempt %d): %s", attempt + 1, e)
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
+                result = self._handle_retry_error(e, attempt + 1, endpoint_config)
+                if result is not None:
+                    return result
                 last_error = e
 
-        # All retries exhausted
         raise RequestError(
             f"Request failed after {self._limits.max_retries + 1} attempts: {last_error}",
             retryable=False,
@@ -939,37 +964,17 @@ class RapiClient:
                 elapsed = time.monotonic() - start_time
 
                 self._log_response(response, elapsed)
-
-                # Check response size (header and actual body)
-                content_length = response.headers.get("content-length")
-                if content_length and int(content_length) > self._limits.max_response_size:
-                    raise ResponseTooLargeError(
-                        int(content_length),
-                        self._limits.max_response_size,
-                    )
-                actual_size = len(response.content)
-                if actual_size > self._limits.max_response_size:
-                    raise ResponseTooLargeError(actual_size, self._limits.max_response_size)
-
-                # Parse response
+                self._check_response_size(response)
                 return self._parse_response(response, endpoint_config, elapsed)
 
-            except httpx.TimeoutException as e:
-                log.warning("Request timeout (attempt %d): %s", attempt + 1, e)
-                last_error = e
-            except httpx.NetworkError as e:
-                log.warning("Network error (attempt %d): %s", attempt + 1, e)
-                last_error = e
             except ResponseTooLargeError:
                 raise
-            except httpx.HTTPStatusError as e:
-                # Don't retry client errors (4xx)
-                if 400 <= e.response.status_code < 500:
-                    return self._parse_response(e.response, endpoint_config, 0.0)
-                log.warning("HTTP error (attempt %d): %s", attempt + 1, e)
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
+                result = self._handle_retry_error(e, attempt + 1, endpoint_config)
+                if result is not None:
+                    return result
                 last_error = e
 
-        # All retries exhausted
         raise RequestError(
             f"Request failed after {self._limits.max_retries + 1} attempts: {last_error}",
             retryable=False,

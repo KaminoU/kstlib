@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.4] - 2026-04-01
+
+### Fixed
+
+- **Batch audit fixes: pre-compile regex, extract helpers, fix resource leaks**
+  - Pre-compile regex patterns at module level (logging, monitoring, delivery,
+    ops/validators, sops) to avoid re-compilation on hot paths
+  - Extract helpers to reduce duplication: `_normalize_scopes`/`_normalize_redirect_uri`
+    (auth/config), `_validate_token_options` (cli/token), `_upgrade_to_tls`/`_authenticate`/
+    `_trace_envelope` (smtp), `_check_response_size`/`_handle_retry_error` (rapi/client)
+  - Add `OAuth2Provider.close()` and `__exit__` to release HTTP connection pool
+  - Add JWKS TTL cache (3600s) in OIDC provider for key rotation
+  - Add `py.typed` marker to package-data (PEP 561)
+
 ## [2.1.3] - 2026-04-01
 
 ### Fixed
@@ -606,6 +620,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[2.1.4]: https://github.com/KaminoU/kstlib/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/KaminoU/kstlib/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/KaminoU/kstlib/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/KaminoU/kstlib/compare/v2.1.0...v2.1.1

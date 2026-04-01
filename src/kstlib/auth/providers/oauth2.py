@@ -33,6 +33,8 @@ from kstlib.logging import TRACE_LEVEL, get_logger
 from kstlib.utils.http_trace import HTTPTraceLogger
 
 if TYPE_CHECKING:
+    import types
+
     from kstlib.auth.token import AbstractTokenStorage
 
 logger = get_logger(__name__)
@@ -193,6 +195,22 @@ class OAuth2Provider(AbstractAuthProvider):
                 },
             )
         return self._http_client
+
+    def close(self) -> None:
+        """Close the HTTP client and release connection pool resources."""
+        if self._http_client is not None:
+            self._http_client.close()
+            self._http_client = None
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        """Exit context manager - close HTTP client and clear sensitive data."""
+        self.close()
+        super().__exit__(exc_type, exc_val, exc_tb)
 
     def _build_ssl_context(self) -> bool | str:
         """Build SSL verification context from config.

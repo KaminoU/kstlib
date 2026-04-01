@@ -266,72 +266,86 @@ class SMTPTransport(MailTransport):
         self._use_starttls = effective_security.use_starttls if not effective_security.use_ssl else False
         self._ssl_context = effective_security.ssl_context or ssl.create_default_context()
 
+    def _upgrade_to_tls(self, client: smtplib.SMTP, trace: bool) -> None:
+        """Upgrade connection to TLS via STARTTLS if supported.
+
+        Args:
+            client: Active SMTP client.
+            trace: Whether TRACE logging is enabled.
+        """
+        if not (self._use_starttls and client.has_extn("STARTTLS")):
+            return
+        if trace:
+            log.log(TRACE_LEVEL, "[SMTP] Upgrading to TLS via STARTTLS")
+        client.starttls(context=self._ssl_context)
+        client.ehlo()
+        if trace:
+            _log_ssl_info(client, "TLS")
+
+    def _authenticate(self, client: smtplib.SMTP, trace: bool) -> None:
+        """Authenticate with the SMTP server if credentials are configured.
+
+        Args:
+            client: Active SMTP client.
+            trace: Whether TRACE logging is enabled.
+        """
+        if not self._username:
+            return
+        if trace:
+            log.log(TRACE_LEVEL, "[SMTP] Authenticating as: %s", self._username)
+        client.login(self._username, self._password or "")
+        if trace:
+            log.log(TRACE_LEVEL, "[SMTP] Authentication successful")
+
+    def _trace_envelope(self, message: EmailMessage) -> None:
+        """Log message envelope details at TRACE level.
+
+        Args:
+            message: Email message to log.
+        """
+        log.log(TRACE_LEVEL, "[SMTP] MAIL FROM: %s", message.get("From", "unknown"))
+        log.log(TRACE_LEVEL, "[SMTP] RCPT TO: %s", message.get("To", "unknown"))
+        log.log(TRACE_LEVEL, "[SMTP] Subject: %s", message.get("Subject", "(no subject)"))
+
     def send(self, message: EmailMessage) -> None:
         """Send *message* through the configured SMTP server.
 
         When TRACE logging is enabled, detailed session information is logged
         including SMTP commands, SSL/TLS handshake details, and message envelope.
         """
-        trace_enabled = log.isEnabledFor(TRACE_LEVEL)
+        trace = log.isEnabledFor(TRACE_LEVEL)
         client_kwargs: dict[str, Any] = {"host": self._host, "port": self._port, "timeout": self._timeout}
         client_cls = smtplib.SMTP_SSL if self._use_ssl else smtplib.SMTP
         protocol = "SMTP_SSL" if self._use_ssl else "SMTP"
 
-        if trace_enabled:
+        if trace:
             log.log(TRACE_LEVEL, "[SMTP] Connecting to %s:%d (%s)", self._host, self._port, protocol)
 
         try:
             with _capture_smtp_debug() as debug_buffer, client_cls(**client_kwargs) as client:
-                # Enable smtplib debug if trace is on
-                if trace_enabled:
+                if trace:
                     client.set_debuglevel(2)
 
-                # Initial EHLO
                 client.ehlo()
-
-                # Log initial SSL info for SMTP_SSL
-                if trace_enabled and self._use_ssl:
+                if trace and self._use_ssl:
                     _log_ssl_info(client, "SSL")
 
-                # STARTTLS upgrade
-                if self._use_starttls and client.has_extn("STARTTLS"):
-                    if trace_enabled:
-                        log.log(TRACE_LEVEL, "[SMTP] Upgrading to TLS via STARTTLS")
-                    client.starttls(context=self._ssl_context)
-                    client.ehlo()
+                self._upgrade_to_tls(client, trace)
+                self._authenticate(client, trace)
 
-                    # Log SSL info after STARTTLS
-                    if trace_enabled:
-                        _log_ssl_info(client, "TLS")
-
-                # Authentication
-                if self._username:
-                    if trace_enabled:
-                        log.log(TRACE_LEVEL, "[SMTP] Authenticating as: %s", self._username)
-                    client.login(self._username, self._password or "")
-                    if trace_enabled:
-                        log.log(TRACE_LEVEL, "[SMTP] Authentication successful")
-
-                # Send message
-                if trace_enabled:
-                    sender = message.get("From", "unknown")
-                    recipients = message.get("To", "unknown")
-                    subject = message.get("Subject", "(no subject)")
-                    log.log(TRACE_LEVEL, "[SMTP] MAIL FROM: %s", sender)
-                    log.log(TRACE_LEVEL, "[SMTP] RCPT TO: %s", recipients)
-                    log.log(TRACE_LEVEL, "[SMTP] Subject: %s", subject)
+                if trace:
+                    self._trace_envelope(message)
 
                 client.send_message(message)
 
-                if trace_enabled:
+                if trace:
                     log.log(TRACE_LEVEL, "[SMTP] Message sent successfully")
 
-            # Log captured smtplib debug output
-            if trace_enabled:
+            if trace:
                 _log_smtp_debug_output(debug_buffer)
 
         except smtplib.SMTPException as exc:  # pragma: no cover - network dependent
-            if trace_enabled:
+            if trace:
                 log.log(TRACE_LEVEL, "[SMTP] Error: %s", exc)
             raise MailTransportError(str(exc)) from exc
 

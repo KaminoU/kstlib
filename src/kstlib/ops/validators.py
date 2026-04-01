@@ -44,8 +44,8 @@ MAX_ENV_VALUE_LENGTH = 32768  # 32KB
 # Command limits
 MAX_COMMAND_LENGTH = 4096
 
-# Dangerous patterns to block in commands
-DANGEROUS_PATTERNS = [
+# Dangerous patterns to block in commands (pre-compiled for performance)
+_DANGEROUS_PATTERN_STRINGS = [
     r";",  # Command chaining (semicolon)
     r"&&",  # Logical AND chaining
     r"\|\|",  # Logical OR chaining
@@ -59,6 +59,7 @@ DANGEROUS_PATTERNS = [
     r"\bexec\b",  # exec command
     r"\x00",  # Null byte injection
 ]
+DANGEROUS_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _DANGEROUS_PATTERN_STRINGS]
 
 # Environment variables that could be abused for code injection
 DANGEROUS_ENV_KEYS = frozenset(
@@ -300,8 +301,8 @@ def validate_command(command: str | None, *, strict: bool = True) -> str | None:
         raise ValueError("Null bytes are not allowed in commands")
     if strict:
         for pattern in DANGEROUS_PATTERNS:
-            if re.search(pattern, command, re.IGNORECASE):
-                raise ValueError(f"Potentially dangerous command pattern detected: {pattern}")
+            if pattern.search(command):
+                raise ValueError(f"Potentially dangerous command pattern detected: {pattern.pattern}")
     return command
 
 
@@ -344,8 +345,8 @@ def validate_send_keys(keys: str) -> str:
         return keys
     # For text input, block dangerous shell patterns
     for pattern in DANGEROUS_PATTERNS:
-        if re.search(pattern, keys, re.IGNORECASE):
-            raise ValueError(f"Potentially dangerous pattern in keys: {pattern}")
+        if pattern.search(keys):
+            raise ValueError(f"Potentially dangerous pattern in keys: {pattern.pattern}")
     return keys
 
 
