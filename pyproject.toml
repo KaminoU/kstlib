@@ -91,7 +91,7 @@ Changelog = "https://github.com/KaminoU/kstlib/blob/main/CHANGELOG.md"
 [project.optional-dependencies]
 # Development tools (testing, linting, typing)
 dev = [
-    "pytest>=8.4,<9",
+    "pytest>=8.4,<10",
     "pytest-cov>=7.0,<8",
     "pytest-asyncio>=1.2,<2", # For async tests (roadmap Phase 0)
 
@@ -152,7 +152,7 @@ textual = ["textual>=6.3,<7"]
 
 # Everything for local development
 all = [
-    "pytest>=8.4,<9",
+    "pytest>=8.4,<10",
     "pytest-cov>=7.0,<8",
     "pytest-asyncio>=1.2,<2",
     "ruff>=0.14,<1",
