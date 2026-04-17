@@ -88,6 +88,7 @@ class CallbackResult:
         error: OAuth2 error code (on failure).
         error_description: Human-readable error description.
         raw_params: All query parameters from callback.
+
     """
 
     code: str | None = None
@@ -194,6 +195,7 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
         >>> if result.success:  # doctest: +SKIP
         ...     print(f"Got code: {result.code}")
         >>> server.stop()  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -211,6 +213,7 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
             port: Port to listen on.
             path: URL path for callback endpoint.
             port_range: Optional (min, max) port range to try if port is busy.
+
         """
         self.host = host
         self.port = port
@@ -236,6 +239,7 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
 
         Raises:
             CallbackServerError: If no port is available in the configured range.
+
         """
         if self.port_range:
             min_port, max_port = self.port_range
@@ -271,6 +275,7 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
 
         Raises:
             CallbackServerError: If server fails to start.
+
         """
         if self._server is not None:
             return  # Already running
@@ -341,6 +346,7 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
         Raises:
             CallbackServerError: If timeout expires without callback.
             AuthorizationError: If callback contains an error.
+
         """
         # Defense in depth: cap timeout regardless of config
         timeout = min(timeout, _CALLBACK_TIMEOUT_HARD_LIMIT)

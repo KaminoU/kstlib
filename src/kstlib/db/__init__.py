@@ -25,6 +25,7 @@ Examples:
     ...     await db.execute("CREATE TABLE test (id INTEGER)")
     ...     await db.execute("INSERT INTO test VALUES (?)", (1,))
     ...     row = await db.fetch_one("SELECT * FROM test")
+
 """
 
 from kstlib.db.aiosqlcipher import is_sqlcipher_available

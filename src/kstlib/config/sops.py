@@ -16,6 +16,7 @@ Example:
     True
     >>> is_sops_file(Path("config.yml"))
     False
+
 """
 
 from __future__ import annotations
@@ -62,6 +63,7 @@ def is_sops_file(path: pathlib.Path) -> bool:
         False
         >>> is_sops_file(Path("data.sops.json"))
         True
+
     """
     name = path.name.lower()
     return any(name.endswith(ext) for ext in SOPS_FILE_PATTERNS)
@@ -87,6 +89,7 @@ def get_real_extension(path: pathlib.Path) -> str:
         '.json'
         >>> get_real_extension(Path("normal.yml"))
         '.yml'
+
     """
     name = path.name.lower()
     for marker in (".sops", ".enc"):
@@ -121,6 +124,7 @@ def has_encrypted_values(data: Any, path: str = "", *, _depth: int = 0) -> list[
         ['db.password']
         >>> has_encrypted_values({"normal": "value"})
         []
+
     """
     if _depth > _MAX_SCAN_DEPTH:
         return []
@@ -151,6 +155,7 @@ class SopsDecryptor:
     Examples:
         >>> decryptor = SopsDecryptor()  # doctest: +SKIP
         >>> content = decryptor.decrypt_file(Path("secrets.sops.yml"))  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -163,6 +168,7 @@ class SopsDecryptor:
         Args:
             binary: Name or path of the SOPS binary.
             max_cache_entries: Maximum number of cached decrypted files.
+
         """
         self._binary = binary
         self._max_cache = min(max_cache_entries, HARD_MAX_SOPS_CACHE_ENTRIES)
@@ -190,6 +196,7 @@ class SopsDecryptor:
         Raises:
             ConfigSopsNotAvailableError: If SOPS binary is not found.
             ConfigSopsError: If decryption fails.
+
         """
         resolved = path.resolve()
         mtime = resolved.stat().st_mtime
@@ -242,6 +249,7 @@ class SopsDecryptor:
         Args:
             path: If provided, only clear this specific path.
                   If None, clear all cached entries.
+
         """
         if path is None:
             self._cache.clear()
@@ -273,6 +281,7 @@ def get_decryptor(binary: str = "sops") -> SopsDecryptor:
     Examples:
         >>> decryptor = get_decryptor()  # doctest: +SKIP
         >>> content = decryptor.decrypt_file(path)  # doctest: +SKIP
+
     """
     global _decryptor
     if _decryptor is None:

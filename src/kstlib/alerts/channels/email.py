@@ -29,6 +29,7 @@ Examples:
             recipients=["oncall@example.com", "backup@example.com"],
             subject_prefix="[PROD ALERT]",
         )
+
 """
 
 from __future__ import annotations
@@ -96,6 +97,7 @@ class EmailChannel(AsyncAlertChannel):
                 recipients=["oncall@company.com"],
                 subject_prefix="[PROD]",
             )
+
     """
 
     def __init__(
@@ -118,6 +120,7 @@ class EmailChannel(AsyncAlertChannel):
 
         Raises:
             AlertConfigurationError: If configuration is invalid.
+
         """
         if not sender:
             raise AlertConfigurationError("Email sender is required")
@@ -161,6 +164,7 @@ class EmailChannel(AsyncAlertChannel):
 
         Raises:
             AlertDeliveryError: If email delivery fails.
+
         """
         message = self._build_message(alert)
 
@@ -195,6 +199,7 @@ class EmailChannel(AsyncAlertChannel):
 
         Returns:
             EmailMessage ready for transport.
+
         """
         message = EmailMessage()
 

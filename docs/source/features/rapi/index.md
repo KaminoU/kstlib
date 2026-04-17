@@ -184,6 +184,246 @@ client = RapiClient.from_file("github.rapi.yml")
 client = RapiClient.discover()  # Auto-discover *.rapi.yml in cwd
 ```
 
+### Defaults and Server Profiles
+
+When using `include:` to load external files, declare shared configuration once
+in `rapi.defaults`. All included files inherit these values:
+
+```yaml
+rapi:
+  defaults:
+    base_url: https://${VIYA_HOST}
+    credentials:
+      type: file
+      path: ~/.sas/credentials.json
+      token_path: ".Default['access-token']"
+    auth: bearer
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+
+  include:
+    - "./*/root.rapi.yml"
+```
+
+### Multi-server patterns
+
+Two distinct patterns exist for multi-server workflows. They solve
+different problems, so picking the right one matters.
+
+#### Pattern A - `${VAR}` env vars (same API, different environments)
+
+**Use when**: same API schema, different environments (e.g. SAS Viya
+source vs target migration, dev vs staging vs prod).
+
+**How**: declare a single `defaults` block with `${VAR}` placeholders.
+The substitution is applied globally at YAML load time, so
+`token_path` natively supports dynamic profile selection.
+
+```yaml
+rapi:
+  defaults:
+    base_url: https://${VIYA_HOST}
+    credentials:
+      type: file
+      path: ~/.sas/credentials.json
+      token_path: ".${ACTIVE_VIYA:-Default}['access-token']"
+    auth: bearer
+```
+
+```bash
+# Switch environment by changing two env vars
+export VIYA_HOST=viya-source.example.com ACTIVE_VIYA=source
+kstlib rapi transfer.export-jobs-create
+
+export VIYA_HOST=viya-target.example.com ACTIVE_VIYA=target
+kstlib rapi transfer.packages-upload
+```
+
+The `~/.sas/credentials.json` file holds named profiles (managed by
+`sas-admin auth login`):
+
+```json
+{
+  "Default": {"access-token": "...", "refresh-token": "..."},
+  "source":  {"access-token": "...", "refresh-token": "..."},
+  "target":  {"access-token": "...", "refresh-token": "..."}
+}
+```
+
+`${ACTIVE_VIYA:-Default}` selects which profile is read. Each kstlib
+invocation re-loads the YAML and re-expands the env vars, so switching
+environment is just a matter of exporting two variables before each
+command.
+
+**Caveat**: in a long-running process, the env vars are baked in at
+`load_rapi_config()` time. Changing them mid-process has no effect.
+For CLI use this is a non-issue.
+
+#### Pattern B - `rapi.servers` profiles (heterogeneous APIs)
+
+**Use when**: a single project talks to multiple unrelated APIs with
+different stacks and auth (e.g. github + jira + slack).
+
+**How**: declare named profiles in `rapi.servers`. Each profile
+overrides `base_url`, `credentials`, `auth`, and/or `headers`. Defaults
+are inherited via deep merge (profile values win).
+
+```yaml
+rapi:
+  defaults:
+    auth: bearer
+    headers:
+      Accept: application/json
+
+  servers:
+    github:
+      base_url: https://api.github.com
+      credentials:
+        type: env
+        var: GITHUB_TOKEN
+      headers:
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+
+    jira:
+      base_url: https://mycompany.atlassian.net
+      auth: api_key
+      credentials:
+        type: env
+        var: JIRA_API_KEY
+```
+
+Resolve in Python:
+
+```python
+from kstlib.rapi import load_rapi_config
+
+manager = load_rapi_config()
+
+github = manager.resolve_server("github")
+# github.base_url -> "https://api.github.com"
+# github.auth    -> "bearer"  (inherited from defaults)
+# github.headers -> {"Accept": "application/vnd.github+json", ...}
+
+jira = manager.resolve_server("jira")
+# jira.base_url -> "https://mycompany.atlassian.net"
+# jira.auth    -> "api_key"  (overrides defaults)
+
+default = manager.resolve_server(None)
+# Returns defaults wrapped as ServerConfig(name="defaults", ...)
+
+manager.server_names  # ["github", "jira"]
+```
+
+**Merge rules**: server values override defaults. For `headers` and
+`credentials`, the merge is recursive (add or replace individual keys).
+
+**Validation**: server names must match `[a-zA-Z][a-zA-Z0-9_-]*`
+(max 64 chars). Only `base_url`, `credentials`, `auth`, and `headers`
+keys are allowed. URL schemes are restricted to `http` and `https`.
+Max 20 server profiles.
+
+#### Decision matrix
+
+| Question | Pattern |
+|---|---|
+| Same API schema, different hostnames? | A (env vars) |
+| Different APIs (github + jira + ...)? | B (`rapi.servers`) |
+| Need to switch env in shell scripts? | A |
+| Need typed profiles inside Python code? | B |
+| SAS Viya source/target migration? | **Always A** |
+
+**Anti-pattern**: declaring SAS Viya source/target as
+`rapi.servers.source` and `rapi.servers.target`. This duplicates
+credential files and headers for nothing - use Pattern A instead.
+
+#### The `server:` directive in `*.rapi.yml` files
+
+Pattern B (`rapi.servers`) supports two YAML directives that pin a
+specific endpoint or an entire API file to a named server profile. This
+is useful when a project bundles many `*.rapi.yml` files and you want
+each one to default to a specific backend without forcing the caller
+to pass `--server` every time.
+
+**File-level** (`server:` at the top of a `*.rapi.yml` file): all
+endpoints in the file inherit this server unless they declare their own:
+
+```yaml
+# transfer/import-jobs.rapi.yml
+name: transfer-import-jobs
+server: target          # File-level: default for every endpoint below
+
+endpoints:
+  list:
+    path: /transfer/packages
+    method: GET
+    # No server: directive here -> uses file-level "target"
+```
+
+**Endpoint-level** (`server:` inside an endpoint definition): overrides
+the file-level value for this specific endpoint:
+
+```yaml
+endpoints:
+  upload:
+    path: /transfer/packages
+    method: POST
+    server: target      # Endpoint-level: explicit override
+```
+
+**Cascade priority** (highest to lowest):
+
+1. Runtime override (CLI ``--server`` flag or ``call(server=...)`` kwarg)
+2. Endpoint-level ``server:`` in the YAML file
+3. File-level ``server:`` at the top of the YAML file
+4. None - uses the static API config (no server resolution)
+
+**Validation at load time**:
+
+- If ``rapi.servers`` is configured and the directive references a
+  known profile: validated and accepted.
+- If ``rapi.servers`` is configured but the directive references an
+  **unknown** profile: raises ``ServerNotFoundError`` immediately
+  (fail fast at load, not at first request).
+- If ``rapi.servers`` section is **absent**: logs a warning per
+  reference (not fatal - the user may add the section later).
+
+**Programmatic usage** with the ``server=`` kwarg:
+
+```python
+from kstlib.rapi import RapiClient
+
+client = RapiClient()
+
+# Use the github profile (overrides any server: directive in YAML)
+response = client.call("github.repos-list", server="github")
+
+# Async mirror
+response = await client.call_async("github.user", server="github")
+
+# Module-level convenience also accepts server=
+from kstlib.rapi import call
+response = call("github.user", server="github")
+```
+
+When a server is in effect, the request build pipeline applies the
+profile in three places:
+
+- **base_url** is replaced by ``server.base_url``
+- **credentials** are resolved from the inline ``server.credentials``
+  dict via ``CredentialResolver.resolve_inline`` (no name lookup,
+  no caching - each call re-resolves)
+- **headers** are layered between API and endpoint headers in the
+  cascade ``api < server < endpoint < runtime``
+- **auth_type** falls back to ``server.auth`` when present, otherwise
+  to ``api_config.auth_type``, otherwise to ``"bearer"``
+
+If the resolved server name does not exist in ``rapi.servers``, a
+``ServerNotFoundError`` is raised before any HTTP call is made.
+Passing ``server=None`` (the default) preserves the legacy behavior:
+the static ``ApiConfig`` is used unchanged.
+
 ### Hard Limits
 
 | Parameter | Default | Hard Min | Hard Max |
@@ -486,6 +726,7 @@ Full autodoc: {doc}`../../api/rapi`
 | `RapiClient` | Main client for making API calls |
 | `RapiResponse` | Response object with data, status, elapsed time |
 | `RapiConfigManager` | Manages API and endpoint configuration |
+| `ServerConfig` | Resolved server profile (from `resolve_server()`) |
 
 | Function | Description |
 | - | - |
@@ -500,3 +741,4 @@ Full autodoc: {doc}`../../api/rapi`
 | `EndpointAmbiguousError` | Short reference matches multiple endpoints |
 | `RequestError` | HTTP request failed |
 | `ResponseTooLargeError` | Response exceeds max_response_size |
+| `ServerNotFoundError` | Named server profile not in config |

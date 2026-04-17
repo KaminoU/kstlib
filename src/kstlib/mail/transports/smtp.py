@@ -45,6 +45,7 @@ def _capture_smtp_debug() -> Iterator[io.StringIO]:
 
     Yields:
         StringIO buffer containing captured debug output.
+
     """
     buffer = io.StringIO()
     old_stderr = sys.stderr
@@ -66,6 +67,7 @@ def _extract_cn_from_cert_field(field: Any) -> str | None:
 
     Returns:
         The commonName value if found, None otherwise.
+
     """
     if not field or not isinstance(field, tuple):
         return None
@@ -86,6 +88,7 @@ def _extract_cipher_info(sock: ssl.SSLSocket) -> dict[str, Any]:
 
     Returns:
         Dictionary with cipher_name, cipher_protocol, cipher_bits.
+
     """
     info: dict[str, Any] = {}
     try:
@@ -107,6 +110,7 @@ def _extract_cert_info(sock: ssl.SSLSocket) -> dict[str, Any]:
 
     Returns:
         Dictionary with peer_cn, issuer_cn, valid_from, valid_until.
+
     """
     info: dict[str, Any] = {}
     try:
@@ -135,6 +139,7 @@ def _extract_ssl_info(sock: ssl.SSLSocket | None) -> dict[str, Any]:
 
     Returns:
         Dictionary with SSL session details (version, cipher, peer cert).
+
     """
     if sock is None:
         return {}
@@ -158,6 +163,7 @@ def _log_ssl_info(client: smtplib.SMTP | smtplib.SMTP_SSL, protocol_label: str) 
     Args:
         client: The SMTP client with an SSL socket.
         protocol_label: Label for the protocol (e.g., "SSL" or "TLS").
+
     """
     ssl_sock = getattr(client, "sock", None)
     if ssl_sock is None or not hasattr(ssl_sock, "version"):
@@ -190,6 +196,7 @@ def _log_smtp_debug_output(buffer: io.StringIO) -> None:
 
     Args:
         buffer: StringIO containing captured debug output.
+
     """
     if not log.isEnabledFor(TRACE_LEVEL):
         return
@@ -272,6 +279,7 @@ class SMTPTransport(MailTransport):
         Args:
             client: Active SMTP client.
             trace: Whether TRACE logging is enabled.
+
         """
         if not (self._use_starttls and client.has_extn("STARTTLS")):
             return
@@ -288,6 +296,7 @@ class SMTPTransport(MailTransport):
         Args:
             client: Active SMTP client.
             trace: Whether TRACE logging is enabled.
+
         """
         if not self._username:
             return
@@ -302,6 +311,7 @@ class SMTPTransport(MailTransport):
 
         Args:
             message: Email message to log.
+
         """
         log.log(TRACE_LEVEL, "[SMTP] MAIL FROM: %s", message.get("From", "unknown"))
         log.log(TRACE_LEVEL, "[SMTP] RCPT TO: %s", message.get("To", "unknown"))

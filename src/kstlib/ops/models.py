@@ -29,6 +29,7 @@ class BackendType(str, Enum):
     Attributes:
         TMUX: Use tmux for session management (dev/local).
         CONTAINER: Use Podman/Docker for session management (prod).
+
     """
 
     TMUX = "tmux"
@@ -44,6 +45,7 @@ class SessionState(str, Enum):
         EXITED: Container exited (with exit code).
         DEFINED: Session exists in config but has not been started.
         UNKNOWN: State cannot be determined.
+
     """
 
     RUNNING = "running"
@@ -86,6 +88,7 @@ class SessionConfig:
         ...     volumes=["./data:/app/data"],
         ...     log_volume="./logs:/app/logs",
         ... )
+
     """
 
     name: str
@@ -107,6 +110,7 @@ class SessionConfig:
 
         Raises:
             ValueError: If any configuration value is invalid.
+
         """
         validate_session_name(self.name)
         if self.command is not None:
@@ -155,6 +159,7 @@ class SessionStatus:
         ...     pid=67890,
         ...     image="astro-bot:latest",
         ... )
+
     """
 
     name: str

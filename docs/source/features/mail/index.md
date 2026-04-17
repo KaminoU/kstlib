@@ -137,6 +137,35 @@ builder = MailBuilder(filesystem=guards)
 
 ```yaml
 mail:
+  # Named transport preset auto-resolved when MailBuilder() is called
+  # without transport= or preset=. Leave null to force callers to pick.
+  default: corporate
+
+  # Named presets referenced by MailBuilder(preset="name") or by mail.default.
+  # Each entry declares a "transport" field (smtp or resend) plus backend-
+  # specific parameters.
+  presets:
+    corporate:
+      transport: smtp
+      host: smtp-secure.corp.local
+      port: 25
+      login: svc_user
+      password: "secret"
+      starttls: false
+      ssl: false
+      timeout: 30
+
+    transactional:
+      transport: resend
+      api_key: re_xxxxxxxxxxxxx
+      timeout: 30
+
+    local:
+      transport: smtp
+      host: localhost
+      port: 1025
+      starttls: false
+
   filesystem:
     attachments_root: /srv/app/mail/attachments
     inline_root: /srv/app/mail/inline
@@ -144,6 +173,46 @@ mail:
     allow_external_attachments: false
     allow_external_templates: false
 ```
+
+### Config-driven usage vs. direct transport
+
+`MailBuilder` supports two complementary construction modes. The priority
+cascade is ``transport=`` kwarg, then ``preset=`` kwarg, then
+``mail.default`` in config, then ``None``.
+
+```python
+from kstlib.mail import MailBuilder
+from kstlib.mail.transports.smtp import SMTPTransport
+
+# 1. Explicit transport (backward compatible, useful for one-off instances)
+smtp = SMTPTransport(host="smtp.example.com", port=587)
+MailBuilder(transport=smtp).sender("...").to("...").send()
+
+# 2. Named preset (reads mail.presets.<name> from kstlib.conf.yml)
+MailBuilder(preset="corporate").sender("...").to("...").send()
+
+# 3. Default preset (reads mail.default from kstlib.conf.yml)
+MailBuilder().sender("...").to("...").send()
+```
+
+Preset resolution fails fast with `MailConfigurationError` when the name
+is unknown, the transport field is missing, or a required backend field
+(e.g. SMTP host, Resend api_key) is absent.
+
+### Preset fields
+
+| Field     | Transport | Required | Default | Description          |
+|-----------|-----------|----------|---------|----------------------|
+| transport | all       | yes      | -       | smtp or resend       |
+| host      | smtp      | yes      | -       | SMTP server hostname |
+| port      | smtp      | no       | 587     | SMTP port            |
+| login     | smtp      | no       | -       | SMTP username        |
+| password  | smtp      | no       | -       | SMTP password        |
+| starttls  | smtp      | no       | true    | Enable STARTTLS      |
+| ssl       | smtp      | no       | false   | Use SSL/TLS directly |
+| timeout   | smtp      | no       | null    | Connection timeout   |
+| api_key   | resend    | yes      | -       | Resend API key       |
+| timeout   | resend    | no       | 30.0    | Request timeout      |
 
 ### AWS SES Transport
 

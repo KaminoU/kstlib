@@ -21,7 +21,7 @@ from .common import (
 )
 
 
-def stop(  # noqa: PLR0913
+def stop(
     name: str = SESSION_ARGUMENT,
     backend: str | None = BACKEND_OPTION,
     quiet: bool = QUIET_OPTION,
@@ -38,6 +38,7 @@ def stop(  # noqa: PLR0913
         kstlib ops stop dev
         kstlib ops stop prod --force
         kstlib ops stop orion --socket orion
+
     """
     try:
         manager = get_session_manager(name, backend=backend, socket_name=socket)

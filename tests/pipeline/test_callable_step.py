@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from kstlib.pipeline.exceptions import StepImportError
+from kstlib.pipeline.exceptions import PipelineConfigError, StepImportError
 from kstlib.pipeline.models import StepConfig, StepStatus, StepType
-from kstlib.pipeline.steps.callable import CallableStep
+from kstlib.pipeline.steps.callable import DANGEROUS_MODULES, CallableStep
 
 
 class TestCallableStepExecute:
@@ -32,23 +32,20 @@ class TestCallableStepExecute:
         config = StepConfig(
             name="join-path",
             type=StepType.CALLABLE,
-            callable="os.path:join",
+            callable="posixpath:join",
             args=("/tmp", "test"),
         )
         result = step.execute(config)
         assert result.status == StepStatus.SUCCESS
-        # On Windows this may differ, but value should be set
-        assert result.return_value is not None
+        assert result.return_value == "/tmp/test"
 
     def test_call_returning_none(self) -> None:
-        """Handle functions that return None."""
+        """Handle functions that return an int value."""
         step = CallableStep()
-        # list.clear returns None but we need an importable function
-        # Use os.getpid which returns int, but test json.loads for None scenario
         config = StepConfig(
-            name="no-return",
+            name="thread-id",
             type=StepType.CALLABLE,
-            callable="os:getpid",
+            callable="threading:get_ident",
         )
         result = step.execute(config)
         assert result.status == StepStatus.SUCCESS
@@ -73,7 +70,7 @@ class TestCallableStepExecute:
         config = StepConfig(
             name="bad-attr",
             type=StepType.CALLABLE,
-            callable="os:nonexistent_function_xyz",
+            callable="json:nonexistent_function_xyz",
         )
         with pytest.raises(StepImportError) as exc_info:
             step.execute(config)
@@ -98,13 +95,13 @@ class TestCallableStepExecute:
         config = StepConfig(
             name="process",
             type=StepType.CALLABLE,
-            callable="os.path:join",
+            callable="posixpath:join",
             args=("/tmp", "test"),
         )
         result = step.execute(config, dry_run=True)
         assert result.status == StepStatus.SKIPPED
         assert "dry-run" in result.stdout
-        assert "os.path:join" in result.stdout
+        assert "posixpath:join" in result.stdout
 
     def test_invalid_target_no_colon(self) -> None:
         """Handle target without colon separator."""
@@ -115,7 +112,7 @@ class TestCallableStepExecute:
             type=StepType.CALLABLE,
             callable="a:b",  # Valid format but test the rpartition path
         )
-        # This will try to import 'a' which doesn't exist
+        # Blacklist and whitelist pass for "a", so this reaches the import step
         with pytest.raises(StepImportError):
             step.execute(config)
 
@@ -125,9 +122,76 @@ class TestCallableStepExecute:
         config = StepConfig(
             name="basename",
             type=StepType.CALLABLE,
-            callable="os.path:basename",
+            callable="posixpath:basename",
             args=("/tmp/test.txt",),
         )
         result = step.execute(config)
         assert result.status == StepStatus.SUCCESS
         assert result.return_value == "test.txt"
+
+
+class TestCallableStepSecurity:
+    """Tests for DANGEROUS_MODULES blacklist and whitelist enforcement."""
+
+    @pytest.mark.parametrize("module", ["os", "sys", "subprocess", "ctypes", "pickle"])
+    def test_blacklist_rejects_dangerous_module(self, module: str) -> None:
+        """DANGEROUS_MODULES blacklist rejects the target before import."""
+        step = CallableStep()
+        config = StepConfig(
+            name="malicious",
+            type=StepType.CALLABLE,
+            callable=f"{module}:any_function",
+        )
+        with pytest.raises(PipelineConfigError, match="DANGEROUS_MODULES"):
+            step.execute(config)
+
+    def test_blacklist_rejects_dangerous_submodule(self) -> None:
+        """Blacklist rejects submodules of dangerous root modules."""
+        step = CallableStep()
+        config = StepConfig(
+            name="indirect",
+            type=StepType.CALLABLE,
+            callable="os.path:join",
+        )
+        with pytest.raises(PipelineConfigError, match="DANGEROUS_MODULES"):
+            step.execute(config)
+
+    def test_whitelist_rejects_outside_module(self) -> None:
+        """Whitelist rejects modules not present in the allow-list."""
+        step = CallableStep(allowed_modules=("json",))
+        config = StepConfig(
+            name="off-list",
+            type=StepType.CALLABLE,
+            callable="platform:system",
+        )
+        with pytest.raises(PipelineConfigError, match="not in allowed_callable_modules"):
+            step.execute(config)
+
+    def test_whitelist_allows_exact_match(self) -> None:
+        """Whitelist allows exact module match."""
+        step = CallableStep(allowed_modules=("json",))
+        config = StepConfig(
+            name="allowed",
+            type=StepType.CALLABLE,
+            callable="json:dumps",
+            args=('{"k": "v"}',),
+        )
+        result = step.execute(config)
+        assert result.status == StepStatus.SUCCESS
+
+    def test_whitelist_allows_submodule_prefix(self) -> None:
+        """Whitelist allows submodules via prefix match."""
+        step = CallableStep(allowed_modules=("email",))
+        config = StepConfig(
+            name="allowed-sub",
+            type=StepType.CALLABLE,
+            callable="email.utils:quote",
+            args=("hello",),
+        )
+        result = step.execute(config)
+        assert result.status == StepStatus.SUCCESS
+
+    def test_dangerous_modules_contains_expected(self) -> None:
+        """Ensure the core dangerous modules are covered."""
+        for expected in {"os", "sys", "subprocess", "builtins", "ctypes"}:
+            assert expected in DANGEROUS_MODULES

@@ -86,6 +86,7 @@ class SessionExistsError(SessionError):
         Args:
             name: The session name that already exists.
             backend: The backend type (tmux, container).
+
         """
         super().__init__(f"{backend} session '{name}' already exists")
         self.name = name
@@ -104,6 +105,7 @@ class SessionNotFoundError(SessionError):
         Args:
             name: The session name that was not found.
             backend: The backend type (tmux, container).
+
         """
         super().__init__(f"{backend} session '{name}' not found")
         self.name = name
@@ -123,6 +125,7 @@ class SessionStartError(SessionError):
             name: The session name that failed to start.
             backend: The backend type (tmux, container).
             reason: The reason for the failure.
+
         """
         super().__init__(f"Failed to start {backend} session '{name}': {reason}")
         self.name = name
@@ -145,6 +148,7 @@ class SessionAttachError(SessionError):
             name: The session name that failed to attach.
             backend: The backend type (tmux, container).
             reason: The reason for the failure.
+
         """
         super().__init__(f"Failed to attach to {backend} session '{name}': {reason}")
         self.name = name
@@ -165,6 +169,7 @@ class SessionStopError(SessionError):
             name: The session name that failed to stop.
             backend: The backend type (tmux, container).
             reason: The reason for the failure.
+
         """
         super().__init__(f"Failed to stop {backend} session '{name}': {reason}")
         self.name = name
@@ -185,6 +190,7 @@ class SessionAmbiguousError(SessionError):
         Args:
             name: The session name that exists in multiple backends.
             backends: List of backend names where the session was found.
+
         """
         backend_list = ", ".join(backends)
         super().__init__(

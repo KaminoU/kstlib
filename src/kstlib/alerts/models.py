@@ -21,6 +21,7 @@ Examples:
         result = AlertResult(channel="slack", success=True, message_id="12345")
         if result.success:
             print(f"Alert delivered: {result.message_id}")
+
 """
 
 from __future__ import annotations
@@ -53,6 +54,7 @@ class AlertLevel(IntEnum):
         True
         >>> AlertLevel.SUCCESS < AlertLevel.WARNING
         True
+
     """
 
     INFO = 10
@@ -89,6 +91,7 @@ class AlertMessage:
         ... )
         >>> ":::" in msg.formatted_title
         True
+
     """
 
     title: str
@@ -113,6 +116,7 @@ class AlertMessage:
             >>> msg = AlertMessage(title="Test", body="Body", timestamp=True)
             >>> "Test" in msg.formatted_title
             True
+
         """
         if self.timestamp:
             now = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
@@ -137,6 +141,7 @@ class AlertResult:
         >>> result = AlertResult(channel="email", success=False, error="SMTP timeout")
         >>> result.error
         'SMTP timeout'
+
     """
 
     channel: str

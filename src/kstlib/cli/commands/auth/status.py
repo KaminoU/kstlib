@@ -39,6 +39,7 @@ def _format_duration(seconds: int) -> str:
 
     Returns:
         Formatted duration string.
+
     """
     abs_seconds = abs(seconds)
     if abs_seconds > 3600:
@@ -57,6 +58,7 @@ def _format_datetime(dt: datetime, *, use_local: bool) -> str:
 
     Returns:
         Formatted datetime string.
+
     """
     if use_local:
         local_dt = dt.astimezone()
@@ -72,6 +74,7 @@ def _get_refresh_token_expiry(token: Token) -> datetime | None:
 
     Returns:
         Refresh token expiry datetime, or None if unknown.
+
     """
     metadata = token.metadata
 
@@ -101,6 +104,7 @@ def _determine_status(token: Token, threshold: int) -> tuple[str, str, bool]:
 
     Returns:
         Tuple of (status_text, status_style, is_expired).
+
     """
     expires_in = token.expires_in
     is_expired = token.is_expired
@@ -119,6 +123,7 @@ def _build_access_token_rows(table: Table, token: Token, ctx: _DisplayContext) -
         table: Rich table to add rows to.
         token: Token object.
         ctx: Display context.
+
     """
     table.add_row("Provider", f"[cyan]{ctx.provider_name}[/]")
     table.add_row("Status", ctx.status_text)
@@ -153,6 +158,7 @@ def _build_refresh_token_panel(token: Token, ctx: _DisplayContext) -> Panel | No
 
     Returns:
         Panel for refresh token, or None if no refresh token.
+
     """
     if not token.is_refreshable:
         return None
@@ -198,6 +204,7 @@ def _show_not_authenticated(provider_name: str, quiet: bool) -> None:
     Args:
         provider_name: Provider name.
         quiet: Whether to use quiet mode.
+
     """
     if quiet:
         console.print(f"[yellow]{provider_name}: not authenticated[/]")
@@ -220,6 +227,7 @@ def _show_quiet_status(provider_name: str, token: Token, status_text: str, is_ex
         token: Token object.
         status_text: Formatted status text.
         is_expired: Whether token is expired.
+
     """
     expires_in = token.expires_in
     if expires_in is not None:
@@ -238,6 +246,7 @@ def _show_verbose_status(token: Token, ctx: _DisplayContext) -> None:
     Args:
         token: Token object.
         ctx: Display context.
+
     """
     # Access token panel
     table = Table(show_header=False, box=None)

@@ -43,6 +43,7 @@ def _get_datetime_config() -> tuple[str, str]:
 
     Returns:
         Tuple of (format_string, timezone_string).
+
     """
     try:
         from kstlib.config import get_config
@@ -68,6 +69,7 @@ def _validate_format_string(fmt: str) -> str:
 
     Returns:
         Validated format string, or default if invalid.
+
     """
     if not fmt or not isinstance(fmt, str):
         return DEFAULT_DATETIME_FORMAT
@@ -95,6 +97,7 @@ def _validate_timezone(tz: str) -> str:
 
     Returns:
         Validated timezone string, or "local" if invalid.
+
     """
     if not tz or not isinstance(tz, str):
         return "local"
@@ -149,6 +152,7 @@ def format_timestamp(
         '26/01/2024'
         >>> format_timestamp(None)
         '(invalid)'
+
     """
     # Handle None or empty
     if epoch is None or epoch == "":
@@ -209,6 +213,7 @@ def format_bytes(size: float, binary: bool = True) -> str:
         '25.0 MiB'
         >>> format_bytes(25 * 1000 * 1000, binary=False)
         '25.0 MB'
+
     """
     return humanize.naturalsize(size, binary=binary)
 
@@ -225,6 +230,7 @@ def format_count(value: int) -> str:
     Examples:
         >>> format_count(1000000)
         '1,000,000'
+
     """
     return humanize.intcomma(value)
 
@@ -243,6 +249,7 @@ def format_duration(seconds: float) -> str:
         '5 minutes'
         >>> format_duration(3661)
         'an hour'
+
     """
     delta = timedelta(seconds=seconds)
     return humanize.naturaldelta(delta)
@@ -263,6 +270,7 @@ def format_time_delta(dt: datetime, other: datetime | None = None) -> str:
         >>> past = datetime.now() - timedelta(hours=2)
         >>> format_time_delta(past)
         '2 hours ago'
+
     """
     return humanize.naturaltime(dt, when=other)
 
@@ -312,6 +320,7 @@ def parse_size_string(value: str | float) -> int:
         104857600
         >>> parse_size_string("1.5GB")
         1610612736
+
     """
     # Handle numeric types directly
     if isinstance(value, int | float):

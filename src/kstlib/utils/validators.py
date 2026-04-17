@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from email.utils import formataddr, parseaddr
 from typing import TYPE_CHECKING
 
+from kstlib.config.exceptions import KstlibError
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 else:  # pragma: no cover - runtime alias for delayed evaluation
@@ -21,9 +23,39 @@ LABEL_MAX_LENGTH = 63
 MIN_LABEL_COUNT = 2
 MIN_TLD_LENGTH = 2
 
+#: Shared pattern for callable targets (``module.path:function_name``).
+#: Used by :mod:`kstlib.pipeline.validators` and
+#: :mod:`kstlib.transform.validators`. Keep in sync with both modules.
+CALLABLE_TARGET_PATTERN: re.Pattern[str] = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$")
 
-class ValidationError(ValueError):
+#: Maximum callable target length (bytes).
+MAX_CALLABLE_TARGET_LENGTH: int = 256
+
+
+class ValidationError(KstlibError, ValueError):
     """Raised when user supplied values fail validation."""
+
+
+def _validate_callable_target_str(target: str) -> None:
+    """Validate a callable target string.
+
+    Shared by pipeline and transform modules; each caller wraps the
+    raised ``ValueError`` in its module-specific exception type.
+
+    Args:
+        target: Callable target in the form ``module.path:function_name``.
+
+    Raises:
+        ValueError: If the target is empty, exceeds the length limit, or
+            does not match :data:`CALLABLE_TARGET_PATTERN`.
+
+    """
+    if not target:
+        raise ValueError("Callable target must not be empty")
+    if len(target) > MAX_CALLABLE_TARGET_LENGTH:
+        raise ValueError(f"Callable target too long: {len(target)} > {MAX_CALLABLE_TARGET_LENGTH}")
+    if not CALLABLE_TARGET_PATTERN.match(target):
+        raise ValueError(f"Invalid callable target: {target!r}. Expected format: module.path:function_name")
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +96,7 @@ def parse_email_address(value: str) -> EmailAddress:
         Traceback (most recent call last):
         ...
         kstlib.utils.validators.ValidationError: Invalid email address: 'foo@bar'
+
     """
     if not value:
         raise ValidationError("Email address cannot be empty")
@@ -112,6 +145,7 @@ def normalize_address_list(values: Iterable[str]) -> list[EmailAddress]:
         ... ])  # doctest: +NORMALIZE_WHITESPACE
         [EmailAddress(name='Ada Lovelace', address='ada@example.com'),
          EmailAddress(name='', address='grace@example.net')]
+
     """
     return [parse_email_address(value) for value in values]
 

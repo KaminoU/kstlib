@@ -42,6 +42,7 @@ class PipelineAbortedError(PipelineError):
     Attributes:
         step_name: Name of the step that caused the abort.
         reason: Description of why the step failed.
+
     """
 
     def __init__(self, step_name: str, reason: str) -> None:
@@ -50,6 +51,7 @@ class PipelineAbortedError(PipelineError):
         Args:
             step_name: Name of the step that caused the abort.
             reason: Description of why the step failed.
+
         """
         super().__init__(f"Pipeline aborted at step '{step_name}': {reason}")
         self.step_name = step_name
@@ -62,6 +64,7 @@ class StepError(PipelineError):
     Attributes:
         step_name: Name of the step that failed.
         reason: Description of the failure.
+
     """
 
     def __init__(self, step_name: str, reason: str) -> None:
@@ -70,6 +73,7 @@ class StepError(PipelineError):
         Args:
             step_name: Name of the step that failed.
             reason: Description of the failure.
+
         """
         super().__init__(f"Step '{step_name}' failed: {reason}")
         self.step_name = step_name
@@ -82,6 +86,7 @@ class StepTimeoutError(StepError):
     Attributes:
         step_name: Name of the step that timed out.
         timeout: The timeout value in seconds.
+
     """
 
     def __init__(self, step_name: str, timeout: float) -> None:
@@ -90,6 +95,7 @@ class StepTimeoutError(StepError):
         Args:
             step_name: Name of the step that timed out.
             timeout: The timeout value in seconds.
+
         """
         super().__init__(step_name, f"exceeded timeout of {timeout}s")
         self.timeout = timeout
@@ -101,6 +107,7 @@ class StepImportError(StepError):
     Attributes:
         step_name: Name of the step with the import failure.
         target: The import target string that failed.
+
     """
 
     def __init__(self, step_name: str, target: str) -> None:
@@ -109,6 +116,7 @@ class StepImportError(StepError):
         Args:
             step_name: Name of the step with the import failure.
             target: The import target string (e.g. "module.path:function").
+
         """
         super().__init__(step_name, f"cannot import '{target}'")
         self.target = target

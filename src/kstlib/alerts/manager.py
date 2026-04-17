@@ -29,6 +29,7 @@ Examples:
             .add_channel(slack_channel, min_level=AlertLevel.INFO)
             .add_channel(email_channel, min_level=AlertLevel.CRITICAL)
         )
+
 """
 
 from __future__ import annotations
@@ -77,6 +78,7 @@ class AlertManagerStats:
         total_failed: Total alerts that failed delivery.
         total_throttled: Total alerts dropped due to throttling.
         by_channel: Per-channel statistics.
+
     """
 
     total_sent: int = 0
@@ -147,6 +149,7 @@ class AlertManager:
                 config=config["alerts"],
                 credential_resolver=resolver,
             )
+
     """
 
     def __init__(self) -> None:
@@ -191,6 +194,7 @@ class AlertManager:
             AlertManager(channels=1)
             >>> manager.add_channel(email_channel, min_level=AlertLevel.CRITICAL)  # doctest: +SKIP
             AlertManager(channels=2)
+
         """
         # Wrap sync channels for async usage
         if isinstance(channel, AlertChannel):
@@ -249,6 +253,7 @@ class AlertManager:
 
                 >>> alerts = [alert1, alert2, alert3]  # doctest: +SKIP
                 >>> results = await manager.send(alerts, channel="watchdog")  # doctest: +SKIP
+
         """
         if not self._channels:
             log.warning("No channels configured, alert not sent")
@@ -289,6 +294,7 @@ class AlertManager:
 
         Returns:
             List of results for this alert.
+
         """
         # Determine matching entries
         if target_entries is not None:
@@ -325,6 +331,7 @@ class AlertManager:
 
         Returns:
             List with matching entry, or empty list if not found.
+
         """
         for entry in self._channels:
             # Match by key (e.g., "hb")
@@ -351,6 +358,7 @@ class AlertManager:
 
         Returns:
             AlertResult with delivery status.
+
         """
         channel_name = entry.channel.name
 
@@ -433,6 +441,7 @@ class AlertManager:
 
         Raises:
             AlertConfigurationError: If configuration is invalid.
+
         """
         from kstlib.alerts.channels import SlackChannel
         from kstlib.alerts.throttle import AlertThrottle
@@ -524,6 +533,7 @@ def _parse_level(level_str: str) -> AlertLevel:
 
     Raises:
         AlertConfigurationError: If level is invalid.
+
     """
     level_map = {
         "info": AlertLevel.INFO,
@@ -537,12 +547,84 @@ def _parse_level(level_str: str) -> AlertLevel:
     return level
 
 
+def _create_smtp_transport(
+    transport_config: Mapping[str, Any],
+) -> MailTransport:
+    """Build an SMTP mail transport from raw config."""
+    from kstlib.mail.transports import SMTPCredentials, SMTPSecurity, SMTPTransport
+
+    credentials = None
+    username = transport_config.get("username")
+    if username:
+        credentials = SMTPCredentials(
+            username=username,
+            password=transport_config.get("password"),
+        )
+
+    security = SMTPSecurity(
+        use_starttls=transport_config.get("use_tls", True),
+    )
+
+    return SMTPTransport(
+        host=transport_config.get("host", "localhost"),
+        port=int(transport_config.get("port", 587)),
+        credentials=credentials,
+        security=security,
+    )
+
+
+def _create_resend_transport(
+    transport_config: Mapping[str, Any],
+    name: str,
+    credential_resolver: CredentialResolver | None,
+) -> AsyncMailTransport:
+    """Build a Resend mail transport from raw config."""
+    from kstlib.mail.transports import ResendTransport
+
+    api_key = transport_config.get("api_key")
+    if not api_key and credential_resolver:
+        cred_name = transport_config.get("credentials")
+        if cred_name:
+            record = credential_resolver.resolve(cred_name)
+            api_key = record.value
+
+    if not api_key:
+        raise AlertConfigurationError(f"Resend transport for '{name}' requires 'api_key' or 'credentials'")
+
+    return ResendTransport(api_key=api_key)
+
+
+def _create_ses_transport(
+    transport_config: Mapping[str, Any],
+    credential_resolver: CredentialResolver | None,
+) -> AsyncMailTransport:
+    """Build an AWS SES mail transport from raw config."""
+    from kstlib.mail.transports import SesTransport
+
+    aws_access_key_id = transport_config.get("aws_access_key_id")
+    aws_secret_access_key = transport_config.get("aws_secret_access_key")
+
+    if credential_resolver:
+        cred_name = transport_config.get("credentials")
+        if cred_name:
+            record = credential_resolver.resolve(cred_name)
+            aws_access_key_id = aws_access_key_id or record.value
+
+    return SesTransport(
+        region=transport_config.get("region", "eu-west-3"),
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+    )
+
+
 def _create_email_transport(
     transport_config: Mapping[str, Any],
     name: str,
     credential_resolver: CredentialResolver | None,
 ) -> MailTransport | AsyncMailTransport:
     """Create a mail transport from configuration.
+
+    Delegates to a per-type factory to keep the dispatcher small.
 
     Args:
         transport_config: Transport configuration dict.
@@ -554,72 +636,20 @@ def _create_email_transport(
 
     Raises:
         AlertConfigurationError: If configuration is invalid.
+
     """
     transport_type = transport_config.get("type", "smtp").lower()
-
     if transport_type == "smtp":
-        from kstlib.mail.transports import SMTPCredentials, SMTPSecurity, SMTPTransport
-
-        credentials = None
-        username = transport_config.get("username")
-        if username:
-            credentials = SMTPCredentials(
-                username=username,
-                password=transport_config.get("password"),
-            )
-
-        security = SMTPSecurity(
-            use_starttls=transport_config.get("use_tls", True),
-        )
-
-        return SMTPTransport(
-            host=transport_config.get("host", "localhost"),
-            port=int(transport_config.get("port", 587)),
-            credentials=credentials,
-            security=security,
-        )
-
+        return _create_smtp_transport(transport_config)
     if transport_type == "gmail":
-        # Gmail requires OAuth2 Token from kstlib.auth module
-        # Use GmailTransport directly with a Token object in code
         raise AlertConfigurationError(
             f"Gmail transport for '{name}' requires programmatic configuration. "
             "Use GmailTransport(token=...) directly instead of config."
         )
-
     if transport_type == "resend":
-        from kstlib.mail.transports import ResendTransport
-
-        api_key = transport_config.get("api_key")
-        if not api_key and credential_resolver:
-            cred_name = transport_config.get("credentials")
-            if cred_name:
-                record = credential_resolver.resolve(cred_name)
-                api_key = record.value
-
-        if not api_key:
-            raise AlertConfigurationError(f"Resend transport for '{name}' requires 'api_key' or 'credentials'")
-
-        return ResendTransport(api_key=api_key)
-
+        return _create_resend_transport(transport_config, name, credential_resolver)
     if transport_type == "ses":
-        from kstlib.mail.transports import SesTransport
-
-        aws_access_key_id = transport_config.get("aws_access_key_id")
-        aws_secret_access_key = transport_config.get("aws_secret_access_key")
-
-        if credential_resolver:
-            cred_name = transport_config.get("credentials")
-            if cred_name:
-                record = credential_resolver.resolve(cred_name)
-                aws_access_key_id = aws_access_key_id or record.value
-
-        return SesTransport(
-            region=transport_config.get("region", "eu-west-3"),
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-        )
-
+        return _create_ses_transport(transport_config, credential_resolver)
     raise AlertConfigurationError(f"Unknown transport type '{transport_type}' for email channel '{name}'")
 
 
@@ -640,6 +670,7 @@ def _create_email_channel(
 
     Raises:
         AlertConfigurationError: If configuration is invalid.
+
     """
     from kstlib.alerts.channels import EmailChannel
 

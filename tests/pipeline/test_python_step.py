@@ -140,7 +140,7 @@ class TestPythonStepExecute:
         import subprocess
         from unittest.mock import patch
 
-        with patch("kstlib.pipeline.steps.python.subprocess.run") as mock_run:
+        with patch("kstlib.pipeline.steps._base.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired(cmd="python", timeout=0.1)
             result = step.execute(config)
         assert result.status == StepStatus.TIMEOUT

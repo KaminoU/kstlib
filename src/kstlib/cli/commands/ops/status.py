@@ -30,6 +30,7 @@ def _config_fallback_status(name: str) -> SessionStatus | None:
 
     Returns:
         SessionStatus with DEFINED state, or None if not in config.
+
     """
     try:
         manager = SessionManager.from_config(name)
@@ -52,6 +53,7 @@ def _format_created_at(created_at: str | None) -> str | None:
 
     Returns:
         Formatted datetime string, or None if no value.
+
     """
     if not created_at:
         return None
@@ -79,6 +81,7 @@ def status(
         kstlib ops status dev
         kstlib ops status prod --json
         kstlib ops status orion --socket orion
+
     """
     try:
         manager = get_session_manager(name, backend=backend, socket_name=socket)

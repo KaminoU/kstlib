@@ -16,6 +16,7 @@ Examples:
     >>> configs = discover_monitoring_configs("./configs")  # doctest: +SKIP
     >>> for name, config in configs.items():  # doctest: +SKIP
     ...     print(f"Found: {name}")  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -79,6 +80,7 @@ class CollectorConfig:
         function: Function name (for type="callable").
         env_var: Environment variable name (for type="env").
         default: Default value if env var not set (for type="env").
+
     """
 
     name: str
@@ -97,6 +99,7 @@ class CollectorConfig:
 
         Raises:
             MonitoringConfigCollectorError: If collector cannot be created.
+
         """
         if self.collector_type == "static":
             return self._create_static_collector()
@@ -168,6 +171,7 @@ class MonitoringConfig:
         fail_fast: Whether to fail on first collector error (default True).
         source_path: Path to the source config file (if loaded from file).
         metadata: Additional metadata from the config file.
+
     """
 
     name: str
@@ -186,6 +190,7 @@ class MonitoringConfig:
 
         Raises:
             MonitoringConfigCollectorError: If any collector cannot be created.
+
         """
         collectors: dict[str, Collector] = {}
         for collector_config in self.collectors:
@@ -250,6 +255,7 @@ class MonitoringConfig:
 
         Raises:
             MonitoringConfigFormatError: If required fields are missing.
+
         """
         # Validate required fields
         if "template" not in data:
@@ -320,6 +326,7 @@ def load_monitoring_config(
         >>> config = load_monitoring_config("dashboard.monitor.yml")  # doctest: +SKIP
         >>> service = config.to_service()  # doctest: +SKIP
         >>> result = service.run_sync()  # doctest: +SKIP
+
     """
     path = pathlib.Path(path)
     if not path.is_file():
@@ -368,6 +375,7 @@ def discover_monitoring_configs(
         >>> configs = discover_monitoring_configs("./monitoring")  # doctest: +SKIP
         >>> for name, config in configs.items():  # doctest: +SKIP
         ...     print(f"Loaded: {name}")  # doctest: +SKIP
+
     """
     directory = pathlib.Path(directory)
     if not directory.is_dir():
@@ -407,6 +415,7 @@ def create_services_from_directory(
         >>> for name, service in services.items():  # doctest: +SKIP
         ...     result = service.run_sync()  # doctest: +SKIP
         ...     print(f"{name}: {result.success}")  # doctest: +SKIP
+
     """
     configs = discover_monitoring_configs(directory, recursive=recursive, encoding=encoding)
     return {name: config.to_service() for name, config in configs.items()}

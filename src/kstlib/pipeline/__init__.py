@@ -23,6 +23,7 @@ Examples:
 
     >>> runner = PipelineRunner.from_config("morning")  # doctest: +SKIP
     >>> result = runner.run()  # doctest: +SKIP
+
 """
 
 from kstlib.pipeline.base import AbstractStep

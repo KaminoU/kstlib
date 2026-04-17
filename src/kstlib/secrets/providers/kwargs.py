@@ -27,6 +27,7 @@ class KwargsProvider(SecretProvider):
         >>> record = provider.resolve(SecretRequest(name="api.key"))
         >>> record.value
         'test-key'
+
     """
 
     name = "kwargs"
@@ -36,6 +37,7 @@ class KwargsProvider(SecretProvider):
 
         Args:
             secrets: Mapping of dotted secret names to their values.
+
         """
         self._secrets: dict[str, Any] = dict(secrets) if secrets else {}
 
@@ -45,6 +47,7 @@ class KwargsProvider(SecretProvider):
         Args:
             settings: Optional mapping that may provide additional secrets
                 under the ``secrets`` key.
+
         """
         if not settings:
             return
@@ -60,6 +63,7 @@ class KwargsProvider(SecretProvider):
 
         Returns:
             A ``SecretRecord`` if the secret is found, otherwise ``None``.
+
         """
         value = self._secrets.get(request.name)
         if value is None:
@@ -76,6 +80,7 @@ class KwargsProvider(SecretProvider):
         Args:
             name: The dotted secret name (e.g., "api.key").
             value: The secret value.
+
         """
         self._secrets[name] = value
 
@@ -87,6 +92,7 @@ class KwargsProvider(SecretProvider):
 
         Returns:
             True if the secret was removed, False if it didn't exist.
+
         """
         if name in self._secrets:
             del self._secrets[name]

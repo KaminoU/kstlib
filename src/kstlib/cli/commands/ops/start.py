@@ -25,7 +25,7 @@ from .common import (
 )
 
 
-def start(  # noqa: PLR0913
+def start(
     name: str = SESSION_ARGUMENT,
     backend: str | None = BACKEND_OPTION,
     command: str | None = COMMAND_OPTION,
@@ -47,6 +47,7 @@ def start(  # noqa: PLR0913
         kstlib ops start dev --backend tmux --command "python app.py"
         kstlib ops start prod --backend container --image app:latest
         kstlib ops start orion --socket orion --command "python bot.py"
+
     """
     # Parse environment variables
     env_dict: dict[str, str] = {}

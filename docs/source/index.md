@@ -51,6 +51,7 @@ every developer knows that!
 | **resilience** | Circuit breaker, rate limiter, graceful shutdown |
 | **ops** | Session manager (tmux), containers (Docker/Podman) |
 | **pipeline** | Declarative step execution (shell, Python, callable) |
+| **transform** | Bidirectional data transforms with composed patches and filters |
 | **helpers/utils** | TimeTrigger, formatting, secure delete, validators |
 
 ## Quick Start

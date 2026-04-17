@@ -1,9 +1,11 @@
 """Exceptions for the metrics module."""
 
+from kstlib.config.exceptions import KstlibError
+
 __all__ = ["MetricsError"]
 
 
-class MetricsError(Exception):
+class MetricsError(KstlibError):
     """Base exception for metrics-related errors.
 
     Examples:
@@ -11,4 +13,5 @@ class MetricsError(Exception):
         Traceback (most recent call last):
             ...
         kstlib.metrics.exceptions.MetricsError: Something went wrong
+
     """

@@ -28,6 +28,7 @@ Examples:
 
         async with throttle:
             await channel.send(alert)  # Waits if rate limit hit
+
 """
 
 from __future__ import annotations
@@ -89,6 +90,7 @@ class AlertThrottle:
                 send_alert()
             else:
                 log.warning("Alert throttled")
+
     """
 
     def __init__(
@@ -106,6 +108,7 @@ class AlertThrottle:
             per: Period duration in seconds. If None, uses config.
             burst: Initial token count. If None, defaults to rate.
             name: Optional name for identification.
+
         """
         # Load config defaults
         limits = get_alerts_limits()
@@ -169,6 +172,7 @@ class AlertThrottle:
             True
             >>> throttle.try_acquire()  # Throttled
             False
+
         """
         return self._limiter.try_acquire()
 
@@ -184,6 +188,7 @@ class AlertThrottle:
         Examples:
             >>> throttle = AlertThrottle(rate=10, per=60.0)
             >>> throttle.acquire()  # Blocks if needed
+
         """
         try:
             self._limiter.acquire(blocking=True, timeout=timeout)
@@ -206,6 +211,7 @@ class AlertThrottle:
             >>> import asyncio
             >>> throttle = AlertThrottle(rate=10, per=60.0)
             >>> asyncio.run(throttle.acquire_async())
+
         """
         try:
             await self._limiter.acquire_async(timeout=timeout)
@@ -227,6 +233,7 @@ class AlertThrottle:
             >>> throttle.reset()
             >>> throttle.try_acquire()
             True
+
         """
         self._limiter.reset()
 

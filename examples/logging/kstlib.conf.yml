@@ -1,5 +1,16 @@
 # Logging overrides used by the basic_usage demo.
 # Demonstrates how a local config file changes the defaults.
+
+# Uncomment the `kstlib` block below to turn on kstlib's own internal logs
+# without writing any Python. The first call to get_logger() from any
+# kstlib module will trigger init_logging() transparently. Unknown presets
+# fall back to "prod" with a single stderr notice.
+#
+# kstlib:
+#   logging:
+#     enabled: true   # opt-in: internal kstlib logs (mail, rapi, auth, ...)
+#     preset: dev     # dev | prod | debug | trace | quiet (from this file)
+
 logger:
   defaults:
     output: console

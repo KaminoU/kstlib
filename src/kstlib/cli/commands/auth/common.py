@@ -46,6 +46,7 @@ def resolve_provider_name(provider: str | None) -> str:
 
     Raises:
         typer.Exit: If no provider specified and no default configured.
+
     """
     if provider:
         return provider
@@ -80,6 +81,7 @@ def get_provider(provider_name: str) -> AbstractAuthProvider:
 
     Raises:
         typer.Exit: If provider not found or misconfigured.
+
     """
     from kstlib.auth.config import get_provider_config
 

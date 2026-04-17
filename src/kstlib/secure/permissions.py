@@ -10,6 +10,7 @@ Note:
 Example:
     >>> from kstlib.secure.permissions import FilePermissions  # doctest: +SKIP
     >>> path.chmod(FilePermissions.READONLY)  # doctest: +SKIP
+
 """
 
 # pylint: disable=too-few-public-methods
@@ -32,6 +33,7 @@ class FilePermissions:
             modified, or temporarily to unlock read-only files before deletion.
         OWNER_RWX: Owner read-write-execute (0o700). Use for directories
             containing sensitive files.
+
     """
 
     # Read-only for owner only - private keys, tokens, secrets
@@ -55,6 +57,7 @@ class DirectoryPermissions:
             sensitive files like tokens or secrets.
         SHARED_READ: Owner full, group/others read+execute (0o755).
             Use for directories with public content.
+
     """
 
     # Private directory - only owner can access

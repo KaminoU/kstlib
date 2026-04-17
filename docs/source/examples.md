@@ -197,6 +197,7 @@ Templates, attachments, and multiple transport options.
 
 | Example | Description |
 |---------|-------------|
+| [01_config_driven.py](https://github.com/KaminoU/kstlib/blob/main/examples/mail/01_config_driven.py) | **Config-driven** transport via `MailBuilder(preset=...)` and `mail.default` |
 | [basic_plain.py](https://github.com/KaminoU/kstlib/blob/main/examples/mail/basic_plain.py) | Plain text email |
 | [html_template.py](https://github.com/KaminoU/kstlib/blob/main/examples/mail/html_template.py) | HTML with Jinja templates |
 | [attachments_inline.py](https://github.com/KaminoU/kstlib/blob/main/examples/mail/attachments_inline.py) | Attachments and inline images |
@@ -207,6 +208,35 @@ Templates, attachments, and multiple transport options.
 | [smtp_trace.py](https://github.com/KaminoU/kstlib/blob/main/examples/mail/smtp_trace.py) | TRACE logging for SMTP debugging |
 | [kstlib.conf.yml](https://github.com/KaminoU/kstlib/blob/main/examples/mail/kstlib.conf.yml) | Config with SOPS include |
 | [mail.conf.sops.yml](https://github.com/KaminoU/kstlib/blob/main/examples/mail/mail.conf.sops.yml) | Encrypted Resend API key |
+
+**Config-driven transport** - pick the transport from `kstlib.conf.yml`:
+
+```python
+from kstlib.mail import MailBuilder
+
+# Uses mail.default preset
+MailBuilder().sender("bot@x.com").to("ops@x.com").message("hi").send()
+
+# Explicit named preset
+MailBuilder(preset="corporate").sender("bot@x.com").to("ops@x.com").message("hi").send()
+```
+
+```yaml
+# kstlib.conf.yml
+mail:
+  default: corporate
+  presets:
+    corporate:
+      transport: smtp
+      host: smtp.example.com
+      port: 587
+      login: user@example.com
+      password: "secret"
+      starttls: true
+    transactional:
+      transport: resend
+      api_key: re_xxxxxxxxxxxxx
+```
 
 **@mail.notify() Decorator** - automatic email notifications for function execution:
 
@@ -559,6 +589,105 @@ Path validation and secure file operations.
 | Example | Description |
 |---------|-------------|
 | [guardrails_demo.py](https://github.com/KaminoU/kstlib/blob/main/examples/secure/guardrails_demo.py) | Path validation and permission checks |
+:::
+
+:::{dropdown} transform - Bidirectional data transformation
+
+Encode/decode/patch round-trips for nested binary blobs (base64, zlib,
+JSON, XML). Composed patches with global + targeted filters.
+
+| Example | Description |
+|---------|-------------|
+| [01_round_trip.py](https://github.com/KaminoU/kstlib/blob/main/examples/transform/01_round_trip.py) | Programmatic chain build, full forward + patch + backward, integrity check |
+| [02_config_driven.py](https://github.com/KaminoU/kstlib/blob/main/examples/transform/02_config_driven.py) | Load chain from `kstlib.conf.yml` via `TransformChain.from_config()` |
+| [03_composed_patch.py](https://github.com/KaminoU/kstlib/blob/main/examples/transform/03_composed_patch.py) | global + targeted patches with filter cascade, plus `scope: all` outer mutation for R220 |
+| [04_outer_patch.py](https://github.com/KaminoU/kstlib/blob/main/examples/transform/04_outer_patch.py) | The three `scope:` values (`blob`, `outer`, `all`), `replace_outer_uris` helper, custom protected paths |
+| [kstlib.conf.yml](https://github.com/KaminoU/kstlib/blob/main/examples/transform/kstlib.conf.yml) | Preset + usage chains, replace + callable patches, composed cascade with `scope: blob` / `scope: all` |
+
+```bash
+cd examples/transform
+python 01_round_trip.py     # Programmatic round-trip with synthetic data
+python 02_config_driven.py  # Config-driven via from_config()
+python 03_composed_patch.py # Composed patch cascade on 3 synthetic objects
+python 04_outer_patch.py    # scope: blob | outer | all on a synthetic wrapper
+```
+
+**Round-trip pattern** - decode, patch, re-encode with lossless envelope:
+
+```python
+from kstlib.transform import (
+    TransformChain,
+    TransformChainConfig,
+    PrimitiveConfig,
+    PatchConfig,
+)
+
+chain = TransformChain(
+    TransformChainConfig(
+        name="decode_report",
+        forward=(
+            PrimitiveConfig(name="base64"),
+            PrimitiveConfig(name="zlib"),
+            PrimitiveConfig(
+                name="json",
+                options={"extract": "transferableContent.content"},
+            ),
+        ),
+        patch=PatchConfig(replace={"old-host": "new-host"}),
+    )
+)
+
+# One-shot: forward + patch + backward
+patched_blob = chain.transform(blob_b64_string)
+```
+
+**Composed patches** - apply different patches to different objects:
+
+```yaml
+# kstlib.conf.yml
+transforms:
+  chains:
+    patch_production:
+      preset: sas_report          # Inherit forward + backward
+
+      global_patches:
+        - patch_report            # Applied to every object (scope: blob)
+
+      targeted_patches:
+        - filter:
+            content_type: report
+            name: "R220_*"
+          patches:
+            - patch_report_full   # R220 reports also patch the outer wrapper
+        - filter:
+            name: "*"             # Wildcard fallback
+          patches:
+            - patch_report
+```
+
+```python
+import json
+from kstlib.transform import transform
+
+# Pass metadata so the targeted_patches filters can match. R220 reports
+# also need metadata['outer'] because patch_report_full has scope: all.
+wrapper = json.loads(transfer_object_json)
+result = transform(
+    wrapper["content"],
+    "patch_production",
+    metadata={
+        "content_type": "report",
+        "name": "R220_ASTRO",
+        "outer": wrapper,
+    },
+)
+```
+
+```{note}
+For the full user guide (5 primitives, auto-reverse rules, security
+hardening, YAML schema reference), see {doc}`features/transform/index`.
+For the API reference (autoclass + autofunction), see {doc}`api/transform`.
+```
 :::
 
 :::{dropdown} ui - Rich-based UI components

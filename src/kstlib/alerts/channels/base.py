@@ -27,6 +27,7 @@ Examples:
                     # Send via HTTP POST
                     pass
                 return AlertResult(channel=self.name, success=True)
+
 """
 
 from __future__ import annotations
@@ -57,6 +58,7 @@ class AlertChannel(ABC):
                 def send(self, alert: AlertMessage) -> AlertResult:
                     print(f"[{alert.level.name}] {alert.title}")
                     return AlertResult(channel=self.name, success=True)
+
     """
 
     @property
@@ -79,6 +81,7 @@ class AlertChannel(ABC):
 
         Raises:
             AlertDeliveryError: If delivery fails.
+
         """
 
 
@@ -100,6 +103,7 @@ class AsyncAlertChannel(ABC):
                     async with httpx.AsyncClient() as client:
                         await client.post(...)
                     return AlertResult(channel=self.name, success=True)
+
     """
 
     @property
@@ -122,6 +126,7 @@ class AsyncAlertChannel(ABC):
 
         Raises:
             AlertDeliveryError: If delivery fails.
+
         """
 
 
@@ -144,6 +149,7 @@ class AsyncChannelWrapper(AsyncAlertChannel):
 
             # Now usable in async context
             await async_channel.send(alert)
+
     """
 
     def __init__(
@@ -157,6 +163,7 @@ class AsyncChannelWrapper(AsyncAlertChannel):
         Args:
             channel: The sync channel to wrap.
             executor: Optional custom thread pool executor.
+
         """
         self._channel = channel
         self._executor = executor
@@ -185,6 +192,7 @@ class AsyncChannelWrapper(AsyncAlertChannel):
 
         Raises:
             AlertDeliveryError: If the underlying channel fails.
+
         """
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(

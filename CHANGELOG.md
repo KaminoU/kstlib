@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-04-16
+
+### Added
+
+- **System-wide config cascade via platformdirs.** New fallback level between
+  package defaults and user home config: `XDG_CONFIG_DIRS` on Linux, native
+  paths on macOS/Windows.
+- **LogManager `register=True`.** Unified bootstrap API; replaces the previous
+  dual-object pattern. `init_logging()` is kept as a backward-compatible
+  wrapper.
+- **MailBuilder config-driven presets.** `mail.presets` in `kstlib.conf.yml`;
+  cascade is `transport=` kwarg > `preset=` kwarg > `mail.default`.
+- **Auto-activation of kstlib internal logs** via `kstlib.logging.enabled` in
+  `kstlib.conf.yml` (silent cascade, never breaks the host app).
+
+### Fixed
+
+- **Exception hierarchy consolidated.** All subpackage base exceptions now
+  inherit from `KstlibError`: `mail`, `metrics`, `rapi`, `resilience`, `ui`,
+  `secure`, `utils`. `except KstlibError` now catches everything kstlib
+  raises.
+- **pytest 9.0.3 bump** (was capped at `<9`; pulls in the
+  [CVE-2025-71176](https://nvd.nist.gov/vuln/detail/CVE-2025-71176) temp dir
+  fix).
+- **`defusedxml` applied to all XML parsing paths** (`transform.primitives`,
+  `transform.chain`, `utils.serialization`).
+- **`auth/providers` asserts removed.** `assert` statements replaced by
+  explicit `ConfigurationError` raises so missing `token_url` / `issuer` /
+  JWKS still raise cleanly under `python -O`.
+- **Pipeline `CallableStep` hardened.** `DANGEROUS_MODULES` blacklist +
+  optional `allowed_modules` whitelist wired through
+  `PipelineConfig.allowed_callable_modules`; blocks `os`, `subprocess`,
+  `ctypes`, `pickle`, ... from being invoked via YAML config.
+- **age-keygen private key** now has an explicit `chmod 0o600` after
+  generation (umask fallback was `0o644` on Unix).
+- **HTTP trace logger** redacts `access_token`, `refresh_token`, `id_token`,
+  and `client_secret` in TRACE-level response bodies (matching the existing
+  request redaction).
+
+### Refactored
+
+- **`pipeline/steps`**: shared `_run_subprocess` extracted into
+  `pipeline/steps/_base.py`; `shell.py` and `python.py` now delegate instead
+  of duplicating the execution skeleton.
+- **`utils/validators`**: `CALLABLE_TARGET_PATTERN` +
+  `MAX_CALLABLE_TARGET_LENGTH` consolidated; pipeline and transform
+  validators share `_validate_callable_target_str`.
+- **`alerts/manager`**: `_create_email_transport` split into
+  `_create_smtp_transport`, `_create_resend_transport`,
+  `_create_ses_transport`; dispatcher dropped to ~10 lines.
+- **`cli/commands/ops/common`**: `get_session_manager` decomposed into
+  `_detect_backend`, `_scan_tmux_sockets`, `_build_session_manager`
+  (complexity 15 -> 8, blanket `C901`/`PLR0912` suppressions removed).
+- **`cli/commands/rapi`**: `_load_config_or_exit()` shared by `list`,
+  `show`, and `call`.
+- **`LOGGING_LEVEL`** re-exported from `kstlib.logging`.
+- **`ParamSpec`** migrated from `typing_extensions` to `typing`
+  (`resilience/rate_limiter`, `resilience/circuit_breaker`; Python 3.10+).
+
+### Security
+
+- Response-body token redaction in HTTP trace logger (audit-security F1).
+- `0o600` enforced on age private key (audit-security F2).
+- `defusedxml` everywhere (audit-security F4).
+- `auth/providers` asserts replaced by `ConfigurationError` (audit-security
+  F5, safe under `python -O`).
+- `CallableStep` blacklist + whitelist (audit-security F6).
+
 ## [2.1.4] - 2026-04-01
 
 ### Fixed
@@ -620,6 +688,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[2.2.0]: https://github.com/KaminoU/kstlib/compare/v2.1.4...v2.2.0
 [2.1.4]: https://github.com/KaminoU/kstlib/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/KaminoU/kstlib/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/KaminoU/kstlib/compare/v2.1.1...v2.1.2

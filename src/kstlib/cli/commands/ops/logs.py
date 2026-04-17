@@ -29,6 +29,7 @@ def logs(
         kstlib ops logs dev
         kstlib ops logs prod --lines 50
         kstlib ops logs orion --socket orion
+
     """
     try:
         manager = get_session_manager(name, backend=backend, socket_name=socket)

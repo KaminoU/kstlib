@@ -21,6 +21,7 @@ Examples:
     ...     for item in items:
     ...         wd.ping()
     ...         process(item)
+
 """
 
 from __future__ import annotations
@@ -70,6 +71,7 @@ class WatchdogStats:
         >>> stats.record_ping()
         >>> stats.pings_total
         1
+
     """
 
     pings_total: int = 0
@@ -133,6 +135,7 @@ class Watchdog:
         >>> with Watchdog(timeout=30) as wd:  # doctest: +SKIP
         ...     wd.ping()
         ...     do_work()
+
     """
 
     def __init__(
@@ -150,6 +153,7 @@ class Watchdog:
             on_timeout: Callback for timeout events (sync or async).
             on_alert: Callback for alerting (channel, message, context).
             name: Optional identifier.
+
         """
         # Load config defaults if needed
         if timeout is None:
@@ -255,6 +259,7 @@ class Watchdog:
             ...     on_timeout=restart_bot,
             ... )
             >>> await wd.astart()  # doctest: +SKIP
+
         """
         interval = check_interval if check_interval is not None else max_age / 2
         instance = cls(
@@ -288,6 +293,7 @@ class Watchdog:
         Examples:
             >>> watchdog = Watchdog(timeout=30)
             >>> watchdog.ping()  # Reset timer
+
         """
         with self._lock:
             self._last_ping = time.monotonic()
@@ -302,6 +308,7 @@ class Watchdog:
             ...     watchdog = Watchdog(timeout=30)
             ...     await watchdog.aping()
             >>> asyncio.run(example())
+
         """
         self.ping()
 
@@ -317,6 +324,7 @@ class Watchdog:
             >>> watchdog.is_running
             True
             >>> watchdog.stop()
+
         """
         with self._lock:
             if self._running:
@@ -342,6 +350,7 @@ class Watchdog:
             >>> watchdog.stop()
             >>> watchdog.is_running
             False
+
         """
         with self._lock:
             if not self._running:
@@ -359,6 +368,7 @@ class Watchdog:
 
         Raises:
             RuntimeError: If watchdog is already running.
+
         """
         with self._lock:
             if self._running:
@@ -613,6 +623,7 @@ def watchdog_context(
         ...     for item in items:
         ...         wd.ping()
         ...         process(item)
+
     """
     callback = on_timeout
 

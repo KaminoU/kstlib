@@ -22,6 +22,7 @@ Examples:
     ...     recipients=["team@example.com"],
     ... )
     >>> result = await delivery.deliver(monitoring_result, "Daily Report")  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -81,6 +82,7 @@ class DeliveryResult:
         message_id: Email message ID (for mail delivery).
         error: Error message if delivery failed.
         metadata: Additional delivery metadata.
+
     """
 
     success: bool
@@ -108,6 +110,7 @@ class DeliveryBackend(ABC):
 
         Returns:
             DeliveryResult with success status and metadata.
+
         """
 
 
@@ -142,6 +145,7 @@ class FileDeliveryConfig:
         create_dirs: Create output directory if missing.
         max_files: Maximum files to keep (oldest deleted, 0=unlimited).
         encoding: File encoding.
+
     """
 
     output_dir: str | pathlib.Path
@@ -185,6 +189,7 @@ class FileDelivery(DeliveryBackend):
         ...     output_dir="./reports",
         ...     max_files=7,
         ... )
+
     """
 
     def __init__(
@@ -288,6 +293,7 @@ class FileDelivery(DeliveryBackend):
         Raises:
             DeliveryIOError: If file cannot be written.
             DeliveryConfigError: If configuration is invalid.
+
         """
         timestamp = datetime.now(timezone.utc)
         delivery_result: DeliveryResult | None = None
@@ -373,6 +379,7 @@ class MailDeliveryConfig:
         bcc: List of BCC addresses.
         subject_template: Subject template (supports {name}).
         include_plain_text: Include plain text version.
+
     """
 
     sender: str
@@ -418,6 +425,7 @@ class MailDelivery(DeliveryBackend):
         ...     recipients=["team@example.com"],
         ... )
         >>> result = await delivery.deliver(monitoring_result, "Daily Report")  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -430,6 +438,7 @@ class MailDelivery(DeliveryBackend):
         Args:
             transport: Mail transport (sync or async).
             config: Mail delivery configuration.
+
         """
         self._transport = transport
         self._config = config
@@ -455,6 +464,7 @@ class MailDelivery(DeliveryBackend):
 
         Returns:
             Configured MailDelivery instance.
+
         """
         config = MailDeliveryConfig(
             sender=sender,
@@ -521,6 +531,7 @@ class MailDelivery(DeliveryBackend):
 
         Raises:
             DeliveryError: If email cannot be sent.
+
         """
         import inspect
 

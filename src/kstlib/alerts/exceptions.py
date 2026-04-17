@@ -26,6 +26,7 @@ class AlertDeliveryError(AlertError):
         'slack'
         >>> err.retryable
         True
+
     """
 
     def __init__(self, message: str, *, channel: str, retryable: bool = False) -> None:
@@ -35,6 +36,7 @@ class AlertDeliveryError(AlertError):
             message: Error description.
             channel: Name of the channel that failed.
             retryable: Whether the delivery could succeed on retry.
+
         """
         super().__init__(message)
         self.channel = channel
@@ -51,6 +53,7 @@ class AlertThrottledError(AlertError):
         >>> err = AlertThrottledError("Rate limit exceeded", retry_after=30.0)
         >>> err.retry_after
         30.0
+
     """
 
     def __init__(self, message: str, *, retry_after: float) -> None:
@@ -59,6 +62,7 @@ class AlertThrottledError(AlertError):
         Args:
             message: Error description.
             retry_after: Seconds until the rate limit resets.
+
         """
         super().__init__(message)
         self.retry_after = retry_after

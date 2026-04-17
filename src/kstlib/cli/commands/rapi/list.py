@@ -8,7 +8,6 @@ import typer
 from rich.table import Table
 
 from kstlib.cli.common import console
-from kstlib.rapi import load_rapi_config
 
 if TYPE_CHECKING:
     from kstlib.rapi.config import ApiConfig, EndpointConfig
@@ -32,6 +31,7 @@ def _matches_filter(
 
     Returns:
         True if all terms match any field.
+
     """
     searchable = f"{ref} {method} {path} {description or ''}".lower()
     return all(term in searchable for term in filter_terms)
@@ -49,6 +49,7 @@ def _build_query_body_display(
 
     Returns:
         Tuple of (query_display, body_display).
+
     """
     query_display = f"[yellow]{len(ep_config.query)}[/]" if ep_config.query else "-"
     body_display = "-"
@@ -66,6 +67,7 @@ def _build_compact_indicator(ep_config: EndpointConfig, method: str) -> str:
 
     Returns:
         Formatted indicator string (e.g., " (4) (2)").
+
     """
     indicator = ""
     if ep_config.query:
@@ -91,6 +93,7 @@ def _add_endpoint_row(
         api_name: Parent API name.
         verbose: Whether to show verbose columns.
         short_desc: Whether to truncate description (verbose mode only).
+
     """
     ref = f"{api_name}.{ep_config.name}"
     method = ep_config.method.upper()
@@ -114,6 +117,7 @@ def _create_table(verbose: bool) -> Table:
 
     Returns:
         Configured Rich table.
+
     """
     table = Table(title="Available Endpoints", show_lines=False)
     table.add_column("Reference", style="cyan")
@@ -140,6 +144,7 @@ def _collect_matching_endpoints(
 
     Returns:
         List of (api_name, endpoint_config) tuples.
+
     """
     results = []
     for api_name, api_config in sorted(apis.items()):
@@ -207,12 +212,11 @@ def list_endpoints(
 
         # Show details for specific endpoint (use 'rapi show')
         kstlib rapi show annotations.create
+
     """
-    try:
-        config_manager = load_rapi_config()
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        console.print(f"[red]Failed to load rapi config: {e}[/]")
-        raise typer.Exit(code=1) from e
+    from kstlib.cli.commands.rapi import _load_config_or_exit
+
+    config_manager = _load_config_or_exit()
 
     apis = config_manager.apis
 

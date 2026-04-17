@@ -80,6 +80,7 @@ def secure_delete(
             >>> report = secure_delete(path, method=SecureDeleteMethod.OVERWRITE, passes=1)  # doctest: +SKIP
             >>> report.success  # doctest: +SKIP
             True
+
     """
     path = Path(target)
 

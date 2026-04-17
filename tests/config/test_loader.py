@@ -854,6 +854,117 @@ def test_include_rejects_path_traversal(tmp_path: Any) -> None:
         load_config(path=main)
 
 
+# ============================================================================
+# System-wide config cascade (platformdirs.site_config_dir)
+# ============================================================================
+
+
+def test_system_config_applied(tmp_path: Any, monkeypatch: Any) -> None:
+    """System-wide config values are merged into the cascade."""
+    from kstlib.config import loader as cfg_loader
+
+    system_dir = tmp_path / "system"
+    system_dir.mkdir()
+    (system_dir / "kstlib.conf.yml").write_text("system_flag: enabled\nshared_key: from_system\n", encoding="utf-8")
+
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    cwd_dir = tmp_path / "cwd"
+    cwd_dir.mkdir()
+
+    monkeypatch.setattr(cfg_loader, "site_config_dir", lambda *_a, **_kw: str(system_dir))
+    monkeypatch.setattr(pathlib.Path, "home", lambda: home_dir)
+    monkeypatch.chdir(cwd_dir)
+
+    config = load_config()
+    assert config.system_flag == "enabled"
+    assert config.shared_key == "from_system"
+
+
+def test_system_config_missing_is_silent(tmp_path: Any, monkeypatch: Any) -> None:
+    """Missing system config files are skipped without raising."""
+    from kstlib.config import loader as cfg_loader
+
+    ghost_dir = tmp_path / "nonexistent_system_dir"
+    # ghost_dir is deliberately not created
+
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    (home_dir / "kstlib.conf.yml").write_text("from_home: true\n", encoding="utf-8")
+
+    cwd_dir = tmp_path / "cwd"
+    cwd_dir.mkdir()
+
+    monkeypatch.setattr(cfg_loader, "site_config_dir", lambda *_a, **_kw: str(ghost_dir))
+    monkeypatch.setattr(pathlib.Path, "home", lambda: home_dir)
+    monkeypatch.chdir(cwd_dir)
+
+    # Must not raise, and must still load the home config
+    config = load_config()
+    assert config.from_home is True
+
+
+def test_system_config_priority_below_user(tmp_path: Any, monkeypatch: Any) -> None:
+    """User home config overrides system-wide config for the same key."""
+    from kstlib.config import loader as cfg_loader
+
+    system_dir = tmp_path / "system"
+    system_dir.mkdir()
+    (system_dir / "kstlib.conf.yml").write_text("shared_key: system\n", encoding="utf-8")
+
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    (home_dir / "kstlib.conf.yml").write_text("shared_key: user\n", encoding="utf-8")
+
+    cwd_dir = tmp_path / "cwd"
+    cwd_dir.mkdir()
+
+    monkeypatch.setattr(cfg_loader, "site_config_dir", lambda *_a, **_kw: str(system_dir))
+    monkeypatch.setattr(pathlib.Path, "home", lambda: home_dir)
+    monkeypatch.chdir(cwd_dir)
+
+    config = load_config()
+    assert config.shared_key == "user"
+
+
+def test_system_config_multiple_dirs_merge(tmp_path: Any, monkeypatch: Any) -> None:
+    """Multiple system dirs merge correctly, higher priority wins common keys."""
+    from kstlib.config import loader as cfg_loader
+
+    base_dir = tmp_path / "base"
+    base_dir.mkdir()
+    (base_dir / "kstlib.conf.yml").write_text("common_key: base\nbase_only: from_base\n", encoding="utf-8")
+
+    corp_dir = tmp_path / "corp"
+    corp_dir.mkdir()
+    (corp_dir / "kstlib.conf.yml").write_text("common_key: corp\ncorp_only: from_corp\n", encoding="utf-8")
+
+    # site_config_dir returns paths in priority-DESCENDING order (first = highest).
+    # corp first means corp has higher priority than base, so corp wins.
+    multipath = f"{corp_dir}{os.pathsep}{base_dir}"
+    monkeypatch.setattr(cfg_loader, "site_config_dir", lambda *_a, **_kw: multipath)
+
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    cwd_dir = tmp_path / "cwd"
+    cwd_dir.mkdir()
+    monkeypatch.setattr(pathlib.Path, "home", lambda: home_dir)
+    monkeypatch.chdir(cwd_dir)
+
+    config = load_config()
+    assert config.base_only == "from_base"
+    assert config.corp_only == "from_corp"
+    assert config.common_key == "corp"
+
+
+def test_get_system_config_paths_empty(monkeypatch: Any) -> None:
+    """_get_system_config_paths returns empty list when site_config_dir yields nothing."""
+    from kstlib.config import loader as cfg_loader
+
+    monkeypatch.setattr(cfg_loader, "site_config_dir", lambda *_a, **_kw: "")
+    assert cfg_loader._get_system_config_paths("kstlib.conf.yml") == []
+
+
 def test_include_rejects_symlinks(tmp_path: Any) -> None:
     """Symlinks in includes are rejected to prevent TOCTOU bypass."""
     real_file = tmp_path / "real.yml"

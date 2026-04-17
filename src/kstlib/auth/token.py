@@ -30,6 +30,7 @@ def _validate_provider_name(provider_name: str) -> None:
 
     Raises:
         TokenStorageError: If provider name is invalid.
+
     """
     if not provider_name or len(provider_name) < _MIN_PROVIDER_NAME_LENGTH:
         raise TokenStorageError("Provider name cannot be empty")
@@ -54,6 +55,7 @@ class AbstractTokenStorage(ABC):
 
         Raises:
             TokenStorageError: If save fails.
+
         """
 
     @abstractmethod
@@ -68,6 +70,7 @@ class AbstractTokenStorage(ABC):
 
         Raises:
             TokenStorageError: If load fails (not for missing tokens).
+
         """
 
     @abstractmethod
@@ -79,6 +82,7 @@ class AbstractTokenStorage(ABC):
 
         Returns:
             True if token existed and was deleted.
+
         """
 
     @abstractmethod
@@ -90,6 +94,7 @@ class AbstractTokenStorage(ABC):
 
         Returns:
             True if token exists.
+
         """
 
     @contextmanager
@@ -114,6 +119,7 @@ class AbstractTokenStorage(ABC):
             ...     if token:
             ...         print(token.access_token)
             ... # token reference cleared here
+
         """
         token = self.load(provider_name)
         try:
@@ -169,6 +175,7 @@ class FileTokenStorage(AbstractTokenStorage):
     Warning:
         Tokens are stored in plaintext. Use SOPS storage for production environments
         where token confidentiality is critical.
+
     """
 
     _warned: bool = False  # Class-level flag for one-time warning
@@ -182,6 +189,7 @@ class FileTokenStorage(AbstractTokenStorage):
         Args:
             directory: Directory to store token files.
                 Default: ~/.config/kstlib/auth/tokens
+
         """
         if directory is None:
             directory = Path.home() / ".config" / "kstlib" / "auth" / "tokens"
@@ -281,6 +289,7 @@ class SOPSTokenStorage(AbstractTokenStorage):
             sops_binary: Path to sops binary (default: "sops").
             age_recipients: Age public keys for encryption.
                 If not provided, relies on .sops.yaml or environment.
+
         """
         import shutil
 
@@ -459,6 +468,7 @@ def get_token_storage(
         >>> storage = get_token_storage("memory")
         >>> storage = get_token_storage("file", directory="/tmp/tokens")  # doctest: +SKIP
         >>> storage = get_token_storage("sops", directory="/tmp/tokens")  # doctest: +SKIP
+
     """
     if storage_type == "memory":
         return MemoryTokenStorage()

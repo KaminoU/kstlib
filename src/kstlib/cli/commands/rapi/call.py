@@ -17,7 +17,7 @@ from kstlib.rapi import (
     RapiResponse,
     RequestError,
     ResponseTooLargeError,
-    load_rapi_config,
+    ServerNotFoundError,
 )
 from kstlib.utils.serialization import is_xml_content, to_json, to_xml
 
@@ -38,6 +38,7 @@ def _parse_args(
         (['3'], {'foo': 'bar', 'count': '42'})
         >>> _parse_args(["value1", "value2"])
         (['value1', 'value2'], {})
+
     """
     positional: list[str] = []
     keyword: dict[str, str] = {}
@@ -63,6 +64,7 @@ def _parse_headers(headers: list[str]) -> dict[str, str]:
 
     Raises:
         typer.Exit: If header format is invalid.
+
     """
     result: dict[str, str] = {}
     for header in headers:
@@ -92,6 +94,7 @@ def _parse_body(body: str | None) -> dict[str, Any] | list[Any] | None:
         {'key': 'value'}
         >>> _parse_body('@data.json')  # Reads from file
         {'key': 'value'}
+
     """
     if body is None:
         return None
@@ -126,6 +129,7 @@ def _serialize_json(data: Any, *, minify: bool = False, indent: int = 2) -> str:
 
     Returns:
         JSON string.
+
     """
     if minify:
         return json.dumps(data, separators=(",", ":"), default=str)
@@ -146,6 +150,7 @@ def _build_content(
 
     Returns:
         Formatted content string.
+
     """
     render_config = get_rapi_render_config()
     content_type = response.headers.get("content-type", "")
@@ -193,6 +198,7 @@ def _format_output(
         out_file: Optional file path to write output to.
         raw: Output raw JSON without Rich formatting (pipeable).
         minify: Output compact single-line JSON.
+
     """
     content = _build_content(response, fmt, minify)
 
@@ -252,6 +258,16 @@ def call(
             help="Write output to file (for scripting).",
         ),
     ] = None,
+    server: Annotated[
+        str | None,
+        typer.Option(
+            "--server",
+            "-s",
+            help=(
+                "Named server profile from rapi.servers config. Overrides any server: directive in *.rapi.yml files."
+            ),
+        ),
+    ] = None,
     quiet: Annotated[
         bool,
         typer.Option(
@@ -304,6 +320,11 @@ def call(
 
         # Minified JSON (compact single-line)
         kstlib rapi github.user --minify --out user.json
+
+        # Named server profile (heterogeneous APIs from rapi.servers config)
+        kstlib rapi --server github github.repos-list
+        kstlib rapi -s jira jira.issues-search
+
     """
     # Parse arguments
     positional_args, keyword_args = _parse_args(args or [])
@@ -313,9 +334,11 @@ def call(
     if fmt not in ("json", "text", "full"):
         exit_error(f"Invalid output format: '{fmt}'\nValid formats: json, text, full")
 
+    from kstlib.cli.commands.rapi import _load_config_or_exit
+
+    config_manager = _load_config_or_exit()
     try:
         # Create client and resolve endpoint before body parsing
-        config_manager = load_rapi_config()
         client = RapiClient(config_manager=config_manager)
 
         # Resolve endpoint to check if multipart
@@ -333,6 +356,7 @@ def call(
             *positional_args,
             body=parsed_body,
             headers=headers if headers else None,
+            server=server,
             **cast("dict[str, Any]", keyword_args),
         )
 
@@ -360,6 +384,19 @@ def call(
                 status=CommandStatus.ERROR,
                 message=f"Ambiguous endpoint: '{e.endpoint_name}' exists in multiple APIs",
                 payload={"matching_apis": e.matching_apis},
+            ),
+            quiet=quiet,
+            exit_code=1,
+            cause=e,
+        )
+    except ServerNotFoundError as e:
+        exit_with_result(
+            CommandResult(
+                status=CommandStatus.ERROR,
+                message=(
+                    f"Server profile not found: '{e.server_name}'. Available: {e.available or '(none configured)'}"
+                ),
+                payload={"available_servers": e.available} if e.available else None,
             ),
             quiet=quiet,
             exit_code=1,

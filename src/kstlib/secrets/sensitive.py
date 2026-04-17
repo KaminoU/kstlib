@@ -56,6 +56,7 @@ def sensitive(
 
     Yields:
         The decrypted secret value.
+
     """
     try:
         yield record.value

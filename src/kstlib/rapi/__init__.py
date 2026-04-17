@@ -87,6 +87,7 @@ from kstlib.rapi.config import (
     MultipartConfig,
     RapiConfigManager,
     SafeguardConfig,
+    ServerConfig,
     load_rapi_config,
 )
 from kstlib.rapi.credentials import CredentialRecord, CredentialResolver
@@ -100,6 +101,7 @@ from kstlib.rapi.exceptions import (
     RequestError,
     ResponseTooLargeError,
     SafeguardMissingError,
+    ServerNotFoundError,
 )
 
 __all__ = [
@@ -123,6 +125,8 @@ __all__ = [
     "ResponseTooLargeError",
     "SafeguardConfig",
     "SafeguardMissingError",
+    "ServerConfig",
+    "ServerNotFoundError",
     "call",
     "call_async",
     "load_rapi_config",

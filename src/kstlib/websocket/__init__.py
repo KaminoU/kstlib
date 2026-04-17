@@ -46,6 +46,7 @@ Note:
     Requires the ``websockets`` package. Install with::
 
         pip install kstlib[websocket]
+
 """
 
 from kstlib.websocket.exceptions import (

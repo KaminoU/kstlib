@@ -20,6 +20,7 @@ Example:
     ... )
     >>> status = runner.start(config)  # doctest: +SKIP
     >>> runner.attach("dev")  # Replaces process  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -67,6 +68,7 @@ class TmuxRunner:
         >>> config = SessionConfig(name="bot", command="python bot.py")
         >>> status = runner.start(config)  # doctest: +SKIP
         >>> runner.attach("bot")  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -80,6 +82,7 @@ class TmuxRunner:
             binary: Path or name of the tmux binary.
             socket_name: Custom tmux socket name (``-L`` flag).
                 If None, uses the default tmux socket.
+
         """
         self._binary_name = binary
         self._binary_path: str | None = None
@@ -95,6 +98,7 @@ class TmuxRunner:
 
         Raises:
             TmuxNotFoundError: If tmux is not installed.
+
         """
         if self._binary_path is None:
             path = shutil.which(self._binary_name)
@@ -123,13 +127,14 @@ class TmuxRunner:
 
         Raises:
             TmuxNotFoundError: If tmux is not installed.
+
         """
         cmd = [self.binary]
         if self._socket_name:
             cmd.extend(["-L", self._socket_name])
         cmd.extend(args)
         logger.debug("Running: %s", " ".join(cmd))
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(
             cmd,
             capture_output=True,
             text=True,
@@ -153,6 +158,7 @@ class TmuxRunner:
         Note:
             The exists() check is subject to TOCTOU but provides a clear
             error message. tmux itself will reject duplicate session names.
+
         """
         if self.exists(config.name):
             raise SessionExistsError(config.name, "tmux")
@@ -187,7 +193,7 @@ class TmuxRunner:
         name: str,
         *,
         graceful: bool = True,
-        timeout: int = 10,  # noqa: ARG002
+        timeout: int = 10,
     ) -> bool:
         """Stop a tmux session.
 
@@ -202,6 +208,7 @@ class TmuxRunner:
         Raises:
             SessionNotFoundError: If session doesn't exist.
             SessionStopError: If session couldn't be stopped.
+
         """
         if not self.exists(name):
             raise SessionNotFoundError(name, "tmux")
@@ -240,6 +247,7 @@ class TmuxRunner:
         Raises:
             SessionNotFoundError: If session doesn't exist.
             SessionAttachError: If attach failed.
+
         """
         if not self.exists(name):
             raise SessionNotFoundError(name, "tmux")
@@ -253,7 +261,7 @@ class TmuxRunner:
             if self._socket_name:
                 attach_cmd.extend(["-L", self._socket_name])
             attach_cmd.extend(["attach-session", "-t", name])
-            os.execvp(binary, attach_cmd)  # noqa: S606
+            os.execvp(binary, attach_cmd)
         except OSError as e:
             raise SessionAttachError(name, "tmux", str(e)) from e
 
@@ -268,6 +276,7 @@ class TmuxRunner:
 
         Raises:
             SessionNotFoundError: If session doesn't exist.
+
         """
         # List format: #{session_name}:#{window_count}:#{session_created}:#{pid}
         result = self._run(
@@ -312,6 +321,7 @@ class TmuxRunner:
 
         Raises:
             SessionNotFoundError: If session doesn't exist.
+
         """
         if not self.exists(name):
             raise SessionNotFoundError(name, "tmux")
@@ -332,6 +342,7 @@ class TmuxRunner:
 
         Returns:
             True if session exists, False otherwise.
+
         """
         result = self._run(["has-session", "-t", name])
         return result.returncode == 0
@@ -341,6 +352,7 @@ class TmuxRunner:
 
         Returns:
             List of SessionStatus for all sessions.
+
         """
         result = self._run(
             [
@@ -384,6 +396,7 @@ class TmuxRunner:
 
         Raises:
             SessionNotFoundError: If session doesn't exist.
+
         """
         validate_session_name(name)
         validate_send_keys(keys)
@@ -405,13 +418,14 @@ def discover_tmux_sockets() -> list[str]:
 
     Returns:
         List of custom socket names found.
+
     """
     getuid = getattr(os, "getuid", None)
     if getuid is None:
         return []
 
     uid = getuid()
-    socket_dir = Path(f"/tmp/tmux-{uid}")  # noqa: S108
+    socket_dir = Path(f"/tmp/tmux-{uid}")
     if not socket_dir.is_dir():
         return []
 

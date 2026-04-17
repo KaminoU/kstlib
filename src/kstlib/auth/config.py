@@ -13,6 +13,7 @@ Example:
     >>> auth_config = get_auth_config()
     >>> auth_config["token_storage"]
     'memory'
+
 """
 
 from __future__ import annotations
@@ -86,6 +87,7 @@ def get_auth_config() -> dict[str, Any]:
         >>> config = get_auth_config()
         >>> config["token_storage"]
         'memory'
+
     """
     try:
         from kstlib.config import get_config
@@ -124,6 +126,7 @@ def get_provider_config(
         >>> cfg = get_provider_config("nonexistent")
         >>> cfg is None
         True
+
     """
     auth_config = dict(config) if config else get_auth_config()
     providers = auth_config.get("providers", {})
@@ -151,6 +154,7 @@ def get_callback_server_config(
 
     Returns:
         Callback server configuration with defaults applied.
+
     """
     auth_config = dict(config) if config else get_auth_config()
     callback_cfg = auth_config.get("callback_server", {})
@@ -182,6 +186,7 @@ def get_status_config(
         120
         >>> cfg["display_timezone"]
         'local'
+
     """
     auth_config = dict(config) if config else get_auth_config()
     status_cfg = auth_config.get("status", {})
@@ -236,6 +241,7 @@ def get_token_storage_from_config(
 
     Raises:
         ConfigurationError: If storage type is invalid.
+
     """
     from kstlib.auth.token import get_token_storage
 
@@ -308,6 +314,7 @@ def _normalize_scopes(raw: Any) -> list[str]:
 
     Returns:
         List of scope strings.
+
     """
     if isinstance(raw, str):
         return raw.split() if " " in raw else [raw]
@@ -325,6 +332,7 @@ def _normalize_redirect_uri(raw: Any) -> str | None:
 
     Returns:
         Normalized URI string or None.
+
     """
     if isinstance(raw, list | tuple):
         return str(raw[0]) if raw else None
@@ -354,6 +362,7 @@ def build_provider_config(
 
     Example:
         >>> cfg = build_provider_config("keycloak", client_id="my-app")  # doctest: +SKIP
+
     """
     from kstlib.auth.providers.base import AuthProviderConfig
 
@@ -432,6 +441,7 @@ def _resolve_sops_secret(sops_uri: str) -> str | None:
 
     Returns:
         Resolved secret value, or None if resolution fails.
+
     """
     if logger.isEnabledFor(TRACE_LEVEL):
         # Log path but not the key (could reveal structure)
@@ -476,6 +486,7 @@ def list_configured_providers(
 
     Returns:
         List of provider names.
+
     """
     auth_config = dict(config) if config else get_auth_config()
     providers = auth_config.get("providers", {})
@@ -507,6 +518,7 @@ def get_default_provider_name(
 
     Returns:
         Default provider name, or None if not set.
+
     """
     auth_config = dict(config) if config else get_auth_config()
     return auth_config.get("default_provider")

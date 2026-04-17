@@ -705,11 +705,14 @@ class TestRapiClientShortcuts:
 
         response = call("test.endpoint", body={"key": "value"})
 
+        # server=None is forwarded by the convenience wrapper since the
+        # multi-server feature landed in v2.2.0
         mock_client.call.assert_called_once_with(
             "test.endpoint",
             body={"key": "value"},
             headers=None,
             confirm=None,
+            server=None,
         )
         assert response.status_code == 200
 

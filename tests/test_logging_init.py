@@ -28,21 +28,21 @@ class TestInitLogging:
         assert kstlib_logging._root_logger is logger
 
     def test_init_logging_configures_standard_logger(self) -> None:
-        """Test that init_logging configures the standard kstlib logger."""
+        """init_logging registers the LogManager as the std kstlib logger."""
         # Reset global state
         kstlib_logging._root_logger = None
+        logging.Logger.manager.loggerDict.pop("kstlib", None)
 
         log_manager = init_logging(preset="dev")
 
-        # Check standard logger is configured
+        # logging.getLogger("kstlib") now returns the SAME LogManager
+        # (dual-object bug fixed: the handler-copy workaround is gone).
         std_logger = logging.getLogger("kstlib")
+        assert std_logger is log_manager
+
         from kstlib.logging import TRACE_LEVEL
 
         assert std_logger.level == TRACE_LEVEL
-
-        # Handlers should be copied from LogManager
-        for handler in log_manager.handlers:
-            assert handler in std_logger.handlers
 
     def test_init_logging_with_config(self) -> None:
         """Test init_logging with explicit config dict."""

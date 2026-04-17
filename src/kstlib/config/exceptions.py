@@ -10,6 +10,7 @@ Example:
     except KstlibError as e:
         # Catch any kstlib error
         print(f"Error: {e}")
+
 """
 
 

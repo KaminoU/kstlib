@@ -24,6 +24,7 @@ from kstlib.rapi.exceptions import (
     EndpointNotFoundError,
     EnvVarError,
     SafeguardMissingError,
+    ServerNotFoundError,
 )
 
 if TYPE_CHECKING:
@@ -47,6 +48,7 @@ def _validate_path_param(name: str, value: str) -> None:
 
     Raises:
         ValueError: If the value contains path traversal or null bytes.
+
     """
     if "\x00" in value:
         raise ValueError(f"Null bytes not allowed in path parameter '{name}'")
@@ -66,6 +68,14 @@ _SAFEGUARD_PATTERN = re.compile(r"^[A-Za-z0-9_\-\s\{\}/]+$")
 
 # Default HTTP methods that require safeguard
 _DEFAULT_SAFEGUARD_METHODS = frozenset({"DELETE", "PUT"})
+
+# Deep defense: server profiles
+_MAX_SERVERS = 20  # Max named server profiles
+_MAX_SERVER_NAME_LENGTH = 64
+_SERVER_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
+_ALLOWED_SERVER_KEYS = frozenset({"base_url", "credentials", "auth", "headers"})
+_ALLOWED_AUTH_TYPES = frozenset({"bearer", "basic", "api_key", "hmac"})
+_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
 # Pattern for environment variable substitution: ${VAR} or ${VAR:-default}
 _ENV_VAR_PATTERN = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?\}")
@@ -95,6 +105,7 @@ def _expand_env_vars(value: str, source: str | None = None) -> str:
         'hello world'
         >>> _expand_env_vars("${MISSING:-default}")
         'default'
+
     """
     import os
 
@@ -131,6 +142,7 @@ def _expand_env_vars_recursive(data: Any, source: str | None = None) -> Any:
         >>> os.environ["HOST"] = "example.com"
         >>> _expand_env_vars_recursive({"url": "https://${HOST}"})
         {'url': 'https://example.com'}
+
     """
     if isinstance(data, dict):
         return {k: _expand_env_vars_recursive(v, source) for k, v in data.items()}
@@ -160,6 +172,7 @@ class HmacConfig:
         >>> config = HmacConfig(algorithm="sha512", signature_format="base64")
         >>> config.algorithm
         'sha512'
+
     """
 
     algorithm: str = "sha256"
@@ -205,6 +218,7 @@ class MultipartConfig:
         >>> config = MultipartConfig(field_name="dataFile")
         >>> config.field_name
         'dataFile'
+
     """
 
     field_name: str = "file"
@@ -234,6 +248,7 @@ class SafeguardConfig:
         >>> config = SafeguardConfig(required_methods=frozenset({"DELETE"}))
         >>> "PUT" in config.required_methods
         False
+
     """
 
     required_methods: frozenset[str] = field(default_factory=lambda: _DEFAULT_SAFEGUARD_METHODS)
@@ -253,6 +268,7 @@ def _extract_credentials_from_rapi(
 
     Returns:
         Tuple of (credentials_ref, credentials_config).
+
     """
     credentials_config: dict[str, Any] = {}
     credentials_ref: str | None = None
@@ -291,6 +307,7 @@ def _extract_auth_config(
 
     Returns:
         Tuple of (auth_type, HmacConfig or None).
+
     """
     if "auth" not in data:
         return None, None
@@ -329,6 +346,7 @@ def _merge_with_defaults(data: dict[str, Any], defaults: dict[str, Any] | None) 
 
     Returns:
         Merged configuration with file values taking precedence.
+
     """
     if not defaults:
         return data
@@ -402,6 +420,7 @@ def _parse_rapi_file(
     Raises:
         TypeError: If file format is invalid.
         ValueError: If required fields are missing.
+
     """
     import yaml
 
@@ -442,6 +461,7 @@ def _parse_rapi_file(
                 "hmac_config": hmac_config,
                 "headers": data.get("headers", {}),
                 "endpoints": data.get("endpoints", {}),
+                "server": data.get("server"),
             }
         }
     }
@@ -484,6 +504,7 @@ def _resolve_rapi_includes(
 
     Returns:
         Tuple of (merged_endpoints, merged_credentials).
+
     """
     if isinstance(patterns, str):
         patterns = [patterns]
@@ -536,6 +557,7 @@ def _check_endpoint_collisions(
         api_data: New API data from current file.
         path: Current file path.
         ctx: Tuple of (endpoint_sources dict, strict flag).
+
     """
     endpoint_sources, strict = ctx
     existing_endpoints = set(existing_api.get("endpoints", {}).keys())
@@ -582,6 +604,7 @@ def _merge_api_endpoints(
         existing_api: Existing API data from previous files.
         api_data: New API data from current file (modified in place).
         path: Current file path (for logging).
+
     """
     existing_count = len(existing_api.get("endpoints", {}))
     new_count = len(api_data.get("endpoints", {}))
@@ -613,6 +636,7 @@ def _track_endpoint_sources(
         api_data: API data from current file.
         path: Current file path.
         endpoint_sources: Tracking dict for endpoint sources.
+
     """
     for ep_name in api_data.get("endpoints", {}):
         full_ref = f"{api_name}.{ep_name}"
@@ -637,6 +661,11 @@ class EndpointConfig:
         auth: Whether to apply API-level authentication to this endpoint.
             Set to False for public endpoints that don't require auth.
         description: Human-readable description of the endpoint.
+        server: Optional named server profile this endpoint should use.
+            Resolved against ``rapi.servers`` at request time. Overrides
+            any ``server:`` directive set at the file level on the parent
+            ``ApiConfig``. Validated at config-load time when
+            ``rapi.servers`` is present.
 
     Examples:
         >>> config = EndpointConfig(
@@ -647,6 +676,7 @@ class EndpointConfig:
         ... )
         >>> config.full_ref
         'httpbin.get_ip'
+
     """
 
     name: str
@@ -660,6 +690,7 @@ class EndpointConfig:
     safeguard: str | None = None
     description: str | None = None
     multipart: MultipartConfig | None = None
+    server: str | None = None
 
     @property
     def is_multipart(self) -> bool:
@@ -706,6 +737,7 @@ class EndpointConfig:
             '/delay/5'
             >>> config.build_path(5)
             '/delay/5'
+
         """
         path = self.path
 
@@ -761,6 +793,7 @@ class EndpointConfig:
             ... )
             >>> config.build_safeguard(userId="abc123")
             'DELETE USER abc123'
+
         """
         if self.safeguard is None:
             return None
@@ -794,6 +827,11 @@ class ApiConfig:
         hmac_config: HMAC signing configuration (required when auth_type is hmac).
         headers: Service-level headers (applied to all endpoints).
         endpoints: Dictionary of endpoint configurations.
+        server: Optional named server profile this API file should use by
+            default. Resolved against ``rapi.servers`` at request time.
+            Acts as a fallback when individual endpoints do not declare
+            their own ``server:`` directive. Validated at config-load
+            time when ``rapi.servers`` is present.
 
     Examples:
         >>> api = ApiConfig(
@@ -801,6 +839,7 @@ class ApiConfig:
         ...     base_url="https://httpbin.org",
         ...     endpoints={},
         ... )
+
     """
 
     name: str
@@ -810,6 +849,116 @@ class ApiConfig:
     hmac_config: HmacConfig | None = None
     headers: dict[str, str] = field(default_factory=dict)
     endpoints: dict[str, EndpointConfig] = field(default_factory=dict)
+    server: str | None = None
+
+
+def _validate_server_name(name: str) -> None:
+    """Validate a server profile name.
+
+    Args:
+        name: Server profile name to validate.
+
+    Raises:
+        ValueError: If name is invalid.
+
+    """
+    if not name:
+        raise ValueError("Server profile name must not be empty")
+    if len(name) > _MAX_SERVER_NAME_LENGTH:
+        raise ValueError(f"Server profile name too long: {len(name)} > {_MAX_SERVER_NAME_LENGTH}")
+    if not _SERVER_NAME_PATTERN.match(name):
+        raise ValueError(f"Invalid server profile name: {name!r}. Must match {_SERVER_NAME_PATTERN.pattern}")
+
+
+def _validate_server_profile(name: str, profile: dict[str, Any]) -> None:
+    """Validate a server profile dict for allowed keys and value types.
+
+    Args:
+        name: Server profile name (for error messages).
+        profile: Server profile configuration dict.
+
+    Raises:
+        ValueError: If profile contains invalid keys or values.
+
+    """
+    unknown_keys = set(profile) - _ALLOWED_SERVER_KEYS
+    if unknown_keys:
+        raise ValueError(
+            f"Server profile '{name}' has unknown keys: {sorted(unknown_keys)}. Allowed: {sorted(_ALLOWED_SERVER_KEYS)}"
+        )
+
+    base_url = profile.get("base_url")
+    if base_url is not None:
+        _validate_base_url(base_url, context=f"servers.{name}")
+
+    auth = profile.get("auth")
+    if auth is not None and auth not in _ALLOWED_AUTH_TYPES:
+        raise ValueError(
+            f"Server profile '{name}' has invalid auth type: {auth!r}. Allowed: {sorted(_ALLOWED_AUTH_TYPES)}"
+        )
+
+    headers = profile.get("headers")
+    if headers is not None:
+        if not isinstance(headers, dict):
+            raise ValueError(f"Server profile '{name}' headers must be a dict")
+        for hdr_name in headers:
+            if len(str(hdr_name)) > _MAX_HEADER_NAME_LENGTH:
+                raise ValueError(
+                    f"Server profile '{name}' header name too long: {len(str(hdr_name))} > {_MAX_HEADER_NAME_LENGTH}"
+                )
+
+
+def _validate_base_url(url: str, *, context: str = "config") -> None:
+    """Validate a base URL for allowed schemes.
+
+    Args:
+        url: URL string to validate.
+        context: Context label for error messages.
+
+    Raises:
+        ValueError: If URL scheme is not http or https.
+
+    """
+    from urllib.parse import urlparse
+
+    if not url or "${" in url:
+        return
+
+    parsed = urlparse(url)
+    if parsed.scheme and parsed.scheme not in _ALLOWED_URL_SCHEMES:
+        raise ValueError(f"Invalid URL scheme in {context}: {parsed.scheme!r}. Allowed: {sorted(_ALLOWED_URL_SCHEMES)}")
+
+
+@dataclass(frozen=True, slots=True)
+class ServerConfig:
+    """Resolved server profile (defaults merged with server overrides).
+
+    Created by :meth:`RapiConfigManager.resolve_server` after merging
+    ``rapi.defaults`` with a named ``rapi.servers.<name>`` profile.
+
+    Attributes:
+        name: Server profile name (or ``"defaults"`` for the fallback).
+        base_url: Base URL for the server.
+        credentials: Credentials configuration dict.
+        auth: Authentication type string (bearer, basic, api_key, hmac).
+        headers: Merged headers dict.
+
+    Examples:
+        >>> cfg = ServerConfig(
+        ...     name="source",
+        ...     base_url="https://viya-source.example.com",
+        ...     credentials={"type": "file", "path": "~/.sas/creds.json"},
+        ...     auth="bearer",
+        ...     headers={"Accept": "application/json"},
+        ... )
+
+    """
+
+    name: str
+    base_url: str
+    credentials: dict[str, Any] = field(default_factory=dict)
+    auth: str | None = None
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 class RapiConfigManager:
@@ -834,6 +983,7 @@ class RapiConfigManager:
 
         >>> manager = RapiConfigManager.from_file("github.rapi.yml")  # doctest: +SKIP
         >>> manager = RapiConfigManager.discover()  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -850,6 +1000,7 @@ class RapiConfigManager:
             credentials_config: Inline credentials from ``*.rapi.yml`` files.
             safeguard_config: Safeguard configuration (default: DELETE and PUT require safeguard).
             strict: If True, raise error on endpoint collisions. If False, warn and overwrite.
+
         """
         self._config = rapi_config or {}
         self._credentials_config = dict(credentials_config) if credentials_config else {}
@@ -859,6 +1010,8 @@ class RapiConfigManager:
         self._endpoint_index: dict[str, list[str]] = {}  # endpoint_name -> [api_names]
         self._endpoint_sources: dict[str, str] = {}  # full_ref -> source file
         self._source_files: list[Path] = []  # Track loaded files for debugging
+        self._defaults: dict[str, Any] = {}  # rapi.defaults section
+        self._servers: dict[str, dict[str, Any]] = {}  # rapi.servers.* profiles
 
         self._load_apis()
 
@@ -892,6 +1045,7 @@ class RapiConfigManager:
 
         Examples:
             >>> manager = RapiConfigManager.from_file("github.rapi.yml")  # doctest: +SKIP
+
         """
         return cls.from_files(
             [path], base_dir=base_dir, safeguard_config=safeguard_config, defaults=defaults, strict=strict
@@ -929,6 +1083,7 @@ class RapiConfigManager:
             ...     "github.rapi.yml",
             ...     "slack.rapi.yml",
             ... ])  # doctest: +SKIP
+
         """
         merged_api_config: dict[str, Any] = {"api": {}}
         merged_credentials: dict[str, Any] = {}
@@ -968,6 +1123,11 @@ class RapiConfigManager:
         for full_ref, sources in endpoint_sources.items():
             if sources:
                 manager._endpoint_sources[full_ref] = sources[0]
+        # Validate any server: directives in the loaded files. With no
+        # rapi.servers context here, references produce warnings only.
+        # When called via load_rapi_config, the parent manager re-validates
+        # against the merged servers section.
+        manager._validate_server_references()
         return manager
 
     @classmethod
@@ -994,6 +1154,7 @@ class RapiConfigManager:
         Examples:
             >>> manager = RapiConfigManager.discover()  # doctest: +SKIP
             >>> manager = RapiConfigManager.discover("./apis/")  # doctest: +SKIP
+
         """
         search_dir = Path(directory) if directory else Path.cwd()
 
@@ -1018,6 +1179,7 @@ class RapiConfigManager:
 
         Returns:
             Dictionary of credentials configurations.
+
         """
         return self._credentials_config
 
@@ -1027,6 +1189,7 @@ class RapiConfigManager:
 
         Returns:
             List of Path objects for loaded files.
+
         """
         return self._source_files
 
@@ -1036,8 +1199,156 @@ class RapiConfigManager:
 
         Returns:
             SafeguardConfig instance.
+
         """
         return self._safeguard_config
+
+    def resolve_server(self, server_name: str | None = None) -> ServerConfig:
+        """Resolve a named server profile, merged with defaults.
+
+        If ``server_name`` is None, returns the defaults as a ServerConfig.
+        If ``server_name`` is given, merges ``rapi.servers.<name>`` on top
+        of ``rapi.defaults`` using deep merge (server values win).
+
+        Args:
+            server_name: Named server profile, or None for defaults.
+
+        Returns:
+            Resolved ServerConfig with merged values.
+
+        Raises:
+            ServerNotFoundError: If server_name is not in rapi.servers.
+
+        Examples:
+            >>> manager = load_rapi_config()  # doctest: +SKIP
+            >>> server = manager.resolve_server("source")  # doctest: +SKIP
+            >>> server.base_url  # doctest: +SKIP
+            'https://viya-source.example.com'
+
+        """
+        import copy
+
+        from kstlib.utils.dict import deep_merge
+
+        base = copy.deepcopy(self._defaults)
+
+        if server_name is None:
+            return ServerConfig(
+                name="defaults",
+                base_url=base.get("base_url", ""),
+                credentials=base.get("credentials", {}),
+                auth=base.get("auth"),
+                headers=base.get("headers", {}),
+            )
+
+        if server_name not in self._servers:
+            raise ServerNotFoundError(server_name, available=list(self._servers))
+
+        overrides = copy.deepcopy(self._servers[server_name])
+        merged = deep_merge(base, overrides)
+
+        return ServerConfig(
+            name=server_name,
+            base_url=merged.get("base_url", ""),
+            credentials=merged.get("credentials", {}),
+            auth=merged.get("auth"),
+            headers=merged.get("headers", {}),
+        )
+
+    @property
+    def server_names(self) -> list[str]:
+        """Get list of configured server profile names.
+
+        Returns:
+            List of server names from rapi.servers section.
+
+        """
+        return list(self._servers)
+
+    def resolve_effective_server(
+        self,
+        api_config: ApiConfig,
+        endpoint_config: EndpointConfig,
+        runtime_server: str | None = None,
+    ) -> ServerConfig | None:
+        """Resolve the effective server profile for a given request.
+
+        Cascade priority (highest to lowest):
+
+        1. ``runtime_server`` (e.g. CLI ``--server`` flag or ``call(server=...)``)
+        2. ``endpoint_config.server`` (endpoint-level ``server:`` directive)
+        3. ``api_config.server`` (file-level ``server:`` directive)
+        4. None (caller falls back to the static ``api_config``)
+
+        Args:
+            api_config: API configuration for the called endpoint.
+            endpoint_config: Endpoint configuration for the called endpoint.
+            runtime_server: Optional runtime override (CLI flag or kwarg).
+
+        Returns:
+            Resolved ServerConfig if any cascade level provided a name,
+            otherwise None (caller should use the static ApiConfig).
+
+        Raises:
+            ServerNotFoundError: If the resolved name does not exist in
+                ``rapi.servers``.
+
+        """
+        name = runtime_server or endpoint_config.server or api_config.server
+        if name is None:
+            return None
+        return self.resolve_server(name)
+
+    def _validate_server_references(self) -> None:
+        """Validate ``server:`` references in loaded ApiConfig/EndpointConfig.
+
+        Walks every loaded API and endpoint, collects every non-None
+        ``server:`` value, and validates it against ``self._servers``:
+
+        - If ``self._servers`` is empty: log a warning per reference (the
+          user may add a ``servers:`` section later, this is not fatal).
+        - If ``self._servers`` is non-empty but the name is unknown:
+          raise :class:`ValueError` (strict, fail at load time).
+
+        Called explicitly from :func:`load_rapi_config` after both inline
+        APIs and included files are merged. Not called automatically by
+        :meth:`from_files` standalone use (which has no ``rapi.servers``
+        context); for that case, validation happens at request time via
+        :meth:`_resolve_effective_server`.
+
+        Raises:
+            ValueError: If a ``server:`` directive references an unknown
+                server profile while ``rapi.servers`` is configured.
+
+        """
+        from kstlib.rapi.exceptions import ServerNotFoundError
+
+        servers_present = bool(self._servers)
+        known = set(self._servers)
+
+        def _check(label: str, server_name: str) -> None:
+            if servers_present:
+                if server_name not in known:
+                    # Strict error: servers section is present but name is unknown
+                    raise ServerNotFoundError(server_name, available=sorted(known))
+            else:
+                # Permissive warning: no servers section, may be added later
+                log.warning(
+                    "%s declares server: %r but rapi.servers section is absent. "
+                    "Add a servers: block to kstlib.conf.yml or remove the directive.",
+                    label,
+                    server_name,
+                )
+
+        for api_name, api_config in self._apis.items():
+            if api_config.server is not None:
+                _check(f"API '{api_name}' (file-level)", api_config.server)
+            for ep_name, endpoint in api_config.endpoints.items():
+                if endpoint.server is not None:
+                    _check(
+                        f"Endpoint '{api_name}.{ep_name}' (endpoint-level)",
+                        endpoint.server,
+                    )
 
     def _load_apis(self) -> None:
         """Load API configurations from config."""
@@ -1088,6 +1399,7 @@ class RapiConfigManager:
                     safeguard=safeguard,
                     description=ep_data.get("description"),
                     multipart=multipart_config,
+                    server=ep_data.get("server"),
                 )
 
                 # Validate safeguard requirement
@@ -1112,6 +1424,7 @@ class RapiConfigManager:
                 hmac_config=api_data.get("hmac_config"),
                 headers=dict(api_data.get("headers", {})),
                 endpoints=endpoints,
+                server=api_data.get("server"),
             )
             self._apis[api_name] = api_config
             log.debug("Loaded API: %s (%d endpoints)", api_name, len(endpoints))
@@ -1127,6 +1440,7 @@ class RapiConfigManager:
         Args:
             other: Source manager to merge from.
             overwrite: If True, overwrite existing APIs. If False, skip conflicts.
+
         """
         for api_name, api_config in other.apis.items():
             if api_name in self._apis and not overwrite:
@@ -1154,6 +1468,7 @@ class RapiConfigManager:
             api_name: Name of the conflicting API.
             api_config: The incoming API config.
             other: Source manager to merge from.
+
         """
         existing_endpoints = set(self._apis[api_name].endpoints.keys())
         new_endpoints = set(api_config.endpoints.keys())
@@ -1188,6 +1503,7 @@ class RapiConfigManager:
         Args:
             api_name: Name of the API.
             api_config: The API configuration.
+
         """
         for ep_name in api_config.endpoints:
             if ep_name not in self._endpoint_index:
@@ -1207,6 +1523,7 @@ class RapiConfigManager:
             api_name: Name of the API.
             api_config: The API configuration.
             other: Source manager to copy from.
+
         """
         for ep_name in api_config.endpoints:
             full_ref = f"{api_name}.{ep_name}"
@@ -1234,6 +1551,7 @@ class RapiConfigManager:
             >>> manager = RapiConfigManager({...})  # doctest: +SKIP
             >>> api, endpoint = manager.resolve("httpbin.get_ip")  # doctest: +SKIP
             >>> api, endpoint = manager.resolve("get_ip")  # doctest: +SKIP
+
         """
         log.debug("Resolving endpoint reference: %s", endpoint_ref)
 
@@ -1301,6 +1619,7 @@ class RapiConfigManager:
 
         Returns:
             ApiConfig or None if not found.
+
         """
         return self._apis.get(api_name)
 
@@ -1309,6 +1628,7 @@ class RapiConfigManager:
 
         Returns:
             List of API names.
+
         """
         return list(self._apis)
 
@@ -1318,6 +1638,7 @@ class RapiConfigManager:
 
         Returns:
             Dictionary mapping API names to ApiConfig objects.
+
         """
         return self._apis
 
@@ -1329,6 +1650,7 @@ class RapiConfigManager:
 
         Returns:
             List of full endpoint references.
+
         """
         if api_name:
             api = self._apis.get(api_name)
@@ -1351,6 +1673,7 @@ def _parse_safeguard_config(rapi_section: dict[str, Any]) -> SafeguardConfig:
 
     Returns:
         SafeguardConfig instance.
+
     """
     safeguard_data = rapi_section.get("safeguard", {})
     if not safeguard_data:
@@ -1363,6 +1686,64 @@ def _parse_safeguard_config(rapi_section: dict[str, Any]) -> SafeguardConfig:
     # Convert list to frozenset, uppercase all methods
     methods = frozenset(m.upper() for m in required_methods)
     return SafeguardConfig(required_methods=methods)
+
+
+def _validate_defaults_section(defaults: dict[str, Any]) -> None:
+    """Validate the rapi.defaults section.
+
+    Args:
+        defaults: The defaults dict from rapi config.
+
+    Raises:
+        ValueError: If defaults contain invalid values.
+
+    """
+    defaults_url = defaults.get("base_url")
+    if defaults_url and isinstance(defaults_url, str):
+        _validate_base_url(defaults_url, context="rapi.defaults")
+
+    defaults_auth = defaults.get("auth")
+    if defaults_auth and defaults_auth not in _ALLOWED_AUTH_TYPES:
+        raise ValueError(
+            f"Invalid auth type in rapi.defaults: {defaults_auth!r}. Allowed: {sorted(_ALLOWED_AUTH_TYPES)}"
+        )
+
+
+def _parse_servers_section(
+    servers_raw: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Parse and validate the rapi.servers section.
+
+    Args:
+        servers_raw: Raw servers dict from config (may be None).
+
+    Returns:
+        Validated and env-expanded server profiles dict.
+
+    Raises:
+        ValueError: If servers section exceeds limits or contains invalid data.
+
+    """
+    if not servers_raw or not isinstance(servers_raw, dict):
+        return {}
+
+    if len(servers_raw) > _MAX_SERVERS:
+        raise ValueError(f"Too many server profiles: {len(servers_raw)} > {_MAX_SERVERS}")
+
+    servers: dict[str, dict[str, Any]] = {}
+    for name, profile in servers_raw.items():
+        if not isinstance(profile, dict):
+            log.warning("Skipping invalid server profile: %s", name)
+            continue
+        _validate_server_name(name)
+        expanded = _expand_env_vars_recursive(profile)
+        _validate_server_profile(name, expanded)
+        servers[name] = expanded
+
+    if servers:
+        log.debug("Found %d server profile(s): %s", len(servers), list(servers))
+
+    return servers
 
 
 def load_rapi_config() -> RapiConfigManager:
@@ -1419,6 +1800,7 @@ def load_rapi_config() -> RapiConfigManager:
 
     Examples:
         >>> manager = load_rapi_config()  # doctest: +SKIP
+
     """
     from kstlib.config import get_config
 
@@ -1436,6 +1818,10 @@ def load_rapi_config() -> RapiConfigManager:
     defaults = rapi_section.pop("defaults", None)
     if defaults:
         log.debug("Found rapi.defaults section with keys: %s", list(defaults.keys()))
+        _validate_defaults_section(defaults)
+
+    # Extract named server profiles (optional)
+    servers = _parse_servers_section(rapi_section.pop("servers", None))
 
     # Process includes if present
     include_patterns = rapi_section.pop("include", None)
@@ -1445,6 +1831,12 @@ def load_rapi_config() -> RapiConfigManager:
 
     # Create manager for inline config first
     manager = RapiConfigManager(rapi_section, safeguard_config=safeguard_config, strict=strict)
+
+    # Store defaults and servers for resolve_server()
+    if defaults:
+        manager._defaults = _expand_env_vars_recursive(defaults)
+    if servers:
+        manager._servers = servers
 
     # Merge included files if any
     if include_patterns:
@@ -1460,6 +1852,11 @@ def load_rapi_config() -> RapiConfigManager:
             # Merge included APIs (inline config takes precedence)
             manager._merge_apis(included_manager, overwrite=False)
 
+    # Validate any server: directives now that defaults + servers + includes
+    # are all in place. Strict error if servers: is configured but a name is
+    # unknown; permissive warning if servers: section is absent.
+    manager._validate_server_references()
+
     return manager
 
 
@@ -1471,6 +1868,7 @@ def _resolve_include_patterns(patterns: list[str] | str) -> list[Path]:
 
     Returns:
         List of resolved file paths.
+
     """
     if isinstance(patterns, str):
         patterns = [patterns]
@@ -1494,5 +1892,6 @@ __all__ = [
     "MultipartConfig",
     "RapiConfigManager",
     "SafeguardConfig",
+    "ServerConfig",
     "load_rapi_config",
 ]

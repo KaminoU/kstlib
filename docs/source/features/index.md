@@ -105,6 +105,13 @@ CircuitBreaker, Heartbeat, Watchdog, RateLimiter.
 SOPS, AWS KMS, keyring, environment variable resolution.
 :::
 
+:::{grid-item-card} transform
+:link: transform/index
+:link-type: doc
+
+Bidirectional data transforms (decode, patch, re-encode) with composed patches.
+:::
+
 :::{grid-item-card} ui
 :link: ui/index
 :link-type: doc
@@ -152,6 +159,7 @@ pipeline/index
 rapi/index
 resilience/index
 secrets/index
+transform/index
 ui/index
 utils/index
 websocket/index

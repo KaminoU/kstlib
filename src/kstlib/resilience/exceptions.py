@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
+from kstlib.config.exceptions import KstlibError
 
-class HeartbeatError(RuntimeError):
+
+class HeartbeatError(KstlibError, RuntimeError):
     """Raised when the heartbeat encounters an error.
 
     Examples include state file write failure or invalid state file path.
     """
 
 
-class ShutdownError(RuntimeError):
+class ShutdownError(KstlibError, RuntimeError):
     """Raised when graceful shutdown encounters an error.
 
     Examples include cleanup callback failure or timeout exceeded.
     """
 
 
-class CircuitBreakerError(RuntimeError):
+class CircuitBreakerError(KstlibError, RuntimeError):
     """Base exception for circuit breaker errors."""
 
 
@@ -26,6 +28,7 @@ class CircuitOpenError(CircuitBreakerError):
 
     Attributes:
         remaining_seconds: Time until the circuit may transition to half-open.
+
     """
 
     def __init__(self, message: str, remaining_seconds: float) -> None:
@@ -34,12 +37,13 @@ class CircuitOpenError(CircuitBreakerError):
         Args:
             message: Human-readable error message.
             remaining_seconds: Seconds until circuit may transition to half-open.
+
         """
         super().__init__(message)
         self.remaining_seconds = remaining_seconds
 
 
-class RateLimitError(RuntimeError):
+class RateLimitError(KstlibError, RuntimeError):
     """Base exception for rate limiter errors."""
 
 
@@ -48,6 +52,7 @@ class RateLimitExceededError(RateLimitError):
 
     Attributes:
         retry_after: Seconds until a token will be available.
+
     """
 
     def __init__(self, message: str, retry_after: float) -> None:
@@ -56,12 +61,13 @@ class RateLimitExceededError(RateLimitError):
         Args:
             message: Human-readable error message.
             retry_after: Seconds until a token will be available.
+
         """
         super().__init__(message)
         self.retry_after = retry_after
 
 
-class WatchdogError(RuntimeError):
+class WatchdogError(KstlibError, RuntimeError):
     """Base exception for watchdog errors."""
 
 
@@ -70,6 +76,7 @@ class WatchdogTimeoutError(WatchdogError):
 
     Attributes:
         seconds_inactive: Time since last ping/activity.
+
     """
 
     def __init__(self, message: str, seconds_inactive: float) -> None:
@@ -78,6 +85,7 @@ class WatchdogTimeoutError(WatchdogError):
         Args:
             message: Human-readable error message.
             seconds_inactive: Seconds since last activity.
+
         """
         super().__init__(message)
         self.seconds_inactive = seconds_inactive

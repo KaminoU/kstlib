@@ -187,6 +187,7 @@ class Spinner:
         >>> spinner = Spinner("Working...")  # doctest: +SKIP
         >>> spinner.start()  # doctest: +SKIP
         >>> spinner.stop(success=True)  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -268,6 +269,7 @@ class Spinner:
             Traceback (most recent call last):
             ...
             kstlib.ui.exceptions.SpinnerError: Unknown preset 'nonexistent'. ...
+
         """
         config = _load_spinner_config()
         presets = config.get("presets", {})
@@ -310,6 +312,7 @@ class Spinner:
         Args:
             success: If True, show done character; if False, show fail character.
             final_message: Optional message to display after stopping.
+
         """
         if not self._running:
             return
@@ -328,6 +331,7 @@ class Spinner:
 
         Args:
             message: New message to display.
+
         """
         with self._lock:
             self._message = message
@@ -341,6 +345,7 @@ class Spinner:
         Args:
             message: Text to print above the spinner.
             style: Optional Rich style for the message.
+
         """
         with self._lock:
             # Clear spinner line
@@ -619,6 +624,7 @@ def with_spinner(
         ...     for i in range(10):
         ...         print(f"Step {i}")  # Scrolls in 5-line zone
         ...     return True
+
     """
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
@@ -684,6 +690,7 @@ class SpinnerWithLogZone:
         ...     sz.log("Step 1 done")
         ...     sz.log("Step 2 done")
         ...     sz.update("Almost finished...")
+
     """
 
     def __init__(

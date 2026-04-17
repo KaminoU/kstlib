@@ -11,6 +11,7 @@ Example:
     26214400
     >>> mail_limits.max_attachment_size_display
     '25.0 MiB'
+
 """
 
 from __future__ import annotations
@@ -368,6 +369,7 @@ def get_mail_limits(config: Mapping[str, Any] | None = None) -> MailLimits:
 
     Returns:
         MailLimits with resolved values clamped to hard maximums.
+
     """
     if config is None:
         config = _load_config()
@@ -412,6 +414,7 @@ def get_cache_limits(config: Mapping[str, Any] | None = None) -> CacheLimits:
 
     Returns:
         CacheLimits with resolved values clamped to hard maximums.
+
     """
     if config is None:
         config = _load_config()
@@ -439,6 +442,7 @@ def get_sops_limits(config: Mapping[str, Any] | None = None) -> SopsLimits:
 
     Returns:
         SopsLimits with resolved values clamped to hard maximums.
+
     """
     if config is None:
         config = _load_config()
@@ -469,6 +473,7 @@ class ResilienceLimits:
         circuit_reset_timeout: Cooldown before recovery attempt.
         circuit_half_open_calls: Calls allowed in half-open state.
         watchdog_timeout: Seconds before watchdog triggers timeout.
+
     """
 
     heartbeat_interval: float
@@ -500,6 +505,7 @@ def clamp_with_limits(value: float, hard_min: float, hard_max: float) -> float:
         1
         >>> clamp_with_limits(200, 1, 100)
         100
+
     """
     return max(hard_min, min(value, hard_max))
 
@@ -521,6 +527,7 @@ def get_resilience_limits(
         10
         >>> limits.circuit_max_failures
         5
+
     """
     if config is None:
         config = _load_config()
@@ -575,6 +582,7 @@ class DatabaseLimits:
         pool_acquire_timeout: Timeout for acquiring a connection (seconds).
         max_retries: Retry attempts on connection failure.
         retry_delay: Delay between retries (seconds).
+
     """
 
     pool_min_size: int
@@ -601,6 +609,7 @@ def get_db_limits(
         1
         >>> limits.pool_max_size
         10
+
     """
     if config is None:
         config = _load_config()
@@ -655,6 +664,7 @@ class RapiLimits:
         max_retries: Maximum retry attempts.
         retry_delay: Delay between retries in seconds.
         retry_backoff: Backoff multiplier for exponential retry.
+
     """
 
     timeout: float
@@ -692,6 +702,7 @@ def get_rapi_limits(
         30.0
         >>> limits.max_retries
         3
+
     """
     if config is None:
         config = _load_config()
@@ -764,6 +775,7 @@ class RapiRenderConfig:
     Attributes:
         json_indent: JSON indentation (spaces). None or 0 to disable pretty-print.
         xml_pretty: Whether to enable XML pretty-printing.
+
     """
 
     json_indent: int | None
@@ -787,6 +799,7 @@ def get_rapi_render_config(
         2
         >>> render_config.xml_pretty
         True
+
     """
     if config is None:
         config = _load_config()
@@ -825,6 +838,7 @@ class AlertsLimits:
         throttle_burst: Initial burst capacity.
         channel_timeout: Timeout for sending alerts (seconds).
         channel_retries: Retry attempts on delivery failure.
+
     """
 
     throttle_rate: int
@@ -851,6 +865,7 @@ def get_alerts_limits(
         10
         >>> limits.throttle_per
         60.0
+
     """
     if config is None:
         config = _load_config()
@@ -910,6 +925,7 @@ class WebSocketLimits:
         disconnect_check_interval: Seconds between should_disconnect checks.
         reconnect_check_interval: Seconds between should_reconnect checks.
         disconnect_margin: Seconds before platform limit to disconnect.
+
     """
 
     ping_interval: float
@@ -941,6 +957,7 @@ def get_websocket_limits(
         20.0
         >>> limits.max_reconnect_attempts
         10
+
     """
     if config is None:
         config = _load_config()
@@ -1016,6 +1033,7 @@ class PipelineLimits:
     Attributes:
         default_timeout: Default step timeout in seconds.
         on_error: Default error policy (``fail_fast`` or ``continue``).
+
     """
 
     default_timeout: float
@@ -1039,6 +1057,7 @@ def get_pipeline_limits(
         300.0
         >>> limits.on_error
         'fail_fast'
+
     """
     if config is None:
         config = _load_config()

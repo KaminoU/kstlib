@@ -51,6 +51,7 @@ class HTTPTraceLogger:
         ...         "response": [tracer.on_response],
         ...     }
         ... )
+
     """
 
     def __init__(
@@ -85,6 +86,7 @@ class HTTPTraceLogger:
         Args:
             pretty_print: Whether to pretty-print JSON responses.
             max_body_length: Maximum response body length before truncation.
+
         """
         if pretty_print is not None:
             self._pretty_print = pretty_print
@@ -92,12 +94,13 @@ class HTTPTraceLogger:
             self._max_body_length = max_body_length
 
     def on_request(self, request: httpx.Request) -> None:
-        """httpx event hook for outgoing requests (TRACE logging).
+        """Httpx event hook for outgoing requests (TRACE logging).
 
         Redacts sensitive data in request body and Authorization headers.
 
         Args:
             request: The outgoing HTTP request.
+
         """
         if not self._logger.isEnabledFor(self._trace_level):
             return
@@ -115,12 +118,13 @@ class HTTPTraceLogger:
         )
 
     def on_response(self, response: httpx.Response) -> None:
-        """httpx event hook for incoming responses (TRACE logging).
+        """Httpx event hook for incoming responses (TRACE logging).
 
         Optionally pretty-prints JSON and truncates long bodies.
 
         Args:
             response: The incoming HTTP response.
+
         """
         if not self._logger.isEnabledFor(self._trace_level):
             return
@@ -144,6 +148,7 @@ class HTTPTraceLogger:
 
         Returns:
             String representation with sensitive values redacted.
+
         """
         if not content:
             return "{}"
@@ -163,6 +168,25 @@ class HTTPTraceLogger:
         except Exception:  # pylint: disable=broad-exception-caught
             return "[binary or unparseable]"
 
+    def _redact_json(self, data: Any) -> Any:
+        """Recursively redact sensitive keys in a parsed JSON structure.
+
+        Args:
+            data: Parsed JSON value (dict, list, or scalar).
+
+        Returns:
+            Same structure with sensitive values replaced by ``"***REDACTED***"``.
+
+        """
+        if isinstance(data, dict):
+            return {
+                key: ("***REDACTED***" if key in self._sensitive_keys else self._redact_json(value))
+                for key, value in data.items()
+            }
+        if isinstance(data, list):
+            return [self._redact_json(item) for item in data]
+        return data
+
     def _format_response_body(self, response: httpx.Response) -> str:
         """Format response body for logging.
 
@@ -170,18 +194,24 @@ class HTTPTraceLogger:
             response: The HTTP response.
 
         Returns:
-            Formatted body string, possibly pretty-printed and truncated.
+            Formatted body string, with sensitive keys redacted, possibly
+            pretty-printed and truncated.
+
         """
         try:
             response.read()  # Ensure body is available
             body = response.text
 
-            if self._pretty_print and body:
+            if body:
                 try:
                     parsed = json.loads(body)
-                    body = json.dumps(parsed, indent=2, ensure_ascii=False)
                 except (json.JSONDecodeError, TypeError):
-                    pass
+                    parsed = None
+
+                if parsed is not None:
+                    redacted = self._redact_json(parsed)
+                    indent = 2 if self._pretty_print else None
+                    body = json.dumps(redacted, indent=indent, ensure_ascii=False)
 
             if len(body) > self._max_body_length:
                 body = f"{body[: self._max_body_length]}\n... [truncated, {len(body)} total chars]"
@@ -192,7 +222,7 @@ class HTTPTraceLogger:
 
 
 # Type alias for httpx event hooks - uses internal types for accurate typing
-EventHooksDict = dict[str, list["httpx._types.RequestHook | httpx._types.ResponseHook"]]  # type: ignore[name-defined]  # noqa: SLF001
+EventHooksDict = dict[str, list["httpx._types.RequestHook | httpx._types.ResponseHook"]]  # type: ignore[name-defined]
 
 
 def create_trace_event_hooks(
@@ -220,6 +250,7 @@ def create_trace_event_hooks(
         >>> hooks, enabled = create_trace_event_hooks(log)
         >>> async with httpx.AsyncClient(event_hooks=hooks) as client:  # doctest: +SKIP
         ...     response = await client.get("https://example.com")  # doctest: +SKIP
+
     """
     trace_enabled = logger.isEnabledFor(trace_level)
     event_hooks: EventHooksDict = {}

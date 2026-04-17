@@ -32,6 +32,7 @@ class MonitorList:
         >>> ml = MonitorList(["Event A", "Event B"])
         >>> "<ul>" in ml.render()
         True
+
     """
 
     items: list[CellValue | StatusCell]
@@ -46,6 +47,7 @@ class MonitorList:
 
         Returns:
             HTML list string, optionally preceded by an ``<h3>`` title.
+
         """
         parts: list[str] = []
 

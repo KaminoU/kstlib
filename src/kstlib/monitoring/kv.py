@@ -31,6 +31,7 @@ class MonitorKV:
         >>> kv = MonitorKV({"Host": "srv-01", "Port": 8080})
         >>> "<dl" in kv.render()
         True
+
     """
 
     items: dict[str, CellValue | StatusCell]
@@ -44,6 +45,7 @@ class MonitorKV:
 
         Returns:
             HTML ``<dl>`` string, optionally preceded by an ``<h3>`` title.
+
         """
         parts: list[str] = []
 

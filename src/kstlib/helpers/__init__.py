@@ -23,6 +23,7 @@ Examples:
     >>> if trigger.should_trigger(margin=60):  # doctest: +SKIP
     ...     await ws.shutdown()
     ...     await ws.connect()
+
 """
 
 from kstlib.helpers.exceptions import InvalidModuloError, TimeTriggerError

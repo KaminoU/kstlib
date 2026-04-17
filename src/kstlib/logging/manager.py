@@ -30,6 +30,7 @@ Example:
             "file": {"log_name": "myapp.log"}
         }
         logger = LogManager(config=config)
+
 """
 
 import asyncio
@@ -82,7 +83,14 @@ ALLOWED_LOG_EXTENSIONS: frozenset[str] = frozenset({".log", ".txt", ".json", ""}
 #     HAS_ASYNC = False
 HAS_ASYNC = False
 
-__all__ = ["HAS_ASYNC", "LOGGING_LEVEL", "SUCCESS_LEVEL", "TRACE_LEVEL", "LogManager"]
+__all__ = [
+    "HAS_ASYNC",
+    "LOGGING_LEVEL",
+    "SUCCESS_LEVEL",
+    "TRACE_LEVEL",
+    "LogManager",
+    "list_available_presets",
+]
 
 # Custom log levels
 TRACE_LEVEL = 5  # Below DEBUG (10) - for HTTP traces, detailed diagnostics
@@ -121,6 +129,37 @@ FALLBACK_PRESETS = {
 }
 
 
+def list_available_presets() -> list[str]:
+    """Return the list of logging preset names available to ``LogManager``.
+
+    Merges the built-in fallback presets (``dev``, ``prod``, ``debug``) with
+    the presets declared under ``logger.presets`` in ``kstlib.conf.yml``.
+    User-defined presets override built-ins with the same name.
+
+    Returns:
+        Sorted list of unique preset names. Falls back to the built-in
+        names when the configuration cannot be read (silent on all errors).
+
+    Examples:
+        >>> names = list_available_presets()
+        >>> "prod" in names
+        True
+
+    """
+    names: set[str] = set(FALLBACK_PRESETS.keys())
+    try:
+        config = get_config()
+        logger_section = config.get("logger", {})  # type: ignore[no-untyped-call]
+        config_presets = logger_section.get("presets") if logger_section else None
+        if config_presets:
+            names.update(config_presets.keys())
+    except Exception:
+        # Silent by design: fall back to built-in presets. Raising here
+        # would break the host application through a helper function.
+        pass
+    return sorted(names)
+
+
 def _validate_log_file_path(file_path: Path) -> Path:
     """Validate and sanitize log file path.
 
@@ -134,6 +173,7 @@ def _validate_log_file_path(file_path: Path) -> Path:
 
     Raises:
         ValueError: If path violates security constraints.
+
     """
     # Convert to string for length checks
     path_str = str(file_path)
@@ -223,11 +263,25 @@ class LogManager(logging.Logger):
         name: Logger name (default: "kstlib")
         config: Explicit configuration dict/Box
         preset: Preset name ("dev", "prod", "debug", or custom from config)
+        register: When ``True``, register this instance as the global root
+            of the ``"kstlib"`` logger hierarchy. The instance is injected
+            into ``logging.Logger.manager.loggerDict`` so ``logging.getLogger("kstlib")``
+            returns the same object, ``.trace()`` and ``.success()`` are
+            installed on the base ``logging.Logger`` class (so child loggers
+            returned by ``logging.getLogger("kstlib.foo")`` also support them),
+            and the ``TRACE_LEVEL`` is propagated to all pre-existing
+            ``"kstlib.*"`` child loggers. Defaults to ``False``, which produces
+            an isolated instance suitable for local use and tests.
 
     Example:
         >>> logger = LogManager(preset="dev")  # doctest: +SKIP
         >>> logger.info("Server started", host="localhost", port=8080)  # doctest: +SKIP
         >>> logger.success("Connection established")  # doctest: +SKIP
+
+        Global bootstrap used by ``init_logging()``::
+
+            LogManager(preset="dev", register=True)  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -235,8 +289,20 @@ class LogManager(logging.Logger):
         name: str = "kstlib",
         config: Box | dict[str, Any] | None = None,
         preset: str | None = None,
+        register: bool = False,
     ) -> None:
-        """Initialize LogManager with configuration priority chain."""
+        """Initialize LogManager with configuration priority chain.
+
+        Args:
+            name: Logger name (default: "kstlib").
+            config: Explicit configuration dict/Box.
+            preset: Preset name ("dev", "prod", "debug", or custom from config).
+            register: When ``True``, register this instance as the global
+                kstlib root logger (see class docstring for details). When
+                ``False`` (default), the instance stays isolated and does not
+                affect ``logging.getLogger("kstlib")``.
+
+        """
         super().__init__(name)
         logging.addLevelName(TRACE_LEVEL, "TRACE")
         logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
@@ -251,6 +317,57 @@ class LogManager(logging.Logger):
 
         # Setup handlers
         self._setup_handlers()
+
+        # Optional global bootstrap
+        if register:
+            self._register_as_root()
+
+    def _register_as_root(self) -> None:
+        """Inject this instance as the ``"kstlib"`` root in Python logging.
+
+        Performs three steps in order:
+
+        1. Patch the ``logging.Logger`` class with ``.trace()`` and ``.success()``
+           methods (only once per process) so that child loggers returned by
+           ``logging.getLogger("kstlib.foo")`` also support them.
+        2. Register this instance under ``logging.Logger.manager.loggerDict``
+           at the ``"kstlib"`` name, set ``parent`` to the root logger and
+           bind the manager. ``propagate`` stays at ``True`` (Python default)
+           so host applications can aggregate records at the root level and
+           pytest's caplog fixture keeps working.
+        3. Propagate ``TRACE_LEVEL`` to all pre-existing ``"kstlib.*"`` child
+           loggers so modules already imported before the bootstrap get the
+           correct level. New children inherit correctly via the hierarchy.
+        """
+        # 1. Patch logging.Logger class (once per process)
+        if not hasattr(logging.Logger, "trace"):
+
+            def _trace(self: logging.Logger, msg: object, *args: object, **kwargs: Any) -> None:
+                if self.isEnabledFor(TRACE_LEVEL):
+                    self._log(TRACE_LEVEL, msg, args, **kwargs)
+
+            logging.Logger.trace = _trace  # type: ignore[attr-defined]
+
+        if not hasattr(logging.Logger, "success"):
+
+            def _success(self: logging.Logger, msg: object, *args: object, **kwargs: Any) -> None:
+                if self.isEnabledFor(SUCCESS_LEVEL):
+                    self._log(SUCCESS_LEVEL, msg, args, **kwargs)
+
+            logging.Logger.success = _success  # type: ignore[attr-defined]
+
+        # 2. Register in Python's logging manager
+        self.parent = logging.root
+        self.propagate = True
+        self.manager = logging.Logger.manager
+        logging.Logger.manager.loggerDict[self.name] = self
+
+        # 3. Propagate level to pre-existing children
+        prefix = f"{self.name}."
+        for logger_name in list(logging.Logger.manager.loggerDict):
+            if logger_name.startswith(prefix):
+                child_logger = logging.getLogger(logger_name)
+                child_logger.setLevel(TRACE_LEVEL)
 
     def _load_config(self, config: Box | dict[str, Any] | None, preset: str | None) -> Box:
         """Load configuration with priority chain.
@@ -269,6 +386,7 @@ class LogManager(logging.Logger):
 
         Returns:
             Merged configuration as Box
+
         """
         merged = Box(FALLBACK_DEFAULTS, default_box=True)
 
@@ -321,6 +439,7 @@ class LogManager(logging.Logger):
 
         Returns:
             Box with preset configuration, or ``None`` if not found.
+
         """
         if not preset or not presets:
             return None
@@ -335,6 +454,7 @@ class LogManager(logging.Logger):
 
         Returns:
             Rich Theme with logging level colors
+
         """
         theme_config = self._config.theme
         return Theme(
@@ -440,6 +560,7 @@ class LogManager(logging.Logger):
 
         Returns:
             Formatted message with icon
+
         """
         icons = self._config.icons
         if not icons.show:
@@ -459,6 +580,7 @@ class LogManager(logging.Logger):
 
         Returns:
             Sanitized string representation.
+
         """
         text = str(value)
         # Strip ANSI escape sequences (CSI and OSC)
@@ -477,6 +599,7 @@ class LogManager(logging.Logger):
 
         Returns:
             Formatted message with context
+
         """
         if not context:
             return msg
@@ -493,6 +616,7 @@ class LogManager(logging.Logger):
         Returns:
             A tuple containing the structured context dictionary and the kwargs
             that should be forwarded to the underlying logging call.
+
         """
         reserved = {"exc_info", "stack_info", "stacklevel", "extra"}
         context: dict[str, Any] = {}
@@ -523,6 +647,7 @@ class LogManager(logging.Logger):
             msg: Log message
             *args: Format args
             **kwargs: Context key=value pairs
+
         """
         if self.isEnabledFor(TRACE_LEVEL):
             formatted, log_kwargs = self._prepare_message("trace", msg, kwargs)
@@ -536,6 +661,7 @@ class LogManager(logging.Logger):
             msg: Log message
             *args: Format args
             **kwargs: Context key=value pairs
+
         """
         formatted, log_kwargs = self._prepare_message("debug", msg, kwargs)
         log_kwargs.setdefault("stacklevel", 2)
@@ -548,6 +674,7 @@ class LogManager(logging.Logger):
             msg: Log message
             *args: Format args
             **kwargs: Context key=value pairs
+
         """
         formatted, log_kwargs = self._prepare_message("info", msg, kwargs)
         log_kwargs.setdefault("stacklevel", 2)
@@ -560,6 +687,7 @@ class LogManager(logging.Logger):
             msg: Log message
             *args: Format args
             **kwargs: Context key=value pairs
+
         """
         if self.isEnabledFor(SUCCESS_LEVEL):
             formatted, log_kwargs = self._prepare_message("success", msg, kwargs)
@@ -573,6 +701,7 @@ class LogManager(logging.Logger):
             msg: Log message
             *args: Format args
             **kwargs: Context key=value pairs
+
         """
         formatted, log_kwargs = self._prepare_message("warning", msg, kwargs)
         log_kwargs.setdefault("stacklevel", 2)
@@ -585,6 +714,7 @@ class LogManager(logging.Logger):
             msg: Log message
             *args: Format args
             **kwargs: Context key=value pairs
+
         """
         formatted, log_kwargs = self._prepare_message("error", msg, kwargs)
         log_kwargs.setdefault("stacklevel", 2)
@@ -597,6 +727,7 @@ class LogManager(logging.Logger):
             msg: Log message
             *args: Format args
             **kwargs: Context key=value pairs
+
         """
         formatted, log_kwargs = self._prepare_message("critical", msg, kwargs)
         log_kwargs.setdefault("stacklevel", 2)
@@ -607,6 +738,7 @@ class LogManager(logging.Logger):
 
         Args:
             exc: Exception to display
+
         """
         show_locals = self._config.console.get("tracebacks_show_locals", False)
         self.console.print(

@@ -32,10 +32,12 @@ keywords = [
 dynamic = ["version"]
 dependencies = [
     # --- Configuration & Serialization ---
-    "pyyaml>=6.0,<7",     # YAML config parsing
-    "tomli>=2.3,<3",      # Read-only TOML parser (for pyproject & configs)
-    "tomli-w>=1.0,<2",    # TOML writer for config exports
-    "python-box>=7.3,<8", # Dot-access dicts (Box, BoxList, ConfigBox)
+    "pyyaml>=6.0,<7",        # YAML config parsing
+    "tomli>=2.3,<3",         # Read-only TOML parser (for pyproject & configs)
+    "tomli-w>=1.0,<2",       # TOML writer for config exports
+    "python-box>=7.3,<8",    # Dot-access dicts (Box, BoxList, ConfigBox)
+    "platformdirs>=4.0,<5",  # Cross-platform system config dirs (XDG on Linux, native on Mac/Windows)
+    "defusedxml>=0.7,<1",    # XXE-safe XML parsing for kstlib.transform (CVE protection)
 
     # --- CLI & Output Interface ---
     "typer>=0.19,<1", # CLI framework (based on Click)
@@ -60,7 +62,7 @@ dependencies = [
     "pendulum>=3.0,<4", # Modern datetime library with timezone support
 
     # --- Security: transitive dep lower bounds (CVE) ---
-    "cryptography>=46.0.6",  # CVE-2026-26007 + CVE-2026-34073 (via authlib)
+    "cryptography>=46.0.7",  # CVE-2026-26007 + CVE-2026-34073 + CVE-2026-39892
     "requests>=2.33.0",      # CVE-2024-47081 + CVE-2026-25645 (via httpx)
     "urllib3>=2.6.3",         # CVE-2025-50182/50181 + CVE-2025-66418/66471 + CVE-2026-21441 (via requests)
 ]
@@ -91,7 +93,7 @@ Changelog = "https://github.com/KaminoU/kstlib/blob/main/CHANGELOG.md"
 [project.optional-dependencies]
 # Development tools (testing, linting, typing)
 dev = [
-    "pytest>=8.4,<9",
+    "pytest>=9.0.3,<10",      # >=9.0.3 pulls CVE-2025-71176 temp dir fix
     "pytest-cov>=7.0,<8",
     "pytest-asyncio>=1.2,<2", # For async tests (roadmap Phase 0)
 
@@ -99,8 +101,9 @@ dev = [
     "ruff>=0.14,<1",  # Fast linter + formatter (replaces Flake8, isort, Black, Pylint)
 
     # Typing checks
-    "mypy>=1.18,<2",        # Static type checker (validates type hints)
-    "types-PyYAML>=6.0,<7", # Type stubs for PyYAML (used by mypy)
+    "mypy>=1.18,<2",            # Static type checker (validates type hints)
+    "types-PyYAML>=6.0,<7",     # Type stubs for PyYAML (used by mypy)
+    "types-defusedxml>=0.7,<1", # Type stubs for defusedxml (used by mypy)
 
     # Git hooks
     "pre-commit>=4.0,<5", # Git pre-commit hooks for local CI checks
@@ -152,12 +155,13 @@ textual = ["textual>=6.3,<7"]
 
 # Everything for local development
 all = [
-    "pytest>=8.4,<9",
+    "pytest>=9.0.3,<10",  # >=9.0.3 pulls CVE-2025-71176 temp dir fix
     "pytest-cov>=7.0,<8",
     "pytest-asyncio>=1.2,<2",
     "ruff>=0.14,<1",
     "mypy>=1.18,<2",
     "types-PyYAML>=6.0,<7",
+    "types-defusedxml>=0.7,<1",
     "sphinx>=8.1,<9",
     "furo>=2025.9,<2026",
     "myst-parser>=4.0,<5",
@@ -285,11 +289,14 @@ ignore = [
 "src/kstlib/cli/commands/secrets/encrypt.py" = ["PLR0913"]
 "src/kstlib/cli/commands/secrets/shred.py" = ["PLR0913"]
 # T201: print statement - acceptable for CLI raw output (piping, --raw flags)
-# PLR0912/C901/PLR0915: Too many branches/complexity/statements - acceptable for CLI commands with multiple output modes
-"src/kstlib/cli/commands/auth/login.py" = ["PLR0912", "C901"]
+# PLR0912/C901/PLR0913/PLR0915: Too many branches/complexity/args/statements - acceptable for CLI commands with multiple output modes
+"src/kstlib/cli/commands/auth/login.py" = ["PLR0912", "PLR0913", "C901"]
 "src/kstlib/cli/commands/auth/status.py" = ["PLR0912", "C901"]
 "src/kstlib/cli/commands/auth/token.py" = ["T201", "C901", "PLR0912", "PLR0913", "PLR0915"]
 "src/kstlib/cli/commands/auth/whoami.py" = ["T201", "PLR0912", "C901"]
+"src/kstlib/cli/commands/ops/common.py" = ["PLR0913"]
+"src/kstlib/cli/commands/ops/start.py" = ["PLR0913"]
+"src/kstlib/cli/commands/ops/stop.py" = ["PLR0913"]
 "src/kstlib/cli/commands/rapi/call.py" = ["T201", "PLR0913"]
 # S110: try-except-pass - config loading is intentionally optional (no-op on failure)
 # PLR0913: Too many arguments - decorator API requires multiple options
@@ -353,6 +360,37 @@ ignore = [
 "src/kstlib/alerts/channels/slack.py" = ["PLR0913"]
 # Alert manager - transport factory has many branches for different transport types
 "src/kstlib/alerts/manager.py" = ["C901"]
+# Auth check - "token_type" is a label string ("id_token"/"access_token"), not a credential
+"src/kstlib/auth/check.py" = ["S107"]
+# aiosqlcipher - optional dependency feature detection via try/except import
+"src/kstlib/db/aiosqlcipher.py" = ["F401"]
+# Logging - auto-init and preset discovery MUST swallow exceptions to avoid breaking host apps
+"src/kstlib/logging/__init__.py" = ["S110"]
+"src/kstlib/logging/manager.py" = ["S110"]
+# Mail builder - snapshot/notify path legitimately reassigns same-class private state
+"src/kstlib/mail/builder.py" = ["SLF001"]
+# Monitoring image - RenderError chain already raised via "from err"; no additional ignores needed here
+# Monitoring renderer - Markup values are escaped before wrapping; jinja2 Environment defaults to autoescape=True
+"src/kstlib/monitoring/renderer.py" = ["S701", "S704"]
+# Monitoring service config has many options
+"src/kstlib/monitoring/monitoring.py" = ["PLR0913"]
+# ops/* - subprocess calls validated via ops/validators.py (binary resolved via shutil.which, list-form args)
+# S606/S108: tmux default socket path /tmp/tmux-<uid> is a Unix convention, not a user-controlled tempfile
+"src/kstlib/ops/container.py" = ["S603"]
+"src/kstlib/ops/tmux.py" = ["S603", "S606", "S108", "ARG002"]
+# Pipeline steps - subprocess calls validated (python via shutil.which, shell is documented opt-in)
+"src/kstlib/pipeline/steps/python.py" = ["S603"]
+"src/kstlib/pipeline/steps/shell.py" = ["S602"]
+# Pipeline validators - many validation options
+"src/kstlib/pipeline/validators.py" = ["PLR0913"]
+# Transform chain config has many options
+"src/kstlib/transform/chain.py" = ["PLR0913"]
+# Transform primitives - PrimitiveConfig used in runtime signatures (not TYPE_CHECKING-only)
+# N817: ElementTree imported as ET is the stdlib-documented convention for xml/defusedxml
+"src/kstlib/transform/primitives.py" = ["TC001", "N817"]
+# utils/http_trace - httpx._types accessed intentionally for accurate event hook typing
+"src/kstlib/utils/http_trace.py" = ["SLF001"]
+# utils/serialization - defusedxml.minidom used for display pretty-printing
 
 [tool.ruff.format]
 # Use double quotes for strings
@@ -499,6 +537,7 @@ addopts = [
     "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html",
+    "--doctest-modules",
 ]
 
 # Markers for test categorization

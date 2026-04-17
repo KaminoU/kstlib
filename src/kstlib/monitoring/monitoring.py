@@ -25,6 +25,7 @@ Examples:
     ... def metrics():  # doctest: +SKIP
     ...     return collect_metrics()  # doctest: +SKIP
     >>> mon.run_sync()  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -73,9 +74,10 @@ class Monitoring:
         From config file:
 
         >>> mon = Monitoring.from_config()  # doctest: +SKIP
+
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
         template: str | None = None,
@@ -134,6 +136,7 @@ class Monitoring:
             >>> @mon.collector  # doctest: +SKIP
             ... def data():  # doctest: +SKIP
             ...     return {"key": "value"}  # doctest: +SKIP
+
         """
         from kstlib.config import get_config, load_config
 
@@ -223,6 +226,7 @@ class Monitoring:
             ...     return "OK"
             >>> mon.run_sync().html
             'OK'
+
         """
         self._collectors[func.__name__] = func
         return func
@@ -238,6 +242,7 @@ class Monitoring:
 
         Returns:
             Self for chaining.
+
         """
         self._collectors[name] = func
         return self
@@ -259,6 +264,7 @@ class Monitoring:
 
         Returns:
             MonitoringResult with HTML and metadata.
+
         """
         service = self._create_service()
         result = await service.run()
@@ -277,6 +283,7 @@ class Monitoring:
 
         Returns:
             MonitoringResult with HTML and metadata.
+
         """
         try:
             loop = asyncio.get_running_loop()

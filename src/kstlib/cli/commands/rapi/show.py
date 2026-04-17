@@ -13,7 +13,7 @@ from rich.table import Table
 
 from kstlib.cli.common import console
 from kstlib.limits import HARD_MAX_DISPLAY_VALUE_LENGTH, HARD_MAX_ENDPOINT_REF_LENGTH
-from kstlib.rapi import EndpointNotFoundError, load_rapi_config
+from kstlib.rapi import EndpointNotFoundError
 from kstlib.rapi.config import _PATH_PARAM_PATTERN
 
 if TYPE_CHECKING:
@@ -172,14 +172,13 @@ def show_endpoint(
 
         # Short form (if unique)
         kstlib rapi show get_ip
+
     """
+    from kstlib.cli.commands.rapi import _load_config_or_exit
+
     _validate_endpoint_ref(endpoint_ref)
 
-    try:
-        config_manager = load_rapi_config()
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        console.print(f"[red]Failed to load rapi config: {e}[/]")
-        raise typer.Exit(code=1) from e
+    config_manager = _load_config_or_exit()
 
     try:
         api_config, ep_config = config_manager.resolve(endpoint_ref)

@@ -185,24 +185,81 @@ class CredentialResolver:
             raise CredentialError(credential_name, "Not found in credentials config")
 
         cred_config = self._config[credential_name]
-        cred_type = cred_config.get("type", "env")
-
-        log.debug("Credential '%s' type: %s", credential_name, cred_type)
-
-        if cred_type == "env":
-            record = self._resolve_env(credential_name, cred_config)
-        elif cred_type == "file":
-            record = self._resolve_file(credential_name, cred_config)
-        elif cred_type == "sops":
-            record = self._resolve_sops(credential_name, cred_config)
-        elif cred_type == "provider":
-            record = self._resolve_provider(credential_name, cred_config)
-        else:
-            raise CredentialError(credential_name, f"Unknown credential type: {cred_type}")
+        record = self._dispatch_resolution(credential_name, cred_config)
 
         self._cache[credential_name] = record
         log.debug("Credential '%s' resolved from %s", credential_name, record.source)
         return record
+
+    def resolve_inline(
+        self,
+        cred_config: Mapping[str, Any],
+        *,
+        name_hint: str = "<inline>",
+    ) -> CredentialRecord:
+        """Resolve a credential from an inline config dict (no name lookup).
+
+        Used by ``ServerConfig`` profiles where credentials are declared
+        inline (as a dict) rather than referenced by name. Bypasses both
+        the config registry lookup and the resolver cache, since inline
+        configs have no stable identifier to key on.
+
+        Args:
+            cred_config: Inline credential configuration dict (with at
+                least a ``type`` key: env, file, sops, or provider).
+            name_hint: Label used for logging and error messages
+                (e.g. ``"server.github"``).
+
+        Returns:
+            CredentialRecord with resolved value(s).
+
+        Raises:
+            CredentialError: If the inline config is invalid or
+                resolution fails.
+
+        Examples:
+            >>> resolver = CredentialResolver()
+            >>> # cred = resolver.resolve_inline(
+            ... #     {"type": "env", "var": "GITHUB_TOKEN"},
+            ... #     name_hint="server.github",
+            ... # )  # doctest: +SKIP
+        """
+        log.debug("Resolving inline credential: %s", name_hint)
+        return self._dispatch_resolution(name_hint, cred_config)
+
+    def _dispatch_resolution(
+        self,
+        credential_name: str,
+        cred_config: Mapping[str, Any],
+    ) -> CredentialRecord:
+        """Dispatch resolution to the right backend based on credential type.
+
+        Shared by ``resolve`` (config-registered names) and
+        ``resolve_inline`` (server profile inline dicts).
+
+        Args:
+            credential_name: Name or hint for logging and errors.
+            cred_config: Credential configuration dict.
+
+        Returns:
+            CredentialRecord with resolved value(s).
+
+        Raises:
+            CredentialError: If type is unknown or resolution fails.
+        """
+        cred_type = cred_config.get("type", "env")
+        log.debug("Credential '%s' type: %s", credential_name, cred_type)
+
+        if cred_type == "env":
+            return self._resolve_env(credential_name, cred_config)
+        if cred_type == "file":
+            return self._resolve_file(credential_name, cred_config)
+        if cred_type == "sops":
+            return self._resolve_sops(credential_name, cred_config)
+        if cred_type == "provider":
+            return self._resolve_provider(credential_name, cred_config)
+
+        raise CredentialError(credential_name, f"Unknown credential type: {cred_type}")
 
     def _resolve_env(
         self,

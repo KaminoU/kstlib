@@ -21,6 +21,7 @@ Examples:
         transport = ResendTransport(api_key="re_123")
         # Use with async context
         await transport.send(message)
+
 """
 
 from kstlib.mail.builder import MailBuilder, NotifyResult

@@ -20,6 +20,7 @@ Example:
     >>> # From config file
     >>> session = SessionManager.from_config("astro")  # doctest: +SKIP
     >>> session.start()  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -74,6 +75,7 @@ def auto_detect_backend(
         >>> # Session not found
         >>> auto_detect_backend("nonexistent") is None  # doctest: +SKIP
         True
+
     """
     found_in: list[str] = []
 
@@ -143,6 +145,7 @@ class SessionManager:
 
         >>> # From config file (recommended)
         >>> session = SessionManager.from_config("astro")  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -161,6 +164,7 @@ class SessionManager:
 
         Raises:
             SessionConfigError: If configuration is invalid.
+
         """
         # Validate session name early for better error messages
         try:
@@ -257,6 +261,7 @@ class SessionManager:
             Usage::
 
                 >>> session = SessionManager.from_config("astro")  # doctest: +SKIP
+
         """
         from kstlib.config import get_config
 
@@ -312,6 +317,7 @@ class SessionManager:
         Raises:
             SessionExistsError: If session already exists.
             SessionStartError: If session failed to start.
+
         """
         # Build effective config with overrides
         config_dict = {
@@ -348,6 +354,7 @@ class SessionManager:
         Raises:
             SessionNotFoundError: If session does not exist.
             SessionStopError: If session could not be stopped.
+
         """
         return self._runner.stop(self._name, graceful=graceful, timeout=timeout)
 
@@ -359,6 +366,7 @@ class SessionManager:
         Raises:
             SessionNotFoundError: If session does not exist.
             SessionAttachError: If attachment failed.
+
         """
         self._runner.attach(self._name)
 
@@ -370,6 +378,7 @@ class SessionManager:
 
         Raises:
             SessionNotFoundError: If session does not exist.
+
         """
         return self._runner.status(self._name)
 
@@ -384,6 +393,7 @@ class SessionManager:
 
         Raises:
             SessionNotFoundError: If session does not exist.
+
         """
         return self._runner.logs(self._name, lines=lines)
 
@@ -392,6 +402,7 @@ class SessionManager:
 
         Returns:
             True if session exists, False otherwise.
+
         """
         return self._runner.exists(self._name)
 
@@ -400,6 +411,7 @@ class SessionManager:
 
         Returns:
             True if running, False otherwise.
+
         """
         if not self.exists():
             return False

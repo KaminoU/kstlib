@@ -42,6 +42,7 @@ class MonitorTable:
         >>> t.add_row(["API", "OK"])
         >>> "<table" in t.render()
         True
+
     """
 
     headers: list[str]
@@ -56,6 +57,7 @@ class MonitorTable:
 
         Raises:
             RenderError: If the row length does not match the header count.
+
         """
         if len(row) != len(self.headers):
             msg = f"Row has {len(row)} cells but table has {len(self.headers)} headers"
@@ -91,6 +93,7 @@ class MonitorTable:
 
         Returns:
             HTML ``<table>`` string.
+
         """
         parts: list[str] = []
 

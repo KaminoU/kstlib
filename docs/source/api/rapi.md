@@ -103,6 +103,57 @@ client = RapiClient.from_file("github.rapi.yml")
 client = RapiClient.discover()  # Auto-discover *.rapi.yml in current directory
 ```
 
+### Named Server Profiles
+
+The ``rapi.servers`` section is for **heterogeneous APIs** (different
+stacks, different auth) bundled into a single project. Each profile
+inherits from ``rapi.defaults`` via deep merge and overrides what
+matters (``base_url``, ``credentials``, ``auth``, ``headers``).
+
+```yaml
+rapi:
+  defaults:
+    auth: bearer
+    headers:
+      Accept: application/json
+
+  servers:
+    github:
+      base_url: https://api.github.com
+      credentials:
+        type: env
+        var: GITHUB_TOKEN
+      headers:
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    jira:
+      base_url: https://mycompany.atlassian.net
+      auth: api_key
+      credentials:
+        type: env
+        var: JIRA_API_KEY
+```
+
+```python
+manager = load_rapi_config()
+github  = manager.resolve_server("github")  # Merged: github + defaults
+jira    = manager.resolve_server("jira")    # Merged: jira   + defaults
+default = manager.resolve_server(None)      # Defaults wrapped as ServerConfig
+manager.server_names                        # ["github", "jira"]
+```
+
+```{note}
+For **same API, different environments** (e.g. SAS Viya source/target
+migration), do **not** use ``rapi.servers``. Use the ``${VAR}`` env var
+pattern in ``rapi.defaults`` instead - the substitution is applied
+globally at YAML load time, so ``token_path`` supports dynamic profile
+selection natively. See {doc}`../features/rapi/index` for the decision
+matrix and full examples.
+```
+
+See {doc}`../features/rapi/index` for full details, the decision
+matrix, and validation rules.
+
 ## Endpoints and Parameters
 
 ### Path Parameters
@@ -247,9 +298,33 @@ kstlib rapi list --verbose  # show methods and auth
 | `--out` | `-o` | Write output to file |
 | `--body` | `-b` | JSON body or `@filename` |
 | `--header` | `-H` | Custom header (repeatable) |
+| `--server` | `-s` | Named server profile from `rapi.servers` config |
 | `--quiet` | `-q` | Suppress status messages |
 | `--raw` | | Output raw JSON without Rich formatting (pipeable) |
 | `--minify` | | Output compact single-line JSON |
+
+### Server Profile Selection
+
+The `--server` (or `-s`) flag picks a named profile from the
+`rapi.servers` section of `kstlib.conf.yml`. It overrides any
+`server:` directive declared in the `*.rapi.yml` file (file or
+endpoint level). Use it for heterogeneous APIs (github + jira + ...).
+
+```bash
+# Use the github profile (overrides any server: directive in YAML)
+kstlib rapi --server github github.repos-list
+
+# Short form
+kstlib rapi -s jira jira.issues-search
+
+# Unknown server name exits 1 with the list of available profiles
+kstlib rapi --server ghost github.user
+# -> Error: Server profile not found: 'ghost'. Available: ['github', 'jira']
+```
+
+For SAS Viya source/target migration (same API, different environments),
+use the `${ACTIVE_VIYA}` env var pattern instead of `--server`. See
+{doc}`../features/rapi/index` for the decision matrix.
 
 ### Verbosity and Tracing
 
@@ -600,6 +675,11 @@ kstlib -vvv rapi binance.balance   # TRACE mode to see signature details
    :show-inheritance:
    :no-index:
 
+.. autoclass:: kstlib.rapi.ServerConfig
+   :members:
+   :show-inheritance:
+   :no-index:
+
 .. autofunction:: kstlib.rapi.load_rapi_config
 ```
 
@@ -648,6 +728,10 @@ kstlib -vvv rapi binance.balance   # TRACE mode to see signature details
    :show-inheritance:
 
 .. autoexception:: kstlib.rapi.SafeguardMissingError
+   :members:
+   :show-inheritance:
+
+.. autoexception:: kstlib.rapi.ServerNotFoundError
    :members:
    :show-inheritance:
 ```

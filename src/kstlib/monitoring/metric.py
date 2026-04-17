@@ -37,6 +37,7 @@ class MonitorMetric:
         >>> m = MonitorMetric(99.9, label="Uptime", level=StatusLevel.OK, unit="%")
         >>> "99.9" in m.render()
         True
+
     """
 
     value: CellValue
@@ -52,6 +53,7 @@ class MonitorMetric:
 
         Returns:
             HTML ``<div>`` string.
+
         """
         escaped_val = html.escape(str(self.value))
         escaped_unit = html.escape(self.unit)

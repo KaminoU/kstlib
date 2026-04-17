@@ -46,6 +46,7 @@ class HeartbeatTarget(Protocol):
         ...     @property
         ...     def is_dead(self) -> bool:
         ...         return not self.connected
+
     """
 
     @property
@@ -72,6 +73,7 @@ class HeartbeatState:
         ... )
         >>> state.pid
         1234
+
     """
 
     timestamp: str
@@ -84,6 +86,7 @@ class HeartbeatState:
 
         Returns:
             Dictionary representation of the heartbeat state.
+
         """
         return {
             "timestamp": self.timestamp,
@@ -104,6 +107,7 @@ class HeartbeatState:
 
         Raises:
             KeyError: If required fields are missing.
+
         """
         return cls(
             timestamp=data["timestamp"],
@@ -154,6 +158,7 @@ class Heartbeat:
         ...     target=ws_manager,
         ...     on_target_dead=lambda: restart_ws(),
         ... )
+
     """
 
     def __init__(
@@ -179,6 +184,7 @@ class Heartbeat:
             on_target_dead: Callback invoked when target is detected as dead.
             on_beat: Callback invoked after each successful beat.
             metadata: Optional dict included in each heartbeat.
+
         """
         self._state_file = Path(state_file) if state_file else None
         self._on_missed_beat = on_missed_beat
@@ -247,6 +253,7 @@ class Heartbeat:
 
         Raises:
             HeartbeatError: If heartbeat is already running.
+
         """
         with self._lock:
             if self._running:
@@ -279,6 +286,7 @@ class Heartbeat:
 
         Raises:
             HeartbeatError: If state file is configured and cannot be written.
+
         """
         # Skip file write if no state_file configured
         if self._state_file is None:
@@ -333,6 +341,7 @@ class Heartbeat:
 
         Raises:
             HeartbeatError: If heartbeat is already running.
+
         """
         with self._lock:
             if self._running:
@@ -424,6 +433,7 @@ class Heartbeat:
             >>> state = Heartbeat.read_state("/tmp/bot.heartbeat")  # doctest: +SKIP
             >>> if state:  # doctest: +SKIP
             ...     print(f"Last beat: {state.timestamp}")
+
         """
         path = Path(state_file)
         if not path.exists():
@@ -448,6 +458,7 @@ class Heartbeat:
         Examples:
             >>> Heartbeat.is_alive("/tmp/bot.heartbeat", max_age_seconds=30)  # doctest: +SKIP
             True
+
         """
         state = Heartbeat.read_state(state_file)
         if state is None:

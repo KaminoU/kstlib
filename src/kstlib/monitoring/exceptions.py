@@ -26,6 +26,7 @@ class CollectorError(MonitoringError):
     Attributes:
         collector_name: Name of the failed collector.
         cause: The underlying exception that caused the failure.
+
     """
 
     def __init__(self, collector_name: str, cause: Exception) -> None:
@@ -34,6 +35,7 @@ class CollectorError(MonitoringError):
         Args:
             collector_name: Name of the failed collector.
             cause: The exception that caused the failure.
+
         """
         self.collector_name = collector_name
         self.cause = cause

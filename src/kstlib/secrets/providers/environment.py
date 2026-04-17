@@ -31,6 +31,7 @@ class EnvironmentProvider(SecretProvider):
         Args:
             settings: Optional mapping that may provide ``prefix`` or
                 ``delimiter`` keys overriding the defaults.
+
         """
         if not settings:
             return
@@ -46,6 +47,7 @@ class EnvironmentProvider(SecretProvider):
         Returns:
             A ``SecretRecord`` populated from the environment when present,
             otherwise ``None``.
+
         """
         env_key = self._build_env_key(request)
         value = os.getenv(env_key)

@@ -20,6 +20,7 @@ class StatusLevel(IntEnum):
         WARNING: Degraded but functional (#F1C40F yellow).
         ERROR: Service failure (#E85A4F red).
         CRITICAL: Critical failure requiring immediate action (#c0392b dark red).
+
     """
 
     OK = 10
@@ -41,6 +42,7 @@ class Renderable(Protocol):
 
         Returns:
             HTML string representation.
+
         """
         ...  # pragma: no cover
 

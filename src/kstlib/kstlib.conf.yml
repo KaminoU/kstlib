@@ -2,6 +2,27 @@
 # This file is used to set default values for the kstlib library.
 
 ###########################################################################################
+## Internal kstlib behavior (opt-in switches controlling library-side features)
+###########################################################################################
+kstlib:
+  # Internal logging activation
+  # ---------------------------
+  # Controls whether kstlib's own log records (from kstlib.auth, kstlib.mail,
+  # kstlib.rapi, ...) are emitted when a consumer never calls init_logging()
+  # explicitly. Disabled by default so applications embedding kstlib stay
+  # silent unless they opt in.
+  #
+  # When enabled, the first call to get_logger() reads this section and
+  # triggers init_logging(preset=...) transparently. Any error (missing
+  # config file, parse failure, etc.) is swallowed silently so kstlib can
+  # never break the host application through this cascade.
+  logging:
+    enabled: false   # Opt-in: set to true to activate internal kstlib logs
+    preset: prod     # Preset used by auto-init: dev, prod, debug, trace, ...
+                     # Unknown presets fall back to "prod" with a one-line
+                     # stderr notice listing available names.
+
+###########################################################################################
 ## Datetime formatting (global settings for timestamp display)
 ###########################################################################################
 datetime:
@@ -332,6 +353,38 @@ ui:
 ## Mail configuration
 ###########################################################################################
 mail:
+  # Default named preset used when MailBuilder() is instantiated without
+  # transport= or preset=. Must match a key under mail.presets below.
+  # Leave null to force callers to pass transport= or preset= explicitly.
+  default: null
+
+  # Named transport presets. Each preset declares a "transport" field
+  # (smtp or resend) and backend-specific parameters. Define your own
+  # presets here and reference them via MailBuilder(preset="name").
+  presets: {}
+  # Example presets:
+  #
+  # corporate:
+  #   transport: smtp
+  #   host: smtp-secure.corp.local
+  #   port: 25
+  #   login: svc_user
+  #   password: "secret"
+  #   starttls: false
+  #   ssl: false
+  #   timeout: 30
+  #
+  # transactional:
+  #   transport: resend
+  #   api_key: re_xxxxxxxxxxxxx
+  #   timeout: 30
+  #
+  # local:
+  #   transport: smtp
+  #   host: localhost
+  #   port: 1025
+  #   starttls: false
+
   # Attachment and message limits
   limits:
     # Maximum size for a single attachment

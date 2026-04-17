@@ -119,6 +119,13 @@ Complete API documentation for all `kstlib` modules. Each page documents public 
 `PathGuardrails`, permissions, path validation.
 :::
 
+:::{grid-item-card} transform
+:link: transform
+:link-type: doc
+
+`TransformChain`, primitives (base64, zlib, json, xml), composed patches.
+:::
+
 :::{grid-item-card} ui
 :link: ui/index
 :link-type: doc
@@ -182,6 +189,7 @@ rapi
 resilience
 secrets
 secure
+transform
 ui/index
 utils
 websocket

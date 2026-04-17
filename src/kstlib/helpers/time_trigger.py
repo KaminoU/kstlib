@@ -24,6 +24,7 @@ Examples:
     >>> trigger = TimeTrigger("8h")
     >>> await trigger.wait_for_boundary()  # doctest: +SKIP
     >>> await restart_ws()  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -71,6 +72,7 @@ def _parse_modulo(modulo: str) -> int:
 
     Raises:
         InvalidModuloError: If format is invalid or out of bounds.
+
     """
     match = MODULO_PATTERN.match(modulo.strip())
     if not match:
@@ -104,6 +106,7 @@ class TimeTriggerStats:
         triggers_fired: Number of times boundary was triggered.
         callbacks_invoked: Number of callback invocations.
         last_trigger_at: ISO timestamp of last trigger.
+
     """
 
     triggers_fired: int = 0
@@ -158,6 +161,7 @@ class TimeTrigger:
         >>> trigger = TimeTrigger("1d", timezone="Europe/Paris")
         >>> trigger.timezone
         'Europe/Paris'
+
     """
 
     def __init__(
@@ -171,6 +175,7 @@ class TimeTrigger:
         Args:
             modulo: Duration string (e.g., "30m", "4h", "1d").
             timezone: Timezone for boundary calculations.
+
         """
         self._modulo_str = modulo
         self._modulo_seconds = _parse_modulo(modulo)
@@ -221,6 +226,7 @@ class TimeTrigger:
             >>> remaining = trigger.time_until_next()  # doctest: +SKIP
             >>> 0 <= remaining <= 14400  # doctest: +SKIP
             True
+
         """
         elapsed = self._seconds_into_period()
         if elapsed == 0:
@@ -245,6 +251,7 @@ class TimeTrigger:
             True  # If time is 00:00:00, 04:00:00, etc.
             >>> trigger.is_at_boundary(margin=5.0)  # doctest: +SKIP
             True  # If time is within 5 seconds of boundary
+
         """
         elapsed = self._seconds_into_period()
         # Check if we're near 0 (just passed) or near modulo (about to hit)
@@ -266,6 +273,7 @@ class TimeTrigger:
             >>> trigger = TimeTrigger("4h")
             >>> if trigger.should_trigger(margin=60):  # doctest: +SKIP
             ...     print("Boundary in less than 60 seconds!")
+
         """
         remaining = self.time_until_next()
         return remaining <= margin
@@ -281,6 +289,7 @@ class TimeTrigger:
             >>> next_time = trigger.next_boundary()  # doctest: +SKIP
             >>> print(next_time.to_iso8601_string())  # doctest: +SKIP
             '2024-01-15T08:00:00+00:00'
+
         """
         now = pendulum.now(self._timezone)
         seconds_until = self.time_until_next()
@@ -297,6 +306,7 @@ class TimeTrigger:
             >>> prev_time = trigger.previous_boundary()  # doctest: +SKIP
             >>> print(prev_time.to_iso8601_string())  # doctest: +SKIP
             '2024-01-15T04:00:00+00:00'
+
         """
         now = pendulum.now(self._timezone)
         elapsed = self._seconds_into_period()
@@ -315,6 +325,7 @@ class TimeTrigger:
             >>> trigger = TimeTrigger("30m")
             >>> await trigger.wait_for_boundary()  # doctest: +SKIP
             >>> print("Boundary reached!")  # doctest: +SKIP
+
         """
         remaining = self.time_until_next() - margin
         if remaining > 0:
@@ -347,6 +358,7 @@ class TimeTrigger:
             ...     trigger.run_on_boundary(restart, margin=30)
             ... )
             >>> # Later: trigger.stop()
+
         """
         self._running = True
         self._stop_event.clear()

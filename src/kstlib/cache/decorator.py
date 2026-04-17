@@ -30,6 +30,7 @@ def _get_cache_config() -> dict[str, Any]:
 
     Returns:
         Cache configuration dict with defaults
+
     """
     try:
         config = get_config()
@@ -70,6 +71,7 @@ def _create_strategy(
 
     Returns:
         Configured cache strategy instance
+
     """
     config = _get_cache_config()
 
@@ -181,6 +183,7 @@ def cache(
         >>> double.cache_info()
         {'strategy': 'ttl', 'is_async': False}
         >>> double.cache_clear()  # Clear cached values
+
     """
 
     def decorator(f: F) -> F:

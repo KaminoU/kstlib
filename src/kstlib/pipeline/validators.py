@@ -17,6 +17,11 @@ from kstlib.ops.validators import (
     validate_env,
 )
 from kstlib.pipeline.exceptions import PipelineConfigError
+from kstlib.utils.validators import (
+    CALLABLE_TARGET_PATTERN,
+    MAX_CALLABLE_TARGET_LENGTH,
+    _validate_callable_target_str,
+)
 
 # ============================================================================
 # Constants - Hard Limits
@@ -33,12 +38,6 @@ MAX_PIPELINE_STEPS = 50
 
 #: Maximum number of arguments for a step.
 MAX_STEP_ARGS = 50
-
-#: Maximum length of a callable target string.
-MAX_CALLABLE_TARGET_LENGTH = 256
-
-#: Pattern for valid callable targets (module.path:function_name).
-CALLABLE_TARGET_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$")
 
 #: Pattern for valid Python module names.
 MODULE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]*$")
@@ -79,6 +78,7 @@ def validate_step_name(name: str) -> str:
         Traceback (most recent call last):
             ...
         kstlib.pipeline.exceptions.PipelineConfigError: Step name cannot be empty
+
     """
     if not name:
         raise PipelineConfigError("Step name cannot be empty")
@@ -110,13 +110,12 @@ def validate_callable_target(target: str) -> str:
         'mymodule:run'
         >>> validate_callable_target("my.pkg.module:do_work")
         'my.pkg.module:do_work'
+
     """
-    if not target:
-        raise PipelineConfigError("Callable target cannot be empty")
-    if len(target) > MAX_CALLABLE_TARGET_LENGTH:
-        raise PipelineConfigError(f"Callable target too long (max {MAX_CALLABLE_TARGET_LENGTH} chars)")
-    if not CALLABLE_TARGET_PATTERN.match(target):
-        raise PipelineConfigError(f"Invalid callable target format: {target!r} (expected 'module.path:function_name')")
+    try:
+        _validate_callable_target_str(target)
+    except ValueError as exc:
+        raise PipelineConfigError(str(exc)) from exc
     return target
 
 
@@ -137,6 +136,7 @@ def validate_module_name(module: str) -> str:
         'mymodule'
         >>> validate_module_name("my.package.module")
         'my.package.module'
+
     """
     if not module:
         raise PipelineConfigError("Module name cannot be empty")
@@ -147,7 +147,7 @@ def validate_module_name(module: str) -> str:
     return module
 
 
-def validate_step_config(  # noqa: PLR0913
+def validate_step_config(
     *,
     name: str,
     step_type: str,
@@ -173,6 +173,7 @@ def validate_step_config(  # noqa: PLR0913
 
     Raises:
         PipelineConfigError: If configuration is invalid.
+
     """
     validate_step_name(name)
 
@@ -213,6 +214,7 @@ def validate_pipeline_config(
 
     Raises:
         PipelineConfigError: If configuration is invalid.
+
     """
     if step_count == 0:
         raise PipelineConfigError("Pipeline must have at least one step")

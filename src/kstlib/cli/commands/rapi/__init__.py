@@ -2,16 +2,47 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import click
 import typer
 from typer.core import TyperGroup
 
-from .call import call
-from .list import list_endpoints
-from .show import show_endpoint
+from kstlib.cli.common import console
+from kstlib.rapi import load_rapi_config
+
+if TYPE_CHECKING:
+    from kstlib.rapi.config import RapiConfigManager
 
 # Known subcommands that should not be treated as endpoints
 _SUBCOMMANDS = {"list", "call", "show", "--help", "-h", "help"}
+
+
+def _load_config_or_exit() -> RapiConfigManager:
+    """Load rapi config or exit the CLI with a friendly error message.
+
+    Shared by ``rapi list``, ``rapi show``, and ``rapi call`` to keep
+    a single failure mode for config loading.
+
+    Returns:
+        The loaded RapiConfigManager.
+
+    Raises:
+        typer.Exit: Exit code 1 if loading fails for any reason.
+
+    """
+    try:
+        return load_rapi_config()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        console.print(f"[red]Failed to load rapi config: {exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+
+# Sub-command imports come AFTER _load_config_or_exit so the callers
+# can import it without triggering a circular-import failure.
+from .call import call  # noqa: E402
+from .list import list_endpoints  # noqa: E402
+from .show import show_endpoint  # noqa: E402
 
 
 class RapiGroup(TyperGroup):
@@ -52,6 +83,7 @@ def register_cli(app: typer.Typer) -> None:
 
 
 __all__ = [
+    "_load_config_or_exit",
     "call",
     "list_endpoints",
     "rapi_app",

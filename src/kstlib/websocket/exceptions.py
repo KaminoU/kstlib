@@ -9,6 +9,7 @@ Example:
     ...     await manager.connect()
     ... except WebSocketError as e:  # doctest: +SKIP
     ...     print(f"WebSocket error: {e}")
+
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ class WebSocketConnectionError(WebSocketError, ConnectionError):
         url: The WebSocket URL that failed to connect.
         attempts: Number of connection attempts made.
         last_error: The underlying error from the last attempt.
+
     """
 
     def __init__(
@@ -61,6 +63,7 @@ class WebSocketConnectionError(WebSocketError, ConnectionError):
             url: The WebSocket URL that failed to connect.
             attempts: Number of connection attempts made.
             last_error: The underlying error from the last attempt.
+
         """
         super().__init__(message)
         self.url = url
@@ -77,6 +80,7 @@ class WebSocketClosedError(WebSocketError):
     Attributes:
         code: WebSocket close code (1000-4999).
         reason: Optional human-readable close reason.
+
     """
 
     def __init__(
@@ -92,6 +96,7 @@ class WebSocketClosedError(WebSocketError):
             message: Human-readable error description.
             code: WebSocket close code (1000-4999).
             reason: Optional human-readable close reason.
+
         """
         super().__init__(message)
         self.code = code
@@ -107,6 +112,7 @@ class WebSocketTimeoutError(WebSocketError, TimeoutError):
     Attributes:
         operation: The operation that timed out (connect, ping, receive).
         timeout: The timeout value in seconds.
+
     """
 
     def __init__(
@@ -122,6 +128,7 @@ class WebSocketTimeoutError(WebSocketError, TimeoutError):
             message: Human-readable error description.
             operation: The operation that timed out.
             timeout: The timeout value in seconds.
+
         """
         super().__init__(message)
         self.operation = operation
@@ -137,6 +144,7 @@ class WebSocketReconnectError(WebSocketError):
     Attributes:
         attempts: Total number of reconnection attempts made.
         last_error: The underlying error from the last attempt.
+
     """
 
     def __init__(
@@ -152,6 +160,7 @@ class WebSocketReconnectError(WebSocketError):
             message: Human-readable error description.
             attempts: Total number of reconnection attempts made.
             last_error: The underlying error from the last attempt.
+
         """
         super().__init__(message)
         self.attempts = attempts
@@ -166,6 +175,7 @@ class WebSocketProtocolError(WebSocketError):
 
     Attributes:
         protocol_error: Description of the protocol violation.
+
     """
 
     def __init__(
@@ -179,6 +189,7 @@ class WebSocketProtocolError(WebSocketError):
         Args:
             message: Human-readable error description.
             protocol_error: Description of the protocol violation.
+
         """
         super().__init__(message)
         self.protocol_error = protocol_error
@@ -193,6 +204,7 @@ class WebSocketQueueFullError(WebSocketError):
     Attributes:
         queue_size: Maximum queue size that was exceeded.
         dropped_count: Number of messages dropped due to queue overflow.
+
     """
 
     def __init__(
@@ -208,6 +220,7 @@ class WebSocketQueueFullError(WebSocketError):
             message: Human-readable error description.
             queue_size: Maximum queue size that was exceeded.
             dropped_count: Number of messages dropped due to queue overflow.
+
         """
         super().__init__(message)
         self.queue_size = queue_size

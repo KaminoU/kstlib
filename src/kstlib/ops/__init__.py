@@ -35,6 +35,7 @@ Examples:
 Note:
     The attach() method uses os.execvp and replaces the current process.
     It does not return on success.
+
 """
 
 from kstlib.ops.base import AbstractRunner

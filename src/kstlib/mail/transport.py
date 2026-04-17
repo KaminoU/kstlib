@@ -19,18 +19,19 @@ Examples:
         smtp = SMTPTransport(host="smtp.example.com", port=587)
         async_transport = AsyncTransportWrapper(smtp)
         await async_transport.send(message)
+
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging  # noqa: TC003 - used for type hint in function signature
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from kstlib.mail.exceptions import MailTransportError
 
 if TYPE_CHECKING:
+    import logging
     from concurrent.futures import ThreadPoolExecutor
     from email.message import EmailMessage
 
@@ -49,6 +50,7 @@ class MailTransport(ABC):
                 def send(self, message: EmailMessage) -> None:
                     # Send the message
                     pass
+
     """
 
     @abstractmethod
@@ -60,6 +62,7 @@ class MailTransport(ABC):
 
         Raises:
             MailTransportError: If delivery fails.
+
         """
 
 
@@ -75,6 +78,7 @@ class AsyncMailTransport(ABC):
                 async def send(self, message: EmailMessage) -> None:
                     async with httpx.AsyncClient() as client:
                         await client.post(...)
+
     """
 
     @abstractmethod
@@ -86,6 +90,7 @@ class AsyncMailTransport(ABC):
 
         Raises:
             MailTransportError: If delivery fails.
+
         """
 
 
@@ -117,6 +122,7 @@ class AsyncTransportWrapper(AsyncMailTransport):
 
             executor = ThreadPoolExecutor(max_workers=2)
             async_smtp = AsyncTransportWrapper(smtp, executor=executor)
+
     """
 
     def __init__(
@@ -130,6 +136,7 @@ class AsyncTransportWrapper(AsyncMailTransport):
         Args:
             transport: The sync transport to wrap.
             executor: Optional custom thread pool executor.
+
         """
         self._transport = transport
         self._executor = executor
@@ -150,6 +157,7 @@ class AsyncTransportWrapper(AsyncMailTransport):
 
         Raises:
             MailTransportError: If the underlying transport fails.
+
         """
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
@@ -188,6 +196,7 @@ def handle_http_error_response(
         Traceback (most recent call last):
             ...
         MailTransportError: MyAPI error: Bad request
+
     """
     error_msg: str
     error_code: int | str = response.status_code

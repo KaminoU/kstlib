@@ -1,0 +1,354 @@
+# =============================================================================
+# kstlib.conf.yml - Complete configuration example for SAS Viya (viyapi)
+# =============================================================================
+#
+# This file demonstrates how to use kstlib.rapi + kstlib.transform together
+# for SAS Viya REST API calls and content transfer operations.
+#
+# Two main sections:
+#   rapi:       REST API client configuration (endpoints, auth, servers)
+#   transforms: Bidirectional data transformation engine (decode/patch/encode)
+#
+# =============================================================================
+# TRANSFORM SECTION - Preset vs Usage pattern
+# =============================================================================
+#
+# The transforms section uses a PRESET + USAGE pattern:
+#
+#   1. PRESET - A reusable decode/encode chain, defined once.
+#      Example: sas_report decodes base64 → zlib → JSON → XML
+#      DO NOT modify a preset - it's a shared building block.
+#
+#   2. USAGE - A chain that inherits from a preset via `preset:`.
+#      It overrides ONLY the `patch:` block for your specific environment.
+#      Example: patch_report replaces hostnames and caslibs.
+#
+# To create a new usage chain:
+#   1. Copy the patch_report block
+#   2. Give it a unique name (e.g. patch_prod, patch_staging)
+#   3. Set `preset: sas_report` (inherits the decode/encode chain)
+#   4. Override only the `patch:` block with your mapping or callable
+#
+# To allow an external callable module:
+#   1. Add the module path to transforms.security.allowed_callable_modules
+#   2. Use it in a chain's patch.callable field
+#
+# =============================================================================
+
+# =============================================================================
+# RAPI SECTION - REST API client for SAS Viya
+# =============================================================================
+#
+# MULTI-ENVIRONMENT PATTERN - same API, different environments
+# =============================================================================
+# For SAS Viya source/target migration, do NOT use the rapi.servers feature.
+# That feature is for HETEROGENEOUS APIs (different stacks, different auth).
+#
+# Instead, use environment variables. The ${VAR} substitution is applied
+# globally at YAML load time, so token_path supports dynamic profile
+# selection natively.
+#
+# Two env vars drive the multi-environment pattern:
+#
+#   VIYA_HOST     -> server hostname (resolved into base_url)
+#   ACTIVE_VIYA   -> credential profile name inside ~/.sas/credentials.json
+#
+# Usage - export from source server:
+#   export VIYA_HOST=lxd666
+#   export ACTIVE_VIYA=source
+#   kstlib rapi transfer.export-jobs-create ...
+#
+# Usage - import to target server:
+#   export VIYA_HOST=lxi777
+#   export ACTIVE_VIYA=target
+#   kstlib rapi transfer.packages-upload ...
+#
+# Expected ~/.sas/credentials.json structure:
+#   {
+#     "Default": {"access-token": "...", "refresh-token": "..."},
+#     "source":  {"access-token": "...", "refresh-token": "..."},
+#     "target":  {"access-token": "...", "refresh-token": "..."}
+#   }
+#
+# Each kstlib invocation re-loads the YAML and re-expands ${VIYA_HOST} +
+# ${ACTIVE_VIYA} against the current shell env, so switching environment
+# is a simple matter of changing the two variables before each command.
+# =============================================================================
+
+rapi:
+  # Defaults inherited by all included *.rapi.yml files.
+  # Individual endpoint files can override any of these values.
+  defaults:
+    base_url: https://${VIYA_HOST:-your-viya-server.example.com}
+    credentials:
+      type: file
+      path: ~/.sas/credentials.json
+      # ACTIVE_VIYA selects the profile inside credentials.json (default: Default)
+      token_path: ".${ACTIVE_VIYA:-Default}['access-token']"
+    auth: bearer
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+
+  # =============================================================================
+  # HETEROGENEOUS APIs - different stacks, different auth
+  # =============================================================================
+  # The rapi.servers feature lets a single project switch between completely
+  # different APIs (e.g. github + jira + slack). Each profile defines its own
+  # base_url, credentials, and headers.
+  #
+  # When NOT to use this:
+  #   - SAS Viya source/target migration (use ACTIVE_VIYA env var, see above).
+  #
+  # Usage:
+  #   kstlib rapi --server github github.repos-list
+  #   kstlib rapi --server jira jira.issues-list
+  #
+  # The --server flag overrides any server: directive in *.rapi.yml files.
+  # Cascade priority (highest to lowest): CLI --server > endpoint server: >
+  # file server: > defaults.
+  #
+  # NOTE: this section is illustrative for the SAS Viya example file.
+  # For a real Viya project you usually do not need rapi.servers at all.
+  # =============================================================================
+  servers:
+    github:
+      base_url: https://api.github.com
+      credentials:
+        type: env
+        var: GITHUB_TOKEN
+      headers:
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+
+    jira:
+      base_url: https://mycompany.atlassian.net
+      auth: api_key
+      credentials:
+        type: env
+        var: JIRA_API_KEY
+
+  # Pretty-print settings for CLI output
+  pretty_render:
+    json: 2
+    xml: true
+
+  # Include all API definitions from subdirectories.
+  # Each root.rapi.yml includes its sub-modules (annotations, members, etc.)
+  include:
+    - "./*/root.rapi.yml"
+
+  # Safeguard: only DELETE requires confirmation (PUT is common in Viya)
+  safeguard:
+    required_methods:
+      - DELETE
+
+# SSL configuration for corporate CA (uncomment if needed)
+# ssl:
+#   ca_bundle: /opt/sas/viya/config/etc/SASSecurityCertificateFramework/cacerts/trustedcerts.pem
+
+
+# =============================================================================
+# TRANSFORMS SECTION - Bidirectional data transformation engine
+# =============================================================================
+
+transforms:
+  # Security: whitelist of allowed callable modules for patch functions.
+  # Only modules listed here can be used in patch.callable fields.
+  # If this section is absent, no external callables are allowed.
+  security:
+    allowed_callable_modules:
+      - myproject.transforms       # replace with your own module
+
+  chains:
+
+    # -----------------------------------------------------------------
+    # PRESET: sas_report
+    # -----------------------------------------------------------------
+    # Reusable decode/encode chain for SAS Visual Analytics report blobs.
+    # Handles the full round-trip:
+    #   base64 → zlib (with 3-byte SAS header) → JSON → XML
+    #
+    # DO NOT modify this preset - create a usage chain instead.
+    # Usage: reference via `preset: sas_report` in your chain.
+    # -----------------------------------------------------------------
+    sas_report:
+      forward:
+        - base64
+        - zlib:
+            skip_bytes: 3           # Strip M\x15\x04 SAS proprietary header
+        - json:
+            extract: "transferableContent.content"   # Extract BIRD XML from envelope
+        # Note: no xml primitive here - patch operates on raw XML string.
+        # Add `- xml` if you need to patch via Element API instead.
+
+      backward:
+        - json:
+            wrap: "transferableContent.content"      # Restore into original envelope
+        - zlib:
+            prepend_bytes: "4d1504"  # Re-add M\x15\x04 SAS header before zlib
+        - base64
+
+    # -----------------------------------------------------------------
+    # USAGE: patch_report
+    # -----------------------------------------------------------------
+    # Simple environment migration using string mapping.
+    # Inherits the full decode/encode chain from sas_report preset.
+    # Override ONLY the patch: block for your source/target environment.
+    #
+    # Example: migrate reports from deamon-666 to openbar-777
+    # and change CAS library from CASUSER to a production caslib.
+    # -----------------------------------------------------------------
+    patch_report:
+      preset: sas_report            # inherit decode/encode chain
+
+      patch:
+        depth: all                  # apply replacements across entire XML
+        mapping:
+          # Hostname migration (WebContent URLs, SASJobExecution links)
+          "https://source-host.kst/": "https://target-host.kst/"
+
+          # CAS library migration (all CasResource tags)
+          'library="CASUSER"': 'library="TARGET_CASLIB"'
+
+          # Add more mappings as needed:
+          # '_program=%2FProjects%2FOLD_PATH': '_program=%2FProjects%2FNEW_PATH'
+
+    # -----------------------------------------------------------------
+    # USAGE: patch_dynamic
+    # -----------------------------------------------------------------
+    # Dynamic environment migration using a Python callable.
+    # Values are injected from the pipeline context at runtime via
+    # {{variable}} syntax - no hardcoded hostnames or caslibs.
+    #
+    # The callable receives the decoded XML string + resolved args,
+    # and returns the patched XML string.
+    # -----------------------------------------------------------------
+    patch_dynamic:
+      preset: sas_report            # inherit decode/encode chain
+
+      patch:
+        callable: myproject.transforms:patch_cas_resources
+        args:
+          source_host: "{{source_host}}"      # injected from pipeline context
+          target_host: "{{target_host}}"      # injected from pipeline context
+          cas_mapping: "{{cas_mapping}}"      # injected from pipeline context
+
+    # -----------------------------------------------------------------
+    # EXAMPLE: Adding your own usage chain
+    # -----------------------------------------------------------------
+    # patch_staging:
+    #   preset: sas_report
+    #   patch:
+    #     mapping:
+    #       "https://prod.example.com/": "https://staging.example.com/"
+    #       'library="PROD_LIB"': 'library="STAGING_LIB"'
+
+    # =================================================================
+    # COMPOSED PATCHES - global + targeted with filters
+    # =================================================================
+    #
+    # When migrating a package containing many objects (e.g. 200 reports),
+    # an inline `patch:` is applied identically to all of them. That is
+    # fragile: a report-specific mapping can collide with unrelated reports.
+    #
+    # `composed_patch` solves this by composing reusable patch-only chains:
+    #
+    #   - global_patches:   applied to EVERY object (e.g. host remapping)
+    #   - targeted_patches: applied only when a filter matches the object
+    #                       metadata (content_type and/or name glob)
+    #
+    # CASCADE BEHAVIOR - last applied wins
+    # ------------------------------------
+    # global_patches run first (in declaration order), then each
+    # targeted_patches entry is evaluated in declaration order; if its
+    # filter matches the object, its patches run (in order). If multiple
+    # entries mutate the same field, **the LAST one wins**.
+    #
+    # Order your `targeted_patches` from MOST GENERAL to MOST SPECIFIC.
+    # This is the OPPOSITE of CSS specificity - kstlib does not score
+    # filters, it just runs them in order.
+    #
+    # Filter fields are ANDed: every non-wildcard field must match.
+    # Use `"*"` to mean "any value".
+    # -----------------------------------------------------------------
+
+    # Patch-only chains (no forward/backward, only inline patch).
+    # These are reusable building blocks referenced by composed chains.
+
+    remap_host:
+      patch:
+        mapping:
+          "https://source-host.kst/": "https://target-host.kst/"
+
+    remap_caslib_global:
+      patch:
+        mapping:
+          'library="CASUSER"': 'library="PROD_GLOBAL_LIB"'
+
+    remap_caslib_r220:
+      patch:
+        mapping:
+          'library="CASUSER"': 'library="R220_DEDICATED_LIB"'
+
+    # Orchestrator chain - uses sas_report for decode/encode and applies
+    # composed patches per object based on metadata.
+    patch_report_composed:
+      preset: sas_report
+
+      # Applied to every object regardless of filter.
+      global_patches:
+        - remap_host
+
+      # Applied only when the filter matches the object metadata.
+      # IMPORTANT: order = most general → most specific
+      # because LAST applied wins on conflict.
+      targeted_patches:
+        # 1. R220_* reports get the dedicated R220 caslib
+        - filter:
+            content_type: report
+            name: "R220_*"
+          patches:
+            - remap_caslib_r220
+
+        # 2. All other reports get the generic global caslib
+        - filter:
+            content_type: report
+            name: "*"
+          patches:
+            - remap_caslib_global
+
+    # Usage from Python (the package iteration lives in YOUR code,
+    # not in kstlib.transform - the module stays domain-agnostic):
+    #
+    #     from kstlib.transform import TransformChain, load_transform_config
+    #     import json, base64
+    #
+    #     config = load_transform_config()
+    #     chain = TransformChain.from_config("patch_report_composed", config)
+    #
+    #     with open("MyPackage.json") as f:
+    #         pkg = json.load(f)
+    #
+    #     for detail in pkg["transferDetails"]:
+    #         to = detail["transferObject"]
+    #         summary = to.get("summary", {})
+    #         metadata = {
+    #             "content_type": summary.get("type"),  # "report" / "folder" / "file"
+    #             "name": summary.get("name"),
+    #         }
+    #         if summary.get("type") == "report":
+    #             to["content"] = chain.transform(to["content"], metadata=metadata)
+    #
+    #     with open("MyPackage_patched.json", "w") as f:
+    #         json.dump(pkg, f)
+    #
+    # For a report named "R220_ASTRO":
+    #   1. remap_host             → host rewritten
+    #   2. remap_caslib_r220      → CASUSER → R220_DEDICATED_LIB
+    #   (the wildcard fallback also matches but its mapping no longer
+    #    finds "CASUSER" → final value remains R220_DEDICATED_LIB)
+    #
+    # For a report named "ORION_FOO":
+    #   1. remap_host             → host rewritten
+    #   2. remap_caslib_global    → CASUSER → PROD_GLOBAL_LIB

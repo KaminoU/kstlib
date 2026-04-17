@@ -74,6 +74,92 @@ log = LogManager(preset="debug")  # Debug level (use TRACE for max verbosity)
 | `debug` | DEBUG | OFF | Yes |
 | `trace` | TRACE | TRACE | Yes |
 
+### Isolated vs registered instances
+
+`LogManager` has two modes controlled by the `register` constructor flag:
+
+```python
+# Isolated (default): safe for local use and tests. Does NOT touch
+# logging.getLogger("kstlib"), so you can have many LogManager objects
+# side by side without interfering with each other.
+log = LogManager(preset="dev")
+
+# Registered: bootstraps this instance as the global root of the
+# "kstlib" logger hierarchy. logging.getLogger("kstlib") returns the
+# same object, and "kstlib.*" child loggers propagate records to it.
+log = LogManager(preset="dev", register=True)
+```
+
+| Mode | `logging.getLogger("kstlib")` | `.trace` / `.success` on child loggers | Typical use |
+| - | - | - | - |
+| `register=False` (default) | Standard `logging.Logger` | Not patched | Tests, local scripts, multiple isolated instances |
+| `register=True` | This `LogManager` instance | Patched on the base class | Application bootstrap, host-wide logging |
+
+`init_logging()` is a thin backward-compatible alias. These two calls are
+equivalent:
+
+```python
+from kstlib.logging import LogManager, init_logging
+
+# Preferred: explicit register flag
+root = LogManager(preset="dev", register=True)
+
+# Legacy alias (kept for backward compatibility)
+root = init_logging(preset="dev")
+```
+
+### Internal logging activation
+
+By default, libraries that import kstlib (`kstlib.mail`, `kstlib.rapi`,
+`kstlib.auth`, ...) stay silent: no log records are emitted unless the
+application explicitly calls `init_logging()`. This is the right default
+for libraries - the host app should decide when to turn logging on.
+
+If you embed kstlib inside a larger application and want its internal
+logs to appear without writing any Python, flip the opt-in switch in
+`kstlib.conf.yml`:
+
+```yaml
+kstlib:
+  logging:
+    enabled: true   # turn on internal kstlib logs
+    preset: dev     # dev | prod | debug | trace | <custom preset>
+```
+
+The first call to `get_logger()` from any kstlib module reads this
+section and triggers `LogManager(preset=..., register=True)`
+transparently. Later calls are no-ops - the root logger is a singleton.
+The auto-init path is wrapped in a broad `try/except` so a missing,
+unreadable, or invalid config file can NEVER break the host application.
+At worst you get the default Python logging behavior (silent).
+
+If the requested preset does not exist (typo, custom preset removed,
+etc.), kstlib falls back to `prod` and writes a single one-line notice
+to `stderr`. The notice is emitted at most once per process even when
+`get_logger()` is called many times with the same broken config:
+
+```text
+kstlib logging: preset 'foobar' not found, available: ['debug', 'dev', 'prod', 'trace'], falling back to 'prod'.
+```
+
+| Configuration state | Behavior |
+| - | - |
+| Section missing or `enabled: false` | Silent. No auto-init, no stderr output. |
+| `enabled: true`, valid preset | Auto-init with the requested preset. |
+| `enabled: true`, preset missing | Auto-init with `prod` as the default. |
+| `enabled: true`, preset unknown | One-shot stderr notice + fallback to `prod`. |
+| Config file unreadable or parse error | Silent fallback. No exception escapes. |
+
+Explicit `LogManager(register=True)` or `init_logging(preset=...)` calls
+from application code still take precedence over the config-driven path.
+
+```{tip}
+In production, you usually want `enabled: true` + `preset: prod` so
+that kstlib's errors and warnings reach your log pipeline. For local
+development, `preset: dev` gives you a colorful console with DEBUG
+level and full tracebacks.
+```
+
 ### Output Modes
 
 ```python
@@ -270,7 +356,8 @@ Full autodoc: {doc}`../../api/logging`
 
 | Class/Method | Description |
 | - | - |
-| `LogManager(preset=..., config=...)` | Main logger class |
+| `LogManager(preset=..., config=..., register=False)` | Main logger class. `register=True` installs it as the global kstlib root. |
+| `init_logging(preset=..., config=...)` | Backward-compatible alias of `LogManager(register=True)`. |
 | `.trace()`, `.debug()`, `.info()`, etc. | Sync logging methods |
 | `.atrace()`, `.adebug()`, `.ainfo()`, etc. | Async logging methods |
 | `.success()` | SUCCESS level (25) - between INFO and WARNING |

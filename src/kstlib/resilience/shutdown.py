@@ -54,6 +54,7 @@ class CleanupCallback:
         ... )
         >>> (cb.name, cb.priority, cb.timeout)
         ('db_close', 50, 5.0)
+
     """
 
     name: str
@@ -88,6 +89,7 @@ class GracefulShutdown:
         >>> with GracefulShutdown() as shutdown:  # doctest: +SKIP
         ...     shutdown.register("cleanup", close_resources)
         ...     run_application()
+
     """
 
     # Signals not available on Windows
@@ -107,6 +109,7 @@ class GracefulShutdown:
             timeout: Total timeout for all callbacks. Uses config if None.
             signals: Signals to handle. Auto-detects platform if None.
             force_exit_code: Exit code when timeout exceeded.
+
         """
         # Load timeout from config if not provided
         if timeout is None:
@@ -178,6 +181,7 @@ class GracefulShutdown:
             >>> shutdown.register("db", lambda: print("closing db"), priority=10)
             >>> "db" in [cb.name for cb in shutdown._callbacks.values()]
             True
+
         """
         with self._lock:
             if self._shutting_down:
@@ -210,6 +214,7 @@ class GracefulShutdown:
             True
             >>> shutdown.unregister("nonexistent")
             False
+
         """
         with self._lock:
             if name in self._callbacks:
@@ -222,6 +227,7 @@ class GracefulShutdown:
 
         Raises:
             ShutdownError: If handlers already installed.
+
         """
         with self._lock:
             if self._installed:
@@ -350,6 +356,7 @@ class GracefulShutdown:
 
         Returns:
             True if shutdown was triggered, False if timeout.
+
         """
         return self._shutdown_event.wait(timeout=timeout)
 
@@ -361,6 +368,7 @@ class GracefulShutdown:
 
         Returns:
             True if shutdown was triggered, False if timeout.
+
         """
         # Use polling to avoid executor thread cleanup issues
         # Note: We poll a threading.Event, not asyncio.Event, hence the loop

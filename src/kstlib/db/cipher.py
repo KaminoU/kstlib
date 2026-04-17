@@ -48,6 +48,7 @@ def resolve_cipher_key(
         >>> key = resolve_cipher_key(passphrase="my-secret-key")
         >>> len(key) > 0
         True
+
     """
     # Direct passphrase (highest priority)
     if passphrase:
@@ -93,6 +94,7 @@ def apply_cipher_key(conn: sqlite3.Connection, key: str) -> None:
 
     Raises:
         EncryptionError: If key application fails.
+
     """
     if "\x00" in key:
         raise EncryptionError("Null bytes are not allowed in cipher key")

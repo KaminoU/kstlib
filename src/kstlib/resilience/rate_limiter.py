@@ -22,6 +22,7 @@ Examples:
 
     >>> with RateLimiter(rate=100, per=60.0):  # doctest: +SKIP
     ...     call_api()
+
 """
 
 from __future__ import annotations
@@ -32,9 +33,9 @@ import inspect
 import threading
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar, overload
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, overload
 
-from typing_extensions import ParamSpec, Self
+from typing_extensions import Self
 
 from kstlib.resilience.exceptions import RateLimitExceededError
 
@@ -63,6 +64,7 @@ class RateLimiterStats:
         (1, 1)
         >>> stats.total_waited
         0.5
+
     """
 
     total_acquired: int = 0
@@ -116,6 +118,7 @@ class RateLimiter:
         ...         pass  # call_api()
         >>> limiter.stats.total_acquired
         5
+
     """
 
     def __init__(
@@ -136,6 +139,7 @@ class RateLimiter:
 
         Raises:
             ValueError: If rate or per is not positive.
+
         """
         if rate <= 0:
             raise ValueError("rate must be positive")
@@ -203,6 +207,7 @@ class RateLimiter:
             >>> limiter = RateLimiter(rate=10, per=1.0)
             >>> limiter.time_until_token()  # Tokens available
             0.0
+
         """
         with self._lock:
             self._refill()
@@ -227,6 +232,7 @@ class RateLimiter:
             True
             >>> limiter.acquire(blocking=False)  # Returns immediately
             True
+
         """
         start_time = time.monotonic()
         deadline = start_time + timeout if timeout is not None else None
@@ -278,6 +284,7 @@ class RateLimiter:
             True
             >>> limiter.try_acquire()  # No tokens left
             False
+
         """
         return self.acquire(blocking=False)
 
@@ -298,6 +305,7 @@ class RateLimiter:
             >>> limiter = RateLimiter(rate=10, per=1.0)
             >>> asyncio.run(limiter.acquire_async())
             True
+
         """
         start_time = time.monotonic()
         deadline = start_time + timeout if timeout is not None else None
@@ -346,6 +354,7 @@ class RateLimiter:
             >>> limiter.reset()
             >>> limiter.try_acquire()
             True
+
         """
         with self._lock:
             self._tokens = self._max_tokens
@@ -453,6 +462,7 @@ def rate_limiter(
         >>> @rate_limiter(rate=5, blocking=False)
         ... def fast_api():  # doctest: +SKIP
         ...     pass  # Raises RateLimitExceededError if limit hit
+
     """
     # Create the limiter instance (shared across all calls)
     limiter = RateLimiter(rate=rate, per=per, burst=burst, name=name)

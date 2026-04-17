@@ -1,0 +1,216 @@
+# Example transform configuration for kstlib.transform
+# Used by the demos under examples/transform/.
+#
+# Two patterns are demonstrated:
+#
+#   1. PRESET vs USAGE
+#      - Define the encode/decode chain ONCE as a preset (sas_report).
+#      - Reference it from many usage chains (patch_*) that override
+#        only the patch block. This avoids duplicating the chain.
+#
+#   2. SCOPE: blob | outer | all
+#      - scope: blob (default) patches the data decoded by the
+#        forward chain (e.g. the BIRD XML extracted from a SAS Viya
+#        report blob).
+#      - scope: outer mutates the JSON wrapper passed via
+#        metadata['outer'] on chain.transform(). The blob is unchanged.
+#        Useful for fields that live OUTSIDE the encoded blob, like
+#        connectors[].uri or connectors[].hints.orig-uri in SAS Viya
+#        transferObject documents.
+#      - scope: all does both. The same replace map is applied to the
+#        blob AND to the outer wrapper, so the caller must declare
+#        patterns that match in both places.
+#      - HARD RULE: connectors[*].hints.xpath is ALWAYS protected and
+#        is NEVER touched by replace_outer_uris, even with scope: all.
+#        Patching it would break the wrapper-to-content coherence.
+
+transforms:
+
+  # Whitelist: only callables from these modules can be invoked.
+  # Default is empty (no callables allowed). The callable referenced
+  # by patch_dynamic below points to a module that does not exist by
+  # default - it is illustrative only.
+  security:
+    allowed_callable_modules:
+      - myproject.viya
+
+  chains:
+
+    # ----------------------------------------------------------------
+    # PRESET: sas_report  (Approach A: TRUE### prefix-based)
+    # ----------------------------------------------------------------
+    # Reusable encode/decode chain for SAS Viya report blobs.
+    # The wire format is:
+    #
+    #   "TRUE###" + base64(zlib(JSON envelope))
+    #
+    # where:
+    #   - "TRUE" is 4 base64 chars that decode to the 3-byte SAS
+    #     proprietary header M\x15\x04 (hex 4d1504)
+    #   - "###" is a SAS proprietary separator (chars OUTSIDE the
+    #     base64 alphabet, must be stripped before decoding)
+    #
+    # FORWARD: strip "TRUE###" first, then base64 decode (lenient).
+    # The decoded bytes are DIRECTLY a zlib stream (no skip_bytes
+    # needed - the SAS header is encoded as part of the prefix).
+    #
+    # BACKWARD: zlib compress with max level, base64 encode, re-add
+    # the "TRUE###" prefix. This produces a wire-format blob that is
+    # bit-for-bit identical to the original SAS export structure.
+    # ----------------------------------------------------------------
+    sas_report:
+      forward:
+        - base64:
+            strict: false                # tolerate the ### separator
+            strip_prefix: "TRUE###"      # strip SAS marker before decode
+        - zlib                           # no skip_bytes - Approach A
+        - json:
+            extract: "transferableContent.content"
+        - xml
+      backward:
+        - xml
+        - json:
+            wrap: "transferableContent.content"
+            minify: true                 # compact before compression
+            ensure_ascii: false          # preserve French/Unicode content
+        - zlib:
+            level: 9                     # max compression
+        - base64:
+            prefix: "TRUE###"            # re-add SAS proprietary prefix
+
+    # ----------------------------------------------------------------
+    # PRESET: sas_metadata
+    # ----------------------------------------------------------------
+    # Reusable encode/decode chain for SAS Viya METADATA blobs
+    # (folders, files, ACLs, ...).
+    #
+    # The wire format is much simpler than reports:
+    #
+    #   base64(JSON document)
+    #
+    # No prefix, no compression, no proprietary header. Just plain
+    # base64-encoded JSON. SAS uses this format for small metadata
+    # objects where compression would not save much.
+    # ----------------------------------------------------------------
+    sas_metadata:
+      forward:
+        - base64:
+            strict: true                 # pure base64, no SAS noise expected
+        - json
+      backward:
+        - json:
+            minify: true                 # compact for smaller output
+            ensure_ascii: false          # preserve Unicode
+        - base64
+
+    # ----------------------------------------------------------------
+    # USAGE: patch_report  (scope: blob - default)
+    # ----------------------------------------------------------------
+    # Simple environment migration via string replacement.
+    # Only the decoded BIRD XML is patched. The outer JSON wrapper
+    # (connectors, hints, ...) is left untouched.
+    # Inherits the full encode/decode chain from sas_report.
+    # ----------------------------------------------------------------
+    patch_report:
+      preset: sas_report
+      patch:
+        scope: blob                      # default - patch decoded BIRD XML only
+        replace:
+          'library="CASUSER"': 'library="PUBLIC"'
+          "https://old-host.res.private": "https://new-host.res.private"
+
+    # ----------------------------------------------------------------
+    # USAGE: patch_report_full  (scope: all - blob + outer wrapper)
+    # ----------------------------------------------------------------
+    # Full migration that also patches fields living outside the
+    # encoded blob: connectors[].uri and connectors[].hints.orig-uri.
+    # The same replace map is applied to BOTH locations, so the
+    # caller must include patterns that match in each place:
+    #
+    #   - 'library="CASUSER"' targets the BIRD XML attribute syntax
+    #   - 'library=CASUSER'   targets the connector URI syntax
+    #
+    # SAFETY: connectors[*].hints.xpath is NEVER patched (hardcoded
+    # PROTECTED_OUTER_PATHS). Patching it would silently corrupt the
+    # wrapper-to-content coherence.
+    #
+    # HOW TO USE: pass the outer JSON wrapper via metadata['outer']:
+    #
+    #   wrapper = json.loads(transfer_object_json)
+    #   blob = wrapper["content"]
+    #   new_blob = chain.transform(blob, metadata={"outer": wrapper})
+    #   wrapper["content"] = new_blob
+    #   # wrapper is mutated in place by replace_outer_uris
+    # ----------------------------------------------------------------
+    patch_report_full:
+      preset: sas_report
+      patch:
+        scope: all                       # blob + connectors[].uri + hints.orig-uri
+        replace:
+          'library="CASUSER"': 'library="PUBLIC"'           # BIRD XML form
+          "library=CASUSER": "library=PUBLIC"               # connector URI form
+          "https://old-host.res.private": "https://new-host.res.private"
+
+    # ----------------------------------------------------------------
+    # USAGE: patch_dynamic  (callable mode)
+    # ----------------------------------------------------------------
+    # For complex patches (regex, lookup tables, conditional logic),
+    # use a Python callable. {{variable}} references in args are
+    # resolved against the chain's context dict at execution time,
+    # which lets a pipeline step inject runtime values.
+    #
+    # The callable target follows the module.path:function_name
+    # convention and must be whitelisted in security.allowed_callable_modules
+    # above. The function signature is:
+    #     def fn(decoded_data, **resolved_args) -> patched_data
+    # ----------------------------------------------------------------
+    patch_dynamic:
+      preset: sas_report
+      patch:
+        scope: blob
+        callable: myproject.viya:patch_cas_resources
+        args:
+          source_host: "{{source_host}}"
+          target_host: "{{target_host}}"
+          cas_mapping: "{{cas_mapping}}"
+
+    # ----------------------------------------------------------------
+    # USAGE: patch_production  (composed cascade)
+    # ----------------------------------------------------------------
+    # Surgical multi-object workflow. Applies patch_report to every
+    # object globally, then a stronger patch_report_full to objects
+    # whose name matches "R220_*". Other reports get only the blob
+    # patch via the wildcard fallback.
+    #
+    # CASCADE NOTE: targeted_patches are evaluated in DECLARATION
+    # ORDER. Each patch sees the result of previous patches. Order
+    # them from MOST GENERAL to MOST SPECIFIC because last applied
+    # wins on conflict.
+    #
+    # IMPORTANT nuance with replace-based patches: "last applied
+    # wins" is only true when patches share an identical source
+    # string. If the first patch transforms the data such that the
+    # second patch's source no longer matches, the second patch
+    # becomes a NO-OP. See 03_composed_patch.py for a runnable demo.
+    # ----------------------------------------------------------------
+    patch_production:
+      preset: sas_report
+
+      # Applied to every object regardless of filter
+      global_patches:
+        - patch_report                   # blob patch on ALL reports
+
+      # Applied only when filter matches object metadata.
+      # Declaration order matters - LAST applied wins on conflict.
+      targeted_patches:
+        - filter:
+            content_type: report
+            name: "R220_*"
+          patches:
+            - patch_report_full          # R220 reports: also patch outer wrapper
+
+        - filter:
+            content_type: report
+            name: "*"                    # wildcard fallback (general -> specific order)
+          patches:
+            - patch_report               # other reports: blob only (idempotent re-apply)

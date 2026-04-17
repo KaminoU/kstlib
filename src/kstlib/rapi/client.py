@@ -24,6 +24,7 @@ from kstlib.rapi.config import (
     HmacConfig,
     MultipartConfig,
     RapiConfigManager,
+    ServerConfig,
     load_rapi_config,
 )
 from kstlib.rapi.credentials import CredentialRecord, CredentialResolver
@@ -67,6 +68,7 @@ class FilePayload:
         ... )
         >>> payload.field_name
         'file'
+
     """
 
     filename: str
@@ -91,6 +93,7 @@ def _validate_safeguard(
 
     Raises:
         ConfirmationRequiredError: If safeguard is required but confirm is missing or wrong.
+
     """
     if endpoint_config.safeguard is None:
         return
@@ -124,6 +127,7 @@ class RapiResponse:
         True
         >>> response.data["ip"]
         '1.2.3.4'
+
     """
 
     status_code: int
@@ -162,6 +166,7 @@ class RapiClient:
 
         >>> client = RapiClient.from_file("github.rapi.yml")  # doctest: +SKIP
         >>> client = RapiClient.discover()  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -181,6 +186,7 @@ class RapiClient:
                 If None, uses global config from kstlib.conf.yml.
             ssl_ca_bundle: Override CA bundle path.
                 If None, uses global config from kstlib.conf.yml.
+
         """
         self._config_manager = config_manager or load_rapi_config()
 
@@ -230,6 +236,7 @@ class RapiClient:
         Examples:
             >>> client = RapiClient.from_file("github.rapi.yml")  # doctest: +SKIP
             >>> response = client.call("github.user")  # doctest: +SKIP
+
         """
         config_manager = RapiConfigManager.from_file(path)
         return cls(config_manager, credentials_config)
@@ -260,6 +267,7 @@ class RapiClient:
         Examples:
             >>> client = RapiClient.discover()  # doctest: +SKIP
             >>> client = RapiClient.discover("./apis/")  # doctest: +SKIP
+
         """
         config_manager = RapiConfigManager.discover(directory, pattern)
         return cls(config_manager, credentials_config)
@@ -270,6 +278,7 @@ class RapiClient:
 
         Returns:
             RapiConfigManager instance.
+
         """
         return self._config_manager
 
@@ -278,6 +287,7 @@ class RapiClient:
 
         Returns:
             List of API names.
+
         """
         return self._config_manager.list_apis()
 
@@ -289,6 +299,7 @@ class RapiClient:
 
         Returns:
             List of full endpoint references (api.endpoint).
+
         """
         return self._config_manager.list_endpoints(api_name)
 
@@ -300,6 +311,7 @@ class RapiClient:
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
         confirm: str | None = None,
+        server: str | None = None,
         **kwargs: Any,
     ) -> RapiResponse:
         """Make a synchronous API call.
@@ -311,6 +323,11 @@ class RapiClient:
             headers: Runtime headers (override service/endpoint headers).
             timeout: Request timeout (uses config default if None).
             confirm: Confirmation string for dangerous endpoints with safeguard.
+            server: Optional named server profile from ``rapi.servers`` to
+                use for this call. Overrides any ``server:`` directive set
+                at the endpoint or file level in the YAML config. Cascade:
+                runtime ``server`` > endpoint ``server:`` > file ``server:``
+                > static ``ApiConfig`` (no server).
             **kwargs: Keyword arguments for path parameters and query params.
 
         Returns:
@@ -320,6 +337,8 @@ class RapiClient:
             ConfirmationRequiredError: If safeguard requires confirmation.
             RequestError: If request fails after retries.
             ResponseTooLargeError: If response exceeds max size.
+            ServerNotFoundError: If ``server`` (or any cascading directive)
+                does not exist in ``rapi.servers``.
 
         Examples:
             >>> client = RapiClient()  # doctest: +SKIP
@@ -327,12 +346,23 @@ class RapiClient:
             >>> client.call("httpbin.delayed", 5)  # doctest: +SKIP
             >>> client.call("httpbin.post_data", body={"key": "value"})  # doctest: +SKIP
             >>> client.call("admin.delete_user", userId="123", confirm="DELETE USER 123")  # doctest: +SKIP
+            >>> client.call("github.repos-list", server="github")  # doctest: +SKIP
+
         """
         log.debug("Calling endpoint: %s", endpoint_ref)
 
         # Resolve endpoint
         api_config, endpoint_config = self._config_manager.resolve(endpoint_ref)
         _log_trace("Resolved to: %s", endpoint_config.full_ref)
+
+        # Resolve effective server profile (cascade: runtime > endpoint > file > None)
+        effective_server = self._config_manager.resolve_effective_server(
+            api_config,
+            endpoint_config,
+            runtime_server=server,
+        )
+        if effective_server is not None:
+            _log_trace("Effective server profile: %s", effective_server.name)
 
         # Validate safeguard before proceeding
         _validate_safeguard(endpoint_config, args, kwargs, confirm)
@@ -345,6 +375,7 @@ class RapiClient:
             kwargs,
             body,
             headers,
+            effective_server=effective_server,
         )
 
         # Execute with retries
@@ -359,6 +390,7 @@ class RapiClient:
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
         confirm: str | None = None,
+        server: str | None = None,
         **kwargs: Any,
     ) -> RapiResponse:
         """Make an asynchronous API call.
@@ -370,6 +402,8 @@ class RapiClient:
             headers: Runtime headers (override service/endpoint headers).
             timeout: Request timeout (uses config default if None).
             confirm: Confirmation string for dangerous endpoints with safeguard.
+            server: Optional named server profile from ``rapi.servers`` to
+                use for this call. See :meth:`call` for cascade rules.
             **kwargs: Keyword arguments for path parameters and query params.
 
         Returns:
@@ -379,12 +413,24 @@ class RapiClient:
             ConfirmationRequiredError: If safeguard requires confirmation.
             RequestError: If request fails after retries.
             ResponseTooLargeError: If response exceeds max size.
+            ServerNotFoundError: If ``server`` (or any cascading directive)
+                does not exist in ``rapi.servers``.
+
         """
         log.debug("Calling endpoint (async): %s", endpoint_ref)
 
         # Resolve endpoint
         api_config, endpoint_config = self._config_manager.resolve(endpoint_ref)
         _log_trace("Resolved to: %s", endpoint_config.full_ref)
+
+        # Resolve effective server profile (cascade: runtime > endpoint > file > None)
+        effective_server = self._config_manager.resolve_effective_server(
+            api_config,
+            endpoint_config,
+            runtime_server=server,
+        )
+        if effective_server is not None:
+            _log_trace("Effective server profile: %s", effective_server.name)
 
         # Validate safeguard before proceeding
         _validate_safeguard(endpoint_config, args, kwargs, confirm)
@@ -397,6 +443,7 @@ class RapiClient:
             kwargs,
             body,
             headers,
+            effective_server=effective_server,
         )
 
         # Execute with retries
@@ -479,6 +526,7 @@ class RapiClient:
 
         Raises:
             RequestError: If body is not a valid file reference for multipart.
+
         """
         import mimetypes
         from pathlib import Path
@@ -545,6 +593,8 @@ class RapiClient:
         kwargs: dict[str, Any],
         body: Any,
         runtime_headers: Mapping[str, str] | None,
+        *,
+        effective_server: ServerConfig | None = None,
     ) -> httpx.Request:
         """Build HTTP request from configuration.
 
@@ -555,9 +605,15 @@ class RapiClient:
             kwargs: Keyword parameters (path + query).
             body: Request body.
             runtime_headers: Runtime header overrides.
+            effective_server: Optional resolved server profile that
+                overrides ``api_config.base_url`` and contributes
+                ``credentials`` + ``headers`` to the request build.
+                When None, the static ApiConfig is used (backward
+                compatible behavior).
 
         Returns:
             Prepared httpx.Request.
+
         """
         # Build URL with path parameter substitution
         _log_trace("Path template: %s", endpoint_config.path)
@@ -566,7 +622,10 @@ class RapiClient:
         if kwargs:
             _log_trace("Path/query kwargs: %s", kwargs)
         path = endpoint_config.build_path(*args, **kwargs)
-        url = f"{api_config.base_url}{path}"
+
+        # Server profile (when present) overrides the static api_config base_url
+        base_url = effective_server.base_url if effective_server else api_config.base_url
+        url = f"{base_url}{path}"
 
         # Security: reject null bytes in URL to prevent injection
         if "\x00" in url:
@@ -583,11 +642,12 @@ class RapiClient:
         if query_params:
             _log_trace("Query params: %s", query_params)
 
-        # Merge headers (service < endpoint < runtime)
+        # Merge headers - cascade: service < server < endpoint < runtime
         merged_headers = self._merge_headers(
             api_config.headers,
             endpoint_config.headers,
             dict(runtime_headers) if runtime_headers else {},
+            server_headers=effective_server.headers if effective_server else None,
         )
 
         # Detect multipart mode from merged Content-Type header
@@ -602,9 +662,17 @@ class RapiClient:
             merged_headers.pop("Content-Type", None)
             merged_headers.pop("content-type", None)
 
-            # Apply auth (no body content for HMAC signing in multipart mode)
-            if api_config.credentials and endpoint_config.auth:
-                self._apply_auth(merged_headers, api_config, query_params, None)
+            # Apply auth (no body content for HMAC signing in multipart mode).
+            # Auth is applied if either the static ApiConfig or the effective
+            # server profile provides credentials, and the endpoint allows it.
+            if endpoint_config.auth and ((effective_server and effective_server.credentials) or api_config.credentials):
+                self._apply_auth(
+                    merged_headers,
+                    api_config,
+                    query_params,
+                    None,
+                    effective_server=effective_server,
+                )
 
             request = httpx.Request(
                 method=endpoint_config.method,
@@ -629,10 +697,18 @@ class RapiClient:
             # Normal body processing
             content = self._prepare_body(body, merged_headers)
 
-            # Apply authentication (may modify headers and query_params for HMAC)
-            # Skip auth if endpoint explicitly disables it (auth: false)
-            if api_config.credentials and endpoint_config.auth:
-                self._apply_auth(merged_headers, api_config, query_params, content)
+            # Apply authentication (may modify headers and query_params for HMAC).
+            # Skip auth if endpoint explicitly disables it (auth: false).
+            # Credentials may come from either the static ApiConfig or the
+            # effective server profile.
+            if endpoint_config.auth and ((effective_server and effective_server.credentials) or api_config.credentials):
+                self._apply_auth(
+                    merged_headers,
+                    api_config,
+                    query_params,
+                    content,
+                    effective_server=effective_server,
+                )
 
             request = httpx.Request(
                 method=endpoint_config.method,
@@ -650,27 +726,41 @@ class RapiClient:
         service_headers: dict[str, str],
         endpoint_headers: dict[str, str],
         runtime_headers: dict[str, str],
+        *,
+        server_headers: dict[str, str] | None = None,
     ) -> dict[str, str]:
-        """Merge headers from three levels.
+        """Merge headers from up to four levels.
 
-        Order: service < endpoint < runtime (later overrides earlier).
+        Cascade order (later overrides earlier):
+        ``service < server < endpoint < runtime``
+
+        The ``server`` level is inserted between service and endpoint
+        because the server profile describes "what the API server itself
+        expects" (e.g. ``Accept: application/vnd.github+json``), while
+        the endpoint and runtime levels carry per-call overrides.
 
         Args:
-            service_headers: Service-level headers.
+            service_headers: Service-level headers (lowest priority).
             endpoint_headers: Endpoint-level headers.
-            runtime_headers: Runtime headers.
+            runtime_headers: Runtime headers (highest priority).
+            server_headers: Optional headers from the effective server
+                profile, layered between service and endpoint headers.
 
         Returns:
             Merged headers dictionary.
+
         """
-        merged = {}
+        merged: dict[str, str] = {}
         merged.update(service_headers)
+        if server_headers:
+            merged.update(server_headers)
         merged.update(endpoint_headers)
         merged.update(runtime_headers)
 
         _log_trace(
-            "Headers merged: service=%d, endpoint=%d, runtime=%d -> total=%d",
+            "Headers merged: service=%d, server=%d, endpoint=%d, runtime=%d -> total=%d",
             len(service_headers),
+            len(server_headers or {}),
             len(endpoint_headers),
             len(runtime_headers),
             len(merged),
@@ -684,25 +774,56 @@ class RapiClient:
         api_config: ApiConfig,
         query_params: dict[str, str] | None = None,
         body_content: bytes | None = None,
+        *,
+        effective_server: ServerConfig | None = None,
     ) -> None:
         """Apply authentication to headers and query params.
 
+        When ``effective_server`` is provided and carries inline
+        credentials, those are resolved via
+        :meth:`CredentialResolver.resolve_inline` and used instead of
+        the static ``api_config.credentials`` reference. The auth type
+        also follows the server profile when set.
+
         Args:
             headers: Headers dict to modify.
-            api_config: API config with credentials reference.
+            api_config: API config with credentials reference (fallback).
             query_params: Query params dict to modify (for HMAC signing).
             body_content: Request body content (for HMAC signing).
+            effective_server: Optional resolved server profile providing
+                inline credentials and/or auth type override.
+
         """
-        if not api_config.credentials:
+        # Resolve credentials: server profile takes precedence over static
+        # api_config.credentials, and uses inline dict resolution.
+        cred: CredentialRecord | None = None
+        if effective_server and effective_server.credentials:
+            try:
+                cred = self._credential_resolver.resolve_inline(
+                    effective_server.credentials,
+                    name_hint=f"server.{effective_server.name}",
+                )
+            except Exception as e:
+                log.warning(
+                    "Failed to resolve inline credentials for server '%s': %s",
+                    effective_server.name,
+                    e,
+                )
+                return
+        elif api_config.credentials:
+            try:
+                cred = self._credential_resolver.resolve(api_config.credentials)
+            except Exception as e:
+                log.warning("Failed to resolve credential '%s': %s", api_config.credentials, e)
+                return
+        else:
             return
 
-        try:
-            cred = self._credential_resolver.resolve(api_config.credentials)
-        except Exception as e:
-            log.warning("Failed to resolve credential '%s': %s", api_config.credentials, e)
-            return
-
-        auth_type = api_config.auth_type or "bearer"
+        # Auth type cascade: server profile > api_config > default "bearer"
+        if effective_server and effective_server.auth:
+            auth_type = effective_server.auth
+        else:
+            auth_type = api_config.auth_type or "bearer"
 
         if auth_type == "bearer":
             headers["Authorization"] = f"Bearer {cred.value}"
@@ -748,6 +869,7 @@ class RapiClient:
 
         Raises:
             ValueError: If secret is not available in credentials.
+
         """
         if not cred.secret:
             raise ValueError("HMAC auth requires secret_key in credentials")
@@ -829,6 +951,7 @@ class RapiClient:
 
         Raises:
             ResponseTooLargeError: If response exceeds max size.
+
         """
         content_length = response.headers.get("content-length")
         if content_length and int(content_length) > self._limits.max_response_size:
@@ -855,6 +978,7 @@ class RapiClient:
 
         Returns:
             RapiResponse for 4xx client errors, None to continue retrying.
+
         """
         if isinstance(exc, httpx.TimeoutException):
             log.warning("Request timeout (attempt %d): %s", attempt, exc)
@@ -885,6 +1009,7 @@ class RapiClient:
         Raises:
             RequestError: If all retries fail.
             ResponseTooLargeError: If response is too large.
+
         """
         last_error: Exception | None = None
         delay = self._limits.retry_delay
@@ -940,6 +1065,7 @@ class RapiClient:
         Raises:
             RequestError: If all retries fail.
             ResponseTooLargeError: If response is too large.
+
         """
         import asyncio
 
@@ -995,6 +1121,7 @@ class RapiClient:
 
         Returns:
             Parsed RapiResponse.
+
         """
         text = response.text
         data: Any = None
@@ -1023,6 +1150,7 @@ def call(
     body: Any = None,
     headers: Mapping[str, str] | None = None,
     confirm: str | None = None,
+    server: str | None = None,
     **kwargs: Any,
 ) -> RapiResponse:
     """Make a quick synchronous API call using a temporary RapiClient.
@@ -1035,6 +1163,8 @@ def call(
         body: Request body.
         headers: Runtime headers.
         confirm: Confirmation string for dangerous endpoints with safeguard.
+        server: Optional named server profile from ``rapi.servers``
+            (see :meth:`RapiClient.call` for cascade rules).
         **kwargs: Keyword parameters.
 
     Returns:
@@ -1043,9 +1173,19 @@ def call(
     Examples:
         >>> from kstlib.rapi import call  # doctest: +SKIP
         >>> response = call("httpbin.get_ip")  # doctest: +SKIP
+        >>> response = call("github.repos-list", server="github")  # doctest: +SKIP
+
     """
     client = RapiClient()
-    return client.call(endpoint_ref, *args, body=body, headers=headers, confirm=confirm, **kwargs)
+    return client.call(
+        endpoint_ref,
+        *args,
+        body=body,
+        headers=headers,
+        confirm=confirm,
+        server=server,
+        **kwargs,
+    )
 
 
 async def call_async(
@@ -1054,6 +1194,7 @@ async def call_async(
     body: Any = None,
     headers: Mapping[str, str] | None = None,
     confirm: str | None = None,
+    server: str | None = None,
     **kwargs: Any,
 ) -> RapiResponse:
     """Make a quick asynchronous API call using a temporary RapiClient.
@@ -1066,6 +1207,8 @@ async def call_async(
         body: Request body.
         headers: Runtime headers.
         confirm: Confirmation string for dangerous endpoints with safeguard.
+        server: Optional named server profile from ``rapi.servers``
+            (see :meth:`RapiClient.call` for cascade rules).
         **kwargs: Keyword parameters.
 
     Returns:
@@ -1074,9 +1217,18 @@ async def call_async(
     Examples:
         >>> from kstlib.rapi import call_async  # doctest: +SKIP
         >>> response = await call_async("httpbin.get_ip")  # doctest: +SKIP
+
     """
     client = RapiClient()
-    return await client.call_async(endpoint_ref, *args, body=body, headers=headers, confirm=confirm, **kwargs)
+    return await client.call_async(
+        endpoint_ref,
+        *args,
+        body=body,
+        headers=headers,
+        confirm=confirm,
+        server=server,
+        **kwargs,
+    )
 
 
 __all__ = [

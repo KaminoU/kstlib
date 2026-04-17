@@ -99,6 +99,7 @@ class TableBuilder:
             ... ]
             >>> data = [{"metric": "CPU", "val": "42%"}]
             >>> table = builder.render_table("metrics", data=data, columns=columns)
+
     """
 
     def __init__(self, config: Mapping[str, Any] | Box | None = None, console: Console | None = None) -> None:
@@ -131,6 +132,7 @@ class TableBuilder:
         Raises:
             TableRenderingError: If neither ``data`` nor ``rows`` can populate the
                 table.
+
         """
         resolved = self._resolve_table_config(kind, overrides, columns)
         table_config = resolved["table"]

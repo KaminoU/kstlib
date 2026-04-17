@@ -10,6 +10,7 @@ Example:
     >>> report = checker.check("eyJhbGci...")  # doctest: +SKIP
     >>> report.valid  # doctest: +SKIP
     True
+
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ class ValidationStep:
         passed: Whether the step succeeded.
         message: Human-readable result description.
         details: Optional extra information for verbose output.
+
     """
 
     name: str
@@ -77,6 +79,7 @@ class TokenCheckReport:
         issuer_match: Whether iss claim matches expected issuer.
         audience_match: Whether aud claim matches expected audience.
         error: Error message if validation failed.
+
     """
 
     token_type: str = "id_token"
@@ -104,6 +107,7 @@ class TokenCheckReport:
 
         Returns:
             Dictionary representation of the report.
+
         """
         return {
             "token_type": self.token_type,
@@ -158,6 +162,7 @@ class TokenChecker:
         >>> client = httpx.Client(verify="/path/to/ca.pem")  # doctest: +SKIP
         >>> checker = TokenChecker(client, expected_audience="my-app")  # doctest: +SKIP
         >>> report = checker.check(token_string)  # doctest: +SKIP
+
     """
 
     def __init__(
@@ -175,7 +180,7 @@ class TokenChecker:
         self,
         token_str: str,
         *,
-        token_type: str = "id_token",  # noqa: S107
+        token_type: str = "id_token",
     ) -> TokenCheckReport:
         """Run full token validation chain.
 
@@ -185,6 +190,7 @@ class TokenChecker:
 
         Returns:
             TokenCheckReport with all validation results.
+
         """
         report = TokenCheckReport(token_type=token_type)
         self._token_str = token_str
@@ -487,6 +493,7 @@ def _find_matching_key(keys: list[dict[str, Any]], kid: str | None) -> dict[str,
 
     Returns:
         Matching key dict, or None.
+
     """
     if kid:
         for key in keys:
@@ -511,6 +518,7 @@ def _jwk_to_pem(jwk_data: dict[str, Any]) -> tuple[str, str, int | None]:
 
     Raises:
         ImportError: If authlib is not installed.
+
     """
     from authlib.jose import JsonWebKey
     from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
@@ -539,6 +547,7 @@ def _parse_x509_info(cert_b64: str) -> dict[str, Any]:
     Returns:
         Dictionary with CN, serial, not_before, not_after.
         Empty dict if parsing fails.
+
     """
     try:
         from cryptography import x509
@@ -652,6 +661,7 @@ def _b64url_decode(data: str) -> bytes:
 
     Returns:
         Decoded bytes.
+
     """
     padding = 4 - len(data) % 4
     if padding != 4:

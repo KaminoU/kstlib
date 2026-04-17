@@ -5,7 +5,7 @@
 #
 # The 1200+ endpoints covered here were extracted and structured
 # with the help of Claude from the official SAS Viya 3.5
-# Swagger/OpenAPI specifications — a task that would have taken weeks
+# Swagger/OpenAPI specifications - a task that would have taken weeks
 # to do manually.
 #
 # Usage:

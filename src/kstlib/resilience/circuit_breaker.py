@@ -8,9 +8,7 @@ import threading
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, TypeVar, overload
-
-from typing_extensions import ParamSpec
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, overload
 
 from kstlib.limits import (
     HARD_MAX_CIRCUIT_FAILURES,
@@ -65,6 +63,7 @@ class CircuitStats:
         (1, 1, 1)
         >>> stats.total_calls
         3
+
     """
 
     total_calls: int = 0
@@ -124,6 +123,7 @@ class CircuitBreaker:
         >>> cb = CircuitBreaker(max_failures=5)
         >>> cb.state
         <CircuitState.CLOSED: 1>
+
     """
 
     def __init__(
@@ -143,6 +143,7 @@ class CircuitBreaker:
             half_open_max_calls: Calls allowed in half-open state. Uses config if None.
             excluded_exceptions: Exceptions that don't count as failures.
             name: Optional name for the circuit breaker.
+
         """
         limits = get_resilience_limits()
 
@@ -283,6 +284,7 @@ class CircuitBreaker:
             >>> result = cb.call(lambda x: x * 2, 5)
             >>> result
             10
+
         """
         self._check_open()
         try:
@@ -318,6 +320,7 @@ class CircuitBreaker:
             >>> async def double(x): return x * 2
             >>> asyncio.run(cb.acall(double, 5))
             10
+
         """
         self._check_open()
         try:
@@ -342,6 +345,7 @@ class CircuitBreaker:
             >>> cb.reset()
             >>> cb.state.name
             'CLOSED'
+
         """
         with self._lock:
             self._state = CircuitState.CLOSED
@@ -357,6 +361,7 @@ class CircuitBreaker:
 
         Returns:
             Wrapped function with circuit breaker protection.
+
         """
         if inspect.iscoroutinefunction(func):
 
@@ -420,6 +425,7 @@ def circuit_breaker(
         >>> @circuit_breaker(excluded_exceptions=(ValueError,))
         ... def validate():  # doctest: +SKIP
         ...     pass
+
     """
     cb = CircuitBreaker(
         max_failures=max_failures,

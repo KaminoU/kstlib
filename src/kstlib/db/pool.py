@@ -54,6 +54,7 @@ class PoolStats:
         >>> stats = PoolStats()
         >>> stats.total_connections
         0
+
     """
 
     total_connections: int = 0
@@ -86,6 +87,7 @@ class ConnectionPool:
         >>> pool = ConnectionPool(":memory:", min_size=1, max_size=5)
         >>> pool.max_size
         5
+
     """
 
     db_path: str
@@ -177,6 +179,7 @@ class ConnectionPool:
         Raises:
             PoolExhaustedError: If no connection available within timeout.
             DatabaseConnectionError: If connection creation fails after retries.
+
         """
         if self._closed:
             raise DatabaseConnectionError("Pool is closed")
@@ -240,6 +243,7 @@ class ConnectionPool:
 
         Args:
             conn: Connection to release.
+
         """
         if self._closed:
             await conn.close()
@@ -262,6 +266,7 @@ class ConnectionPool:
         Examples:
             >>> async with pool.connection() as conn:  # doctest: +SKIP
             ...     await conn.execute("SELECT 1")
+
         """
         conn = await self.acquire()
         try:

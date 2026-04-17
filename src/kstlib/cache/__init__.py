@@ -36,6 +36,7 @@ Examples:
         def load_config(path: str) -> dict:
             # Cache invalidates automatically if file modified
             return parse_yaml(path)
+
 """
 
 from kstlib.cache.decorator import cache

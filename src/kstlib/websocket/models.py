@@ -13,6 +13,7 @@ Examples:
     >>> reason = DisconnectReason.USER_REQUESTED
     >>> reason.is_proactive
     True
+
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ class ConnectionState(Enum):
         RECONNECTING: Attempting to restore lost connection.
         CLOSING: Graceful shutdown in progress.
         CLOSED: Terminal state, cannot reconnect.
+
     """
 
     DISCONNECTED = auto()
@@ -66,6 +68,7 @@ class ConnectionState(Enum):
             True
             >>> ConnectionState.CONNECTED.can_connect()
             False
+
         """
         return self in (ConnectionState.DISCONNECTED, ConnectionState.RECONNECTING)
 
@@ -80,6 +83,7 @@ class ConnectionState(Enum):
             True
             >>> ConnectionState.DISCONNECTED.can_send()
             False
+
         """
         return self == ConnectionState.CONNECTED
 
@@ -94,6 +98,7 @@ class ConnectionState(Enum):
             True
             >>> ConnectionState.DISCONNECTED.is_terminal()
             False
+
         """
         return self == ConnectionState.CLOSED
 
@@ -143,6 +148,7 @@ class DisconnectReason(Enum):
             True
             >>> DisconnectReason.NETWORK_ERROR.is_proactive
             False
+
         """
         return self in (
             DisconnectReason.USER_REQUESTED,
@@ -163,6 +169,7 @@ class DisconnectReason(Enum):
             True
             >>> DisconnectReason.USER_REQUESTED.is_reactive
             False
+
         """
         return not self.is_proactive
 
@@ -175,6 +182,7 @@ class ReconnectStrategy(Enum):
         FIXED_DELAY: Wait a fixed delay before each attempt.
         EXPONENTIAL_BACKOFF: Exponentially increasing delays.
         CALLBACK_CONTROLLED: Reconnection timing controlled by callback.
+
     """
 
     IMMEDIATE = auto()
@@ -212,6 +220,7 @@ class WebSocketStats:
         >>> stats.record_disconnect(proactive=True)
         >>> stats.proactive_disconnects
         1
+
     """
 
     connects: int = 0
@@ -235,6 +244,7 @@ class WebSocketStats:
             >>> stats.record_connect()
             >>> stats.connects
             1
+
         """
         self.connects += 1
         self.last_connect_time = time.time()
@@ -253,6 +263,7 @@ class WebSocketStats:
             >>> stats.record_disconnect(proactive=False)
             >>> stats.reactive_disconnects
             1
+
         """
         self.disconnects += 1
         self.last_disconnect_time = time.time()
@@ -274,6 +285,7 @@ class WebSocketStats:
             1
             >>> stats.bytes_received
             100
+
         """
         self.messages_received += 1
         self.bytes_received += size
@@ -292,6 +304,7 @@ class WebSocketStats:
             1
             >>> stats.bytes_sent
             50
+
         """
         self.messages_sent += 1
         self.bytes_sent += size
@@ -310,6 +323,7 @@ class WebSocketStats:
             >>> time.sleep(0.05)
             >>> stats.uptime > 0
             True
+
         """
         return time.monotonic() - self._start_time
 
@@ -329,6 +343,7 @@ class WebSocketStats:
             >>> stats.record_connect()
             >>> stats.connection_time > 0 or stats.connection_time == 0.0
             True
+
         """
         if self.last_connect_time == 0.0:
             return 0.0
@@ -346,6 +361,7 @@ class WebSocketStats:
             0
             >>> stats.messages_sent
             0
+
         """
         self.connects = 0
         self.disconnects = 0

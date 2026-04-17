@@ -29,6 +29,7 @@ Example:
         verify = build_ssl_context(ssl_verify=False)  # kwargs override
         async with httpx.AsyncClient(verify=verify) as client:
             ...
+
 """
 
 from __future__ import annotations
@@ -73,6 +74,7 @@ class SSLConfig:
         >>> config = SSLConfig(verify=True, ca_bundle="/path/to/ca.pem")
         >>> config.httpx_verify
         '/path/to/ca.pem'
+
     """
 
     verify: bool
@@ -87,6 +89,7 @@ class SSLConfig:
 
         Returns:
             CA bundle path if set, otherwise verify boolean.
+
         """
         if self.ca_bundle:
             return self.ca_bundle
@@ -106,6 +109,7 @@ def get_ssl_config() -> SSLConfig:
         >>> config = get_ssl_config()  # doctest: +SKIP
         >>> config.verify  # doctest: +SKIP
         True
+
     """
     config = get_config()
     ssl_section = config.get("ssl", {})  # type: ignore[no-untyped-call]
@@ -153,6 +157,7 @@ def build_ssl_context(
 
         >>> # Custom CA bundle
         >>> verify = build_ssl_context(ssl_ca_bundle="/path/to/ca.pem")  # doctest: +SKIP
+
     """
     # Load global config as base
     global_config = get_ssl_config()
@@ -201,6 +206,7 @@ def validate_ssl_verify(value: Any) -> bool:
         >>> validate_ssl_verify("true")  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
         TypeError: ssl_verify must be bool, got str: 'true'
+
     """
     if not isinstance(value, bool):
         msg = f"ssl_verify must be bool, got {type(value).__name__}: {value!r}"
@@ -224,6 +230,7 @@ def _validate_ca_bundle_string(path_str: str) -> None:
     Raises:
         TypeError: If path is not a string.
         ValueError: If path contains null bytes or is empty.
+
     """
     # Layer 1: Type check
     path_value: Any = path_str
@@ -253,6 +260,7 @@ def _resolve_ca_bundle_path(path_str: str) -> Path:
 
     Raises:
         ValueError: If path does not exist or cannot be accessed.
+
     """
     try:
         return Path(path_str).expanduser().resolve(strict=True)
@@ -276,6 +284,7 @@ def _validate_ca_bundle_file(ca_path: Path, original_path: str) -> int:
 
     Raises:
         ValueError: If file is invalid.
+
     """
     # Layer 5: File type
     if not ca_path.is_file():
@@ -331,6 +340,7 @@ def validate_ca_bundle_path(path_str: str) -> str:
     Example:
         >>> validate_ca_bundle_path("/etc/ssl/certs/ca-certificates.crt")  # doctest: +SKIP
         '/etc/ssl/certs/ca-certificates.crt'
+
     """
     # Layers 1-3: String validation
     _validate_ca_bundle_string(path_str)

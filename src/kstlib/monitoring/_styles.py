@@ -78,6 +78,7 @@ def inline_badge_style(level: StatusLevel) -> str:
         >>> from kstlib.monitoring.types import StatusLevel
         >>> "background" in inline_badge_style(StatusLevel.OK)
         True
+
     """
     bg = STATUS_COLORS[level]
     fg = STATUS_TEXT_COLORS[level]
@@ -100,6 +101,7 @@ def get_css_classes() -> str:
         True
         >>> ".status-ok" in css
         True
+
     """
     rules: list[str] = []
 

@@ -38,6 +38,7 @@ class KeyringProvider(SecretProvider):
         Args:
             settings: Optional mapping with a ``service`` key overriding the
                 default keyring service name.
+
         """
         if not settings:
             return
@@ -52,6 +53,7 @@ class KeyringProvider(SecretProvider):
         Returns:
             A populated ``SecretRecord`` when the secret exists, otherwise
             ``None`` to signal a miss.
+
         """
         if keyring_backend is None:
             return None
@@ -71,6 +73,7 @@ class KeyringProvider(SecretProvider):
 
         Raises:
             RuntimeError: If the optional ``keyring`` dependency is missing.
+
         """
         if keyring_backend is None:
             raise RuntimeError("keyring package is not available")
@@ -85,6 +88,7 @@ class KeyringProvider(SecretProvider):
 
         Raises:
             RuntimeError: If the optional ``keyring`` dependency is missing.
+
         """
         if keyring_backend is None:
             raise RuntimeError("keyring package is not available")
@@ -99,6 +103,7 @@ class KeyringProvider(SecretProvider):
 
         Returns:
             The composed username used for keyring operations.
+
         """
         scope = request.scope or "default"
         return f"{scope}:{request.name}"

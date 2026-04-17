@@ -69,6 +69,7 @@ class OIDCProvider(OAuth2Provider):
         >>> #       scopes: [openid, profile, email]
         >>> #       pkce: true
         >>> provider = OIDCProvider.from_config("corporate")  # doctest: +SKIP
+
     """
 
     @classmethod
@@ -103,6 +104,7 @@ class OIDCProvider(OAuth2Provider):
             ...     "corporate",
             ...     client_id="override-id",  # Override config value
             ... )  # doctest: +SKIP
+
         """
         auth_config, token_storage = load_provider_from_config(
             provider_name,
@@ -148,6 +150,7 @@ class OIDCProvider(OAuth2Provider):
 
         Raises:
             ConfigurationError: If configuration is invalid.
+
         """
         # Track which endpoints were explicitly configured (before any modification)
         endpoint_map = [
@@ -169,7 +172,8 @@ class OIDCProvider(OAuth2Provider):
         # These will be replaced by discovery
         if self._discovery_enabled:
             issuer = config.issuer
-            assert issuer is not None  # Guaranteed by _discovery_enabled check
+            if issuer is None:
+                raise ConfigurationError("issuer is required when OIDC discovery is enabled")
             if not config.authorize_url:
                 config.authorize_url = f"{issuer.rstrip('/')}/authorize"  # Placeholder
             if not config.token_url:
@@ -219,6 +223,7 @@ class OIDCProvider(OAuth2Provider):
 
         Returns:
             One of: "auto", "hybrid", "manual"
+
         """
         if not self._discovery_enabled:
             return "manual"
@@ -230,7 +235,7 @@ class OIDCProvider(OAuth2Provider):
     # Discovery
     # ─────────────────────────────────────────────────────────────────────────
 
-    def discover(self, *, force: bool = False) -> dict[str, Any]:
+    def discover(self, *, force: bool = False) -> dict[str, Any]:  # noqa: C901
         """Fetch and cache the OIDC discovery document.
 
         In manual mode (no issuer), this returns an empty dict without
@@ -245,6 +250,7 @@ class OIDCProvider(OAuth2Provider):
 
         Raises:
             DiscoveryError: If discovery fails (only in auto/hybrid mode).
+
         """
         # Manual mode: no discovery, return empty dict
         if not self._discovery_enabled:
@@ -260,7 +266,8 @@ class OIDCProvider(OAuth2Provider):
             if age < self.config.discovery_ttl:
                 return self._discovery_doc
 
-        assert self.config.issuer is not None
+        if self.config.issuer is None:
+            raise ConfigurationError("issuer is required to fetch the OIDC discovery document")
         discovery_url = f"{self.config.issuer.rstrip('/')}/.well-known/openid-configuration"
 
         if logger.isEnabledFor(TRACE_LEVEL):
@@ -315,7 +322,8 @@ class OIDCProvider(OAuth2Provider):
             self.config.issuer,
             mode,
         )
-        assert self._discovery_doc is not None
+        if self._discovery_doc is None:
+            raise ConfigurationError("OIDC discovery completed without producing a discovery document")
         return self._discovery_doc
 
     def _update_endpoints_from_discovery(self) -> None:
@@ -365,6 +373,7 @@ class OIDCProvider(OAuth2Provider):
 
         Returns:
             Tuple of (code_verifier, code_challenge).
+
         """
         # Generate 32 bytes of random data for code_verifier
         # Base64url encode -> 43 characters
@@ -396,6 +405,7 @@ class OIDCProvider(OAuth2Provider):
 
         Returns:
             Tuple of (authorization_url, state).
+
         """
         # Ensure discovery is done first
         self.discover()
@@ -451,6 +461,7 @@ class OIDCProvider(OAuth2Provider):
 
         Raises:
             TokenExchangeError: If exchange fails.
+
         """
         # Use internally stored code_verifier if not provided
         if code_verifier is None and self.config.pkce:
@@ -487,6 +498,7 @@ class OIDCProvider(OAuth2Provider):
 
         Raises:
             TokenValidationError: If validation fails.
+
         """
         # Use discovered issuer if available (authoritative), fallback to configured
         # This handles cases where the IDP returns a different issuer in discovery
@@ -557,7 +569,7 @@ class OIDCProvider(OAuth2Provider):
     # JWKS keys rotate periodically; re-fetch after this TTL (seconds)
     _JWKS_TTL_SECONDS: int = 3600
 
-    def _get_jwks(self) -> dict[str, Any]:
+    def _get_jwks(self) -> dict[str, Any]:  # noqa: C901
         """Fetch JSON Web Key Set for ID token verification.
 
         Uses explicit jwks_uri if configured, otherwise gets it from discovery.
@@ -592,7 +604,8 @@ class OIDCProvider(OAuth2Provider):
             response.raise_for_status()
             self._jwks = response.json()
             self._jwks_fetched_at = datetime.now(timezone.utc)
-            assert self._jwks is not None
+            if self._jwks is None:
+                raise ConfigurationError("JWKS endpoint returned an empty document")
 
             if logger.isEnabledFor(TRACE_LEVEL):
                 keys = self._jwks.get("keys", [])
@@ -625,6 +638,7 @@ class OIDCProvider(OAuth2Provider):
 
         Raises:
             TokenRefreshError: If refresh fails.
+
         """
         # Ensure discovery is done to get correct token_endpoint
         self.discover()
@@ -647,6 +661,7 @@ class OIDCProvider(OAuth2Provider):
 
         Raises:
             AuthError: If request fails or endpoint not configured.
+
         """
         if token is None:
             token = self.get_token()

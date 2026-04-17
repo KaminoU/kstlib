@@ -66,6 +66,7 @@ class AuthSession:
                 If None, uses provider's SSL config or global config.
             ssl_ca_bundle: Override CA bundle path.
                 If None, uses provider's SSL config or global config.
+
         """
         self.provider = provider
         self.timeout = timeout
@@ -151,6 +152,7 @@ class AuthSession:
 
         Raises:
             TokenExpiredError: If no valid token is available.
+
         """
         token = self.provider.get_token(auto_refresh=self.auto_refresh)
 
@@ -196,6 +198,7 @@ class AuthSession:
 
         Returns:
             HTTP response.
+
         """
         if self._sync_client is None:
             msg = "Session not initialized - use 'with AuthSession(...) as session:'"
@@ -276,6 +279,7 @@ class AuthSession:
 
         Returns:
             HTTP response.
+
         """
         if self._async_client is None:
             msg = "Session not initialized - use 'async with AuthSession(...) as session:'"

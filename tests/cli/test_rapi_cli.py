@@ -19,6 +19,7 @@ from kstlib.rapi import (
     RapiResponse,
     RequestError,
     ResponseTooLargeError,
+    ServerNotFoundError,
 )
 
 # Import modules (not functions) to allow patching
@@ -655,6 +656,110 @@ class TestRapiCall:
 
             assert result.exit_code == 1
             assert "too large" in result.stdout
+
+    # ========================================================================
+    # Phase 4: --server flag (server profile selection)
+    # ========================================================================
+
+    def test_call_with_server_flag(self) -> None:
+        """--server flag is forwarded to client.call()."""
+        with (
+            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.return_value = _mock_response(
+                data={"login": "octocat"},
+                endpoint_ref="github.user",
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "--server", "github", "github.user"])
+
+            assert result.exit_code == 0
+            call_kwargs = mock_client.call.call_args.kwargs
+            assert call_kwargs.get("server") == "github"
+
+    def test_call_with_server_short_flag(self) -> None:
+        """-s short flag works the same as --server."""
+        with (
+            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.return_value = _mock_response(
+                data={"login": "octocat"},
+                endpoint_ref="github.user",
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "-s", "github", "github.user"])
+
+            assert result.exit_code == 0
+            call_kwargs = mock_client.call.call_args.kwargs
+            assert call_kwargs.get("server") == "github"
+
+    def test_call_without_server_flag_passes_none(self) -> None:
+        """No --server flag forwards server=None to client.call()."""
+        with (
+            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.return_value = _mock_response(
+                data={"origin": "1.2.3.4"},
+                endpoint_ref="httpbin.get_ip",
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip"])
+
+            assert result.exit_code == 0
+            call_kwargs = mock_client.call.call_args.kwargs
+            assert call_kwargs.get("server") is None
+
+    def test_call_server_not_found(self) -> None:
+        """Unknown server name exits 1 with helpful message listing available."""
+        with (
+            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.side_effect = ServerNotFoundError(
+                "ghost",
+                available=["github", "jira"],
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "-s", "ghost", "github.user"])
+
+            assert result.exit_code == 1
+            assert "Server profile not found" in result.stdout
+            assert "ghost" in result.stdout
+            # Available servers listed for the user
+            assert "github" in result.stdout
+            assert "jira" in result.stdout
+
+    def test_call_server_not_found_no_servers_configured(self) -> None:
+        """Unknown server with no servers configured shows '(none configured)'."""
+        with (
+            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.side_effect = ServerNotFoundError("ghost", available=[])
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "-s", "ghost", "github.user"])
+
+            assert result.exit_code == 1
+            assert "Server profile not found" in result.stdout
+            assert "(none configured)" in result.stdout
 
 
 class TestRapiListQueryIndicator:

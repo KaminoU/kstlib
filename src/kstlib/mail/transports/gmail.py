@@ -32,6 +32,7 @@ Examples:
             token = provider.get_token()
             transport = GmailTransport(token=token)
             await transport.send(message)
+
 """
 
 from __future__ import annotations
@@ -68,6 +69,7 @@ class GmailResponse:
         id: The immutable ID of the sent message.
         thread_id: The ID of the thread the message belongs to.
         label_ids: List of label IDs applied to this message.
+
     """
 
     id: str
@@ -116,6 +118,7 @@ class GmailTransport(AsyncMailTransport):
                 token=token,
                 on_token_refresh=refresh_token,
             )
+
     """
 
     def __init__(
@@ -134,6 +137,7 @@ class GmailTransport(AsyncMailTransport):
 
         Raises:
             MailConfigurationError: If token is None or has no access_token.
+
         """
         if token is None:
             raise MailConfigurationError("OAuth2 token is required for GmailTransport")
@@ -165,6 +169,7 @@ class GmailTransport(AsyncMailTransport):
 
         Args:
             token: New OAuth2 token.
+
         """
         self._token = token
 
@@ -184,6 +189,7 @@ class GmailTransport(AsyncMailTransport):
         Raises:
             MailTransportError: If the API request fails.
             MailConfigurationError: If httpx is not installed.
+
         """
         try:
             import httpx
@@ -253,6 +259,7 @@ class GmailTransport(AsyncMailTransport):
 
         Returns:
             Base64url encoded message string.
+
         """
         raw_bytes = message.as_bytes()
         # base64url encoding (URL-safe, no padding)
@@ -268,5 +275,6 @@ class GmailTransport(AsyncMailTransport):
 
         Raises:
             MailTransportError: Always raises with error details.
+
         """
         handle_http_error_response(response, "Gmail", log, extract_code=True)

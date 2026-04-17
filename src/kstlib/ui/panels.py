@@ -145,6 +145,7 @@ class PanelManager:
         >>> panel = pm.render_panel("error", payload="Oops!", title="Custom Title")
         >>> "Custom Title" in str(panel.title)
         True
+
     """
 
     def __init__(self, config: Mapping[str, Any] | Box | None = None, console: Console | None = None) -> None:
@@ -170,6 +171,7 @@ class PanelManager:
 
         Raises:
             PanelRenderingError: If the payload type is unsupported.
+
         """
         panel_config = self._resolve_panel_config(kind, overrides)
         renderable = self._build_renderable(payload, panel_config["content"])
@@ -221,6 +223,7 @@ class PanelManager:
 
         Returns:
             The rendered ``Panel``.
+
         """
         target_console = self._ensure_console(console)
         panel = self.render_panel(kind=kind, payload=payload, **overrides)
@@ -245,6 +248,7 @@ class PanelManager:
 
         Returns:
             The rendered ``Panel``.
+
         """
         target_console = self._ensure_console(console)
         return await asyncio.to_thread(

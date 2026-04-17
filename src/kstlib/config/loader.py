@@ -21,6 +21,7 @@ Examples:
         >>> from kstlib.config import load_from_file, get_config  # doctest: +SKIP
         >>> config = load_from_file("config.yml")  # doctest: +SKIP
         >>> config = get_config()  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from typing import Any, Literal, cast
 
 import yaml
 from box import Box
+from platformdirs import site_config_dir
 
 try:
     import tomli
@@ -78,6 +80,7 @@ def _load_yaml_file(path: pathlib.Path, encoding: str = DEFAULT_ENCODING) -> dic
 
     Raises:
         ConfigFileNotFoundError: If the file does not exist.
+
     """
     if not path.is_file():
         raise ConfigFileNotFoundError(f"Config file not found: {path}")
@@ -98,6 +101,7 @@ def _load_toml_file(path: pathlib.Path) -> dict[str, Any]:
     Raises:
         ConfigFileNotFoundError: If the file does not exist.
         ConfigFormatError: If tomli package is not installed.
+
     """
     if not path.is_file():
         raise ConfigFileNotFoundError(f"Config file not found: {path}")
@@ -120,6 +124,7 @@ def _load_json_file(path: pathlib.Path, encoding: str = DEFAULT_ENCODING) -> dic
 
     Raises:
         ConfigFileNotFoundError: If the file does not exist.
+
     """
     if not path.is_file():
         raise ConfigFileNotFoundError(f"Config file not found: {path}")
@@ -141,6 +146,7 @@ def _load_ini_file(path: pathlib.Path, encoding: str = DEFAULT_ENCODING) -> dict
 
     Raises:
         ConfigFileNotFoundError: If the file does not exist.
+
     """
     if not path.is_file():
         raise ConfigFileNotFoundError(f"Config file not found: {path}")
@@ -239,6 +245,7 @@ def _sanitize_config_values(data: Any, path: str = "", *, _depth: int = 0) -> No
 
     Raises:
         ConfigFormatError: If NaN or Inf values are found.
+
     """
     if _depth > 32:
         return
@@ -276,6 +283,7 @@ def _load_any_config_file(
 
     Raises:
         ConfigFormatError: If the file extension is not supported.
+
     """
     from kstlib.config.sops import get_real_extension, is_sops_file
 
@@ -337,6 +345,7 @@ def _load_with_includes(
         ConfigCircularIncludeError: If a circular include is detected.
         ConfigIncludeDepthError: If include depth exceeds MAX_INCLUDE_DEPTH.
         ConfigFormatError: If format mismatch occurs (strict_format=True).
+
     """
     # Lazy import for SOPS extension detection
     from kstlib.config.sops import get_real_extension, is_sops_file
@@ -405,11 +414,41 @@ def _load_default_config(encoding: str = DEFAULT_ENCODING) -> dict[str, Any]:
 
     Returns:
         dict: Default configuration as parsed from kstlib.conf.yml, or empty dict if missing.
+
     """
     config_path = pathlib.Path(__file__).resolve().parent.parent / CONFIG_FILENAME
     if not config_path.is_file():
         return {}
     return _load_yaml_file(config_path, encoding)
+
+
+def _get_system_config_paths(filename: str) -> list[pathlib.Path]:
+    """Return system-wide configuration paths for the current platform.
+
+    Uses ``platformdirs.site_config_dir(multipath=True)`` for cross-platform
+    XDG support. On Linux, respects the ``XDG_CONFIG_DIRS`` environment
+    variable and yields one path per entry. On macOS, uses
+    ``/Library/Application Support/kstlib``. On Windows, uses
+    ``%PROGRAMDATA%/kstlib``.
+
+    The returned list is in deep-merge order (lowest priority first), i.e.,
+    the reverse of what ``site_config_dir`` returns. This way, later entries
+    override earlier ones during the cascade, matching how ``XDG_CONFIG_DIRS``
+    is documented (first entry has the highest priority).
+
+    Args:
+        filename: Config filename to locate in each system config dir.
+
+    Returns:
+        List of candidate paths. May be empty if no system dirs are defined.
+        Callers must skip non-existent entries silently.
+
+    """
+    raw = site_config_dir("kstlib", appauthor=False, multipath=True)
+    if not raw:
+        return []
+    dirs = [d for d in raw.split(os.pathsep) if d]
+    return [pathlib.Path(d) / filename for d in reversed(dirs)]
 
 
 # ============================================================================
@@ -471,6 +510,7 @@ class ConfigLoader:
 
             >>> loader = ConfigLoader(sops_decrypt=False)  # doctest: +SKIP
             >>> config = loader.load_from_file("secrets.sops.yml")  # Loads raw  # doctest: +SKIP
+
     """
 
     # pylint: disable=too-many-arguments
@@ -494,6 +534,7 @@ class ConfigLoader:
             auto_kwargs: Legacy keyword arguments controlling auto-discovery:
                 ``auto_discovery``, ``auto_source``, ``auto_filename``,
                 ``auto_env_var``, and ``auto_path``.
+
         """
         self.strict_format = strict_format
         self.encoding = encoding
@@ -624,6 +665,7 @@ class ConfigLoader:
             >>> loader = ConfigLoader()  # doctest: +SKIP
             >>> config = loader.load_from_file("/opt/myapp/config.yml")  # doctest: +SKIP
             >>> print(config.database.host)  # doctest: +SKIP
+
         """
         path = pathlib.Path(path).resolve()
         if not path.is_file():
@@ -657,6 +699,7 @@ class ConfigLoader:
             >>> os.environ["CONFIG_PATH"] = "/opt/config.yml"  # doctest: +SKIP
             >>> loader = ConfigLoader()  # doctest: +SKIP
             >>> config = loader.load_from_env()  # doctest: +SKIP
+
         """
         path_str = os.getenv(env_var)
         if not path_str:
@@ -669,9 +712,12 @@ class ConfigLoader:
 
         Search order (priority from lowest to highest):
             1. Package default config (lowest priority - base layer)
-            2. User's config directory (e.g., ~/.config/kstlib.conf.yml)
-            3. User's home directory (e.g., ~/kstlib.conf.yml)
-            4. Current working directory (highest priority - overrides all)
+            2. System-wide config dirs from ``platformdirs.site_config_dir``
+               (respects ``XDG_CONFIG_DIRS`` on Linux, native locations on
+               Mac/Windows). Missing files are skipped silently.
+            3. User's config directory (e.g., ~/.config/kstlib.conf.yml)
+            4. User's home directory (e.g., ~/kstlib.conf.yml)
+            5. Current working directory (highest priority - overrides all)
 
         Args:
             filename: Config filename to search for.
@@ -686,6 +732,7 @@ class ConfigLoader:
         Examples:
             >>> loader = ConfigLoader()  # doctest: +SKIP
             >>> config = loader.load("myapp.yml")  # doctest: +SKIP
+
         """
         # Start with package default config
         _config = _load_default_config(self.encoding)
@@ -693,6 +740,7 @@ class ConfigLoader:
         # Search multiple locations
         home = pathlib.Path.home()
         search_paths = [
+            *_get_system_config_paths(filename),  # system-wide (silent if missing)
             home / USER_CONFIG_DIR / filename,
             home / filename,
             pathlib.Path.cwd() / filename,
@@ -741,6 +789,7 @@ class ConfigLoader:
         Examples:
             >>> config = ConfigLoader.from_file("config.yml")  # doctest: +SKIP
             >>> config = ConfigLoader.from_file("config.yml", strict_format=True)  # doctest: +SKIP
+
         """
         return cls(strict_format=strict_format, encoding=encoding, sops_decrypt=sops_decrypt).load_from_file(path)
 
@@ -767,6 +816,7 @@ class ConfigLoader:
         Examples:
             >>> config = ConfigLoader.from_env("CONFIG_PATH")  # doctest: +SKIP
             >>> config = ConfigLoader.from_env("MYAPP_CONFIG", strict_format=True)  # doctest: +SKIP
+
         """
         return cls(strict_format=strict_format, encoding=encoding, sops_decrypt=sops_decrypt).load_from_env(env_var)
 
@@ -793,6 +843,7 @@ class ConfigLoader:
         Examples:
             >>> config = ConfigLoader.from_cascading("myapp.yml")  # doctest: +SKIP
             >>> config = ConfigLoader.from_cascading(strict_format=True)  # doctest: +SKIP
+
         """
         return cls(strict_format=strict_format, encoding=encoding, sops_decrypt=sops_decrypt).load(filename)
 
@@ -820,9 +871,12 @@ def load_config(
 
     Cascading search order (priority from lowest to highest):
         1. Package default config (lowest priority - base layer)
-        2. User's config directory (e.g., ~/.config/kstlib.conf.yml)
-        3. User's home directory (e.g., ~/kstlib.conf.yml)
-        4. Current working directory (highest priority - overrides all)
+        2. System-wide config dirs from ``platformdirs.site_config_dir``
+           (respects ``XDG_CONFIG_DIRS`` on Linux, native on Mac/Windows).
+           Missing files are skipped silently.
+        3. User's config directory (e.g., ~/.config/kstlib.conf.yml)
+        4. User's home directory (e.g., ~/kstlib.conf.yml)
+        5. Current working directory (highest priority - overrides all)
 
     Note: Files are merged using deep merge, so later files override earlier ones.
     The current working directory config has final say on all values.
@@ -856,6 +910,7 @@ def load_config(
         Direct load with strict format enforcement::
 
             >>> config = load_config(path="/etc/app.yml", strict_format=True)  # doctest: +SKIP
+
     """
     loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt)
     if path is not None:
@@ -889,6 +944,7 @@ def get_config(
     Examples:
         >>> config = get_config()  # doctest: +SKIP
         >>> config = get_config(force_reload=True)  # doctest: +SKIP
+
     """
     cache_stale = False
     if not force_reload and max_age is not None and _default_loader.cache is not None:
@@ -915,6 +971,7 @@ def require_config() -> Box:
 
     Examples:
         >>> config = require_config()  # doctest: +SKIP
+
     """
     if _default_loader.cache is None:
         raise ConfigNotLoadedError("Configuration not loaded yet. Call get_config() before accessing the config.")
@@ -949,6 +1006,7 @@ def load_from_file(
     Examples:
         >>> config = load_from_file("/opt/myapp/config.yml")  # doctest: +SKIP
         >>> config = load_from_file("/etc/app.yml", strict_format=True)  # doctest: +SKIP
+
     """
     return ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt).load_from_file(path)
 
@@ -987,6 +1045,7 @@ def load_from_env(
         With strict format enforcement::
 
             >>> config = load_from_env("CONFIG_PATH", strict_format=True)  # doctest: +SKIP
+
     """
     return ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt).load_from_env(env_var)
 
@@ -1000,6 +1059,7 @@ def clear_config() -> None:
     Examples:
         >>> clear_config()  # doctest: +SKIP
         >>> config = get_config()  # Will reload from disk  # doctest: +SKIP
+
     """
     _default_loader.cache = None
 

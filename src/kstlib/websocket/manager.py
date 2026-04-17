@@ -30,6 +30,7 @@ Examples:
     ...     async with ws:
     ...         async for candle in ws.stream():
     ...             process(candle)
+
 """
 
 from __future__ import annotations
@@ -73,7 +74,7 @@ try:
     )
 
     HAS_WEBSOCKETS = True
-except ImportError:  # pragma: no cover
+except ImportError:  # pragma: no cover - optional websockets dep may be absent
     HAS_WEBSOCKETS = False
     websockets = None  # type: ignore[assignment]
     ClientConnection = None  # type: ignore[assignment,misc]
@@ -139,6 +140,7 @@ class WebSocketManager:
         ...         await ws.subscribe("btcusdt@kline_4h")
         ...         async for msg in ws.stream():
         ...             process(msg)
+
     """
 
     def __init__(
@@ -197,6 +199,7 @@ class WebSocketManager:
 
         Raises:
             ImportError: If websockets package is not installed.
+
         """
         _check_websockets_installed()
 
@@ -322,6 +325,7 @@ class WebSocketManager:
             ...             print(msg)
             ...     finally:
             ...         await ws.close()
+
         """
         if not self._state.can_connect():
             log.warning("Cannot connect from state %s", self._state)
@@ -694,6 +698,7 @@ class WebSocketManager:
             ...     async with WebSocketManager("wss://example.com/ws") as ws:
             ...         # Disconnect now, reconnect in 5 minutes
             ...         await ws.request_disconnect(reconnect_after=300)
+
         """
         if self._state != ConnectionState.CONNECTED:
             log.warning("Cannot disconnect from state %s", self._state)
@@ -723,6 +728,7 @@ class WebSocketManager:
             ...     await ws.request_disconnect()
             ...     # Reconnect in 5 minutes
             ...     await ws.schedule_reconnect(300)
+
         """
         if self._state not in (ConnectionState.DISCONNECTED, ConnectionState.RECONNECTING):
             log.warning("Cannot schedule reconnect from state %s", self._state)
@@ -758,6 +764,7 @@ class WebSocketManager:
             ...         timeout=3600,
             ...     ):
             ...         await ws.connect()
+
         """
         callback = should_reconnect or self._should_reconnect
         if callback is None:
@@ -804,6 +811,7 @@ class WebSocketManager:
             ...     await ws.force_close()
             ...     # Cannot reconnect after force_close
             ...     assert ws.state == ConnectionState.CLOSED
+
         """
         self._auto_reconnect = False
         self._state = ConnectionState.CLOSING
@@ -840,6 +848,7 @@ class WebSocketManager:
             ...     await ws.kill()  # Simulates Binance kicking us
             ...     assert ws.state == ConnectionState.DISCONNECTED
             ...     # Heartbeat detects is_dead=True and can restart
+
         """
         if self._state == ConnectionState.CLOSED:
             log.warning("Cannot kill: already closed")
@@ -891,6 +900,7 @@ class WebSocketManager:
             ...     # In SIGINT handler:
             ...     await ws.shutdown()
             ...     assert ws.is_shutdown  # Heartbeat knows not to restart
+
         """
         log.info("WebSocket shutdown requested")
         self._shutdown_event.set()
@@ -915,6 +925,7 @@ class WebSocketManager:
             ...     ws = WebSocketManager("wss://example.com/ws")
             ...     if ws.is_dead:
             ...         await ws.connect()  # Restart
+
         """
         return self._state in (
             ConnectionState.DISCONNECTED,
@@ -945,6 +956,7 @@ class WebSocketManager:
             >>> async def main():  # doctest: +SKIP
             ...     async with WebSocketManager("wss://example.com/ws") as ws:
             ...         await ws.send({"type": "ping"})
+
         """
         if self._ws is None or not self._state.can_send():
             raise WebSocketClosedError(
@@ -974,6 +986,7 @@ class WebSocketManager:
             >>> async def main():  # doctest: +SKIP
             ...     async with WebSocketManager("wss://example.com/ws") as ws:
             ...         msg = await ws.receive(timeout=10)
+
         """
         try:
             if timeout is not None:
@@ -1000,6 +1013,7 @@ class WebSocketManager:
             ...     async with WebSocketManager("wss://example.com/ws") as ws:
             ...         async for msg in ws.stream():
             ...             print(msg)
+
         """
         while self._state not in (ConnectionState.CLOSED, ConnectionState.CLOSING):
             if self._shutdown_event.is_set():
@@ -1041,6 +1055,7 @@ class WebSocketManager:
             >>> async def main():  # doctest: +SKIP
             ...     async with WebSocketManager("wss://stream.binance.com/ws") as ws:
             ...         await ws.subscribe("btcusdt@trade", "ethusdt@trade")
+
         """
         for channel in channels:
             if channel not in self._subscriptions:
@@ -1058,6 +1073,7 @@ class WebSocketManager:
             >>> async def main():  # doctest: +SKIP
             ...     async with WebSocketManager("wss://stream.binance.com/ws") as ws:
             ...         await ws.unsubscribe("btcusdt@trade")
+
         """
         for channel in channels:
             self._subscriptions.discard(channel)
@@ -1077,6 +1093,7 @@ class WebSocketManager:
 
         Returns:
             True if connected, False if timed out.
+
         """
         try:
             if timeout is not None:
@@ -1095,6 +1112,7 @@ class WebSocketManager:
 
         Returns:
             True if disconnected, False if timed out.
+
         """
         try:
             if timeout is not None:

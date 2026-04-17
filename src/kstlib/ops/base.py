@@ -32,6 +32,7 @@ class AbstractRunner(Protocol):
         >>> def run_session(runner: AbstractRunner, config: SessionConfig) -> None:
         ...     status = runner.start(config)
         ...     print(f"Session {status.name} started with PID {status.pid}")
+
     """
 
     def start(self, config: SessionConfig) -> SessionStatus:
@@ -47,6 +48,7 @@ class AbstractRunner(Protocol):
             SessionExistsError: If a session with this name already exists.
             SessionStartError: If the session failed to start.
             BackendNotFoundError: If the backend binary is not available.
+
         """
         ...
 
@@ -71,6 +73,7 @@ class AbstractRunner(Protocol):
         Raises:
             SessionNotFoundError: If the session does not exist.
             SessionStopError: If the session could not be stopped.
+
         """
         ...
 
@@ -90,6 +93,7 @@ class AbstractRunner(Protocol):
         Note:
             This method uses os.execvp and does not return on success.
             The calling process is replaced by the attach command.
+
         """
         ...
 
@@ -104,6 +108,7 @@ class AbstractRunner(Protocol):
 
         Raises:
             SessionNotFoundError: If the session does not exist.
+
         """
         ...
 
@@ -119,6 +124,7 @@ class AbstractRunner(Protocol):
 
         Raises:
             SessionNotFoundError: If the session does not exist.
+
         """
         ...
 
@@ -130,6 +136,7 @@ class AbstractRunner(Protocol):
 
         Returns:
             True if the session exists, False otherwise.
+
         """
         ...
 
@@ -139,6 +146,7 @@ class AbstractRunner(Protocol):
         Returns:
             List of SessionStatus for all sessions.
             Empty list if no sessions exist.
+
         """
         ...
 

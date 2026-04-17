@@ -32,6 +32,7 @@ def lazy_factory(module_path: str, class_name: str) -> Callable[[Callable[..., T
         >>>
         >>> # SOPSProvider is only imported when _sops_factory() is called
         >>> provider = _sops_factory(path="secrets.sops.yml")
+
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:

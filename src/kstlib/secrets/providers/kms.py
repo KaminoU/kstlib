@@ -61,6 +61,7 @@ class KMSProvider(SecretProvider):
         ...     endpoint_url="http://localhost:4566",  # LocalStack
         ... )
         >>> # provider.resolve(SecretRequest(name="db.password", metadata={"ciphertext": "..."}))
+
     """
 
     name = "kms"
@@ -82,6 +83,7 @@ class KMSProvider(SecretProvider):
             endpoint_url: Custom endpoint for LocalStack (e.g., "http://localhost:4566").
             aws_access_key_id: AWS access key (optional, uses default credential chain).
             aws_secret_access_key: AWS secret key (optional, uses default credential chain).
+
         """
         self._key_id = key_id
         self._region_name = region_name
@@ -183,6 +185,7 @@ class KMSProvider(SecretProvider):
 
         Raises:
             SecretDecryptionError: If encryption fails or no key_id is configured.
+
         """
         effective_key_id = key_id or self._key_id
         if not effective_key_id:
@@ -205,6 +208,7 @@ class KMSProvider(SecretProvider):
 
         Returns:
             True if KMS is accessible and the key can be used.
+
         """
         if not _HAS_BOTO3:
             return False

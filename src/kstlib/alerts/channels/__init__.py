@@ -22,6 +22,7 @@ Examples:
             sender="alerts@example.com",
             recipients=["oncall@example.com"],
         )
+
 """
 
 from kstlib.alerts.channels.base import AlertChannel, AsyncAlertChannel

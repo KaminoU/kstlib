@@ -9,6 +9,7 @@ Example:
         ...     guard = PathGuardrails(tmpdir, policy=STRICT_POLICY)
         ...     guard.root.is_dir()
         True
+
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
+from kstlib.config.exceptions import KstlibError
 from kstlib.secure.permissions import DirectoryPermissions
 
 __all__ = [
@@ -30,7 +32,7 @@ __all__ = [
 ]
 
 
-class PathSecurityError(RuntimeError):
+class PathSecurityError(KstlibError, RuntimeError):
     """Raised when filesystem guardrails detect a security violation."""
 
 
@@ -50,6 +52,7 @@ class GuardPolicy:
         >>> policy = GuardPolicy(name="custom", allow_external=False)
         >>> policy.name
         'custom'
+
     """
 
     name: str
@@ -79,6 +82,7 @@ class PathGuardrails:
         ...     guard = PathGuardrails(tmpdir, policy=RELAXED_POLICY)
         ...     guard.policy.name
         'relaxed'
+
     """
 
     def __init__(self, root: str | Path, *, policy: GuardPolicy = STRICT_POLICY) -> None:
@@ -86,6 +90,7 @@ class PathGuardrails:
 
         Raises:
             PathSecurityError: If root does not exist or is not a directory.
+
         """
         self._policy = policy
         expanded = Path(root).expanduser()
@@ -114,6 +119,7 @@ class PathGuardrails:
 
         Raises:
             PathSecurityError: If path is not a file or is outside root.
+
         """
         path = self._resolve(candidate)
         if not path.is_file():
@@ -125,6 +131,7 @@ class PathGuardrails:
 
         Raises:
             PathSecurityError: If path is not a directory or is outside root.
+
         """
         path = self._resolve(candidate)
         if not path.is_dir():

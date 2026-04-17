@@ -35,6 +35,7 @@ class SecretRequest:
         required: Whether the resolver must raise if the secret is missing.
         default: Optional fallback value when the secret is not required.
         metadata: Arbitrary provider hints (e.g. keyring namespace).
+
     """
 
     name: str
@@ -52,6 +53,7 @@ class SecretRecord:
         value: The secret itself.
         source: The origin of the secret.
         metadata: Provider specific metadata (e.g. timestamp, path, ttl).
+
     """
 
     value: Any = field(repr=False)

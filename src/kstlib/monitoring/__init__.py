@@ -32,6 +32,7 @@ Examples:
     >>> t.add_row(["API", StatusCell("OK", StatusLevel.OK)])
     >>> "<table" in t.render()
     True
+
 """
 
 from __future__ import annotations

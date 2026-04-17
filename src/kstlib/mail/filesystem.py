@@ -66,6 +66,7 @@ class MailFilesystemGuards:
     Example:
         >>> guards = MailFilesystemGuards.default()  # doctest: +SKIP
         >>> safe_attachment = guards.resolve_attachment("reports/daily.csv")  # doctest: +SKIP
+
     """
 
     def __init__(

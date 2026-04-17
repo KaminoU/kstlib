@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from kstlib.config.exceptions import KstlibError
 
-class MailError(Exception):
+
+class MailError(KstlibError):
     """Base class for mail related errors."""
 
 

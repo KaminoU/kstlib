@@ -35,6 +35,7 @@ class StepType(str, Enum):
         SHELL: Execute a shell command via ``subprocess.run(shell=True)``.
         PYTHON: Execute a Python module via ``python -m module``.
         CALLABLE: Import and call a Python function directly.
+
     """
 
     SHELL = "shell"
@@ -48,6 +49,7 @@ class ErrorPolicy(str, Enum):
     Attributes:
         FAIL_FAST: Abort pipeline on first step failure.
         CONTINUE: Continue executing remaining steps after a failure.
+
     """
 
     FAIL_FAST = "fail_fast"
@@ -61,6 +63,7 @@ class StepCondition(str, Enum):
         ALWAYS: Execute the step regardless of previous results.
         ON_SUCCESS: Execute only if all previous steps succeeded.
         ON_FAILURE: Execute only if at least one previous step failed.
+
     """
 
     ALWAYS = "always"
@@ -76,6 +79,7 @@ class StepStatus(str, Enum):
         FAILED: Step failed (non-zero exit code or exception).
         SKIPPED: Step was skipped due to condition or abort.
         TIMEOUT: Step exceeded its timeout limit.
+
     """
 
     SUCCESS = "success"
@@ -115,6 +119,7 @@ class StepConfig:
         ...     module="my.module",
         ...     args=["--verbose"],
         ... )
+
     """
 
     name: str
@@ -133,6 +138,7 @@ class StepConfig:
 
         Raises:
             PipelineConfigError: If any configuration value is invalid.
+
         """
         validate_step_name(self.name)
 
@@ -176,18 +182,21 @@ class PipelineConfig:
         ... )
         >>> len(config.steps)
         2
+
     """
 
     name: str
     steps: tuple[StepConfig, ...]
     on_error: ErrorPolicy = ErrorPolicy.FAIL_FAST
     default_timeout: float = 300.0
+    allowed_callable_modules: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         """Validate pipeline configuration values.
 
         Raises:
             PipelineConfigError: If configuration is invalid.
+
         """
         validate_pipeline_config(
             step_count=len(self.steps),
@@ -223,6 +232,7 @@ class StepResult:
         >>> result = StepResult(name="build", status=StepStatus.SUCCESS)
         >>> result.status
         <StepStatus.SUCCESS: 'success'>
+
     """
 
     name: str
@@ -248,6 +258,7 @@ class PipelineResult:
         >>> result = PipelineResult(name="deploy")
         >>> result.success
         True
+
     """
 
     name: str
@@ -260,6 +271,7 @@ class PipelineResult:
 
         Returns:
             True if no step has FAILED or TIMEOUT status.
+
         """
         return all(r.status not in (StepStatus.FAILED, StepStatus.TIMEOUT) for r in self.results)
 
@@ -269,6 +281,7 @@ class PipelineResult:
 
         Returns:
             List of StepResult with FAILED or TIMEOUT status.
+
         """
         return [r for r in self.results if r.status in (StepStatus.FAILED, StepStatus.TIMEOUT)]
 
@@ -278,6 +291,7 @@ class PipelineResult:
 
         Returns:
             List of StepResult with SKIPPED status.
+
         """
         return [r for r in self.results if r.status == StepStatus.SKIPPED]
 

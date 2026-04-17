@@ -51,6 +51,7 @@ def _version_callback(value: bool) -> None:
 
     Raises:
         typer.Exit: Always exits after showing version.
+
     """
     if value:
         print(f"{meta.__version__}")
@@ -63,6 +64,7 @@ def get_cli_logger() -> logging.Logger:
     Returns:
         The CLI logger. Uses the global kstlib logger if initialized
         via --log-level, otherwise returns a standard logger.
+
     """
     return get_logger("cli")
 
@@ -149,6 +151,7 @@ def info(
 
     Args:
         full: If True, show detailed package metadata including author, license, etc.
+
     """
     print(meta.__logo__)
 

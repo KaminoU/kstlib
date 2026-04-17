@@ -52,6 +52,7 @@ Examples:
     ...     while running:
     ...         wd.ping()
     ...         do_work()
+
 """
 
 from kstlib.resilience.circuit_breaker import (

@@ -214,29 +214,6 @@ def test_submodules_lazy_load() -> None:
     assert "ui" in kstlib._loaded
 
 
-def test_lazy_import_error_handling_for_config_not_loaded(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that ConfigNotLoadedError import error returns None gracefully."""
-    import kstlib
-
-    # Clear cache
-    kstlib._loaded.pop("ConfigNotLoadedError", None)
-
-    # Mock importlib to raise ImportError for ConfigNotLoadedError
-    original_import = importlib.import_module
-
-    def mock_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        if name == "kstlib.config.exceptions":
-            raise ImportError("Simulated minimal install")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(importlib, "import_module", mock_import)
-
-    # Should return None instead of raising
-    result = kstlib.__getattr__("ConfigNotLoadedError")
-    assert result is None
-    assert kstlib._loaded["ConfigNotLoadedError"] is None
-
-
 def test_lazy_import_error_raises_for_other_attrs(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that ImportError is raised for non-ConfigNotLoadedError attributes."""
     import kstlib

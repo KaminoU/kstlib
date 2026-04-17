@@ -35,12 +35,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Step type to executor mapping
-_STEP_EXECUTORS: dict[StepType, AbstractStep] = {
-    StepType.SHELL: ShellStep(),
-    StepType.PYTHON: PythonStep(),
-    StepType.CALLABLE: CallableStep(),
-}
+
+def _build_executors(config: PipelineConfig) -> dict[StepType, AbstractStep]:
+    """Build the step-type to executor mapping for a given pipeline config.
+
+    CallableStep is constructed with the pipeline's optional
+    ``allowed_callable_modules`` whitelist so the same runner-wide
+    security policy applies to every callable step.
+    """
+    return {
+        StepType.SHELL: ShellStep(),
+        StepType.PYTHON: PythonStep(),
+        StepType.CALLABLE: CallableStep(allowed_modules=config.allowed_callable_modules),
+    }
 
 
 class PipelineRunner:
@@ -71,6 +78,7 @@ class PipelineRunner:
 
         >>> runner = PipelineRunner.from_config("morning")  # doctest: +SKIP
         >>> result = runner.run()  # doctest: +SKIP
+
     """
 
     def __init__(self, config: PipelineConfig) -> None:
@@ -78,8 +86,10 @@ class PipelineRunner:
 
         Args:
             config: Pipeline configuration with steps and policies.
+
         """
         self._config = config
+        self._executors = _build_executors(config)
 
     @property
     def config(self) -> PipelineConfig:
@@ -109,6 +119,7 @@ class PipelineRunner:
 
         Examples:
             >>> runner = PipelineRunner.from_config("morning")  # doctest: +SKIP
+
         """
         config_data = _load_pipeline_config(name)
 
@@ -132,6 +143,7 @@ class PipelineRunner:
 
         Raises:
             PipelineAbortedError: If a step fails with ``fail_fast`` policy.
+
         """
         pipeline_result = PipelineResult(name=self._config.name)
         has_failure = False
@@ -164,7 +176,7 @@ class PipelineRunner:
                 effective_config = _with_timeout(step_config, self._config.default_timeout)
 
             # Execute step
-            executor = _STEP_EXECUTORS[step_config.type]
+            executor = self._executors[step_config.type]
             result = executor.execute(effective_config, dry_run=dry_run)
             pipeline_result.results.append(result)
 
@@ -209,6 +221,7 @@ class PipelineRunner:
 
         Returns:
             True if the step should execute.
+
         """
         if step.when == StepCondition.ON_SUCCESS:
             return not has_failure
@@ -231,6 +244,7 @@ class PipelineRunner:
             failed_step: The step that caused the abort.
             pipeline_result: Pipeline result to append step results to.
             dry_run: Whether to simulate execution.
+
         """
         found = False
         for step_config in self._config.steps:
@@ -243,7 +257,7 @@ class PipelineRunner:
                 effective_config = step_config
                 if step_config.timeout is None:
                     effective_config = _with_timeout(step_config, self._config.default_timeout)
-                executor = _STEP_EXECUTORS[step_config.type]
+                executor = self._executors[step_config.type]
                 result = executor.execute(effective_config, dry_run=dry_run)
                 pipeline_result.results.append(result)
                 logger.info(
@@ -272,6 +286,7 @@ def _load_pipeline_config(name: str) -> dict[str, Any]:
 
     Raises:
         PipelineConfigError: If the pipeline is not found.
+
     """
     # Lazy imports to avoid circular dependencies
     try:
@@ -308,6 +323,7 @@ def _parse_pipeline_config(
 
     Raises:
         PipelineConfigError: If config is invalid.
+
     """
     raw_steps = data.get("steps", [])
     if not isinstance(raw_steps, list):
@@ -331,11 +347,21 @@ def _parse_pipeline_config(
     except (TypeError, ValueError):
         raise PipelineConfigError(f"Pipeline '{name}': invalid default_timeout {default_timeout!r}") from None
 
+    raw_allowed = data.get("allowed_callable_modules")
+    allowed_callable_modules: tuple[str, ...] | None
+    if raw_allowed is None:
+        allowed_callable_modules = None
+    elif isinstance(raw_allowed, (list, tuple)) and all(isinstance(m, str) for m in raw_allowed):
+        allowed_callable_modules = tuple(raw_allowed)
+    else:
+        raise PipelineConfigError(f"Pipeline '{name}': 'allowed_callable_modules' must be a list of strings")
+
     return PipelineConfig(
         name=name,
         steps=tuple(steps),
         on_error=on_error,
         default_timeout=default_timeout,
+        allowed_callable_modules=allowed_callable_modules,
     )
 
 
@@ -356,6 +382,7 @@ def _parse_step_config(
 
     Raises:
         PipelineConfigError: If step config is invalid.
+
     """
     step_name = data.get("name")
     if not step_name:
@@ -414,6 +441,7 @@ def _with_timeout(config: StepConfig, timeout: float) -> StepConfig:
 
     Returns:
         New StepConfig with the specified timeout.
+
     """
     new = StepConfig(
         name=config.name,

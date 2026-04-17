@@ -44,6 +44,7 @@ def _extract_code_from_input(user_input: str) -> tuple[str | None, str | None]:
 
     Returns:
         Tuple of (code, state) where state may be None.
+
     """
     user_input = user_input.strip()
 
@@ -89,6 +90,7 @@ def _login_manual(
         auth_provider: The authentication provider instance.
         provider_name: Name of the provider for display.
         quiet: Suppress verbose output.
+
     """
     # Generate authorization URL (with PKCE if supported)
     if hasattr(auth_provider, "get_authorization_url_with_pkce"):
@@ -177,6 +179,7 @@ def _login_with_callback(
         quiet: Suppress verbose output.
         timeout: Callback timeout in seconds.
         no_browser: Print URL instead of opening browser.
+
     """
     callback_cfg = get_callback_server_config()
 
@@ -250,7 +253,7 @@ def _login_with_callback(
         )
 
 
-def login(  # noqa: PLR0913
+def login(
     provider: str | None = PROVIDER_ARGUMENT,
     quiet: bool = QUIET_OPTION,
     timeout: int = TIMEOUT_OPTION,

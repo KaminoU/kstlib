@@ -22,6 +22,7 @@ Example:
     ... )
     >>> status = runner.start(config)  # doctest: +SKIP
     >>> runner.attach("bot")  # Replaces process  # doctest: +SKIP
+
 """
 
 from __future__ import annotations
@@ -72,6 +73,7 @@ class ContainerRunner:
         ...     image="python:3.10-slim",
         ... )
         >>> status = runner.start(config)  # doctest: +SKIP
+
     """
 
     def __init__(self, runtime: str | None = None) -> None:
@@ -80,6 +82,7 @@ class ContainerRunner:
         Args:
             runtime: Container runtime ("podman", "docker", or None for auto-detect).
                      Auto-detection tries podman first, then docker.
+
         """
         if runtime is None:
             # Auto-detect: try podman first, then docker
@@ -104,6 +107,7 @@ class ContainerRunner:
 
         Raises:
             ContainerRuntimeNotFoundError: If runtime is not installed.
+
         """
         if self._binary_path is None:
             path = shutil.which(self._runtime)
@@ -132,10 +136,11 @@ class ContainerRunner:
 
         Raises:
             ContainerRuntimeNotFoundError: If runtime is not installed.
+
         """
         cmd = [self.binary, *args]
         logger.debug("Running: %s", " ".join(cmd))
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(
             cmd,
             capture_output=True,
             text=True,
@@ -150,6 +155,7 @@ class ContainerRunner:
 
         Returns:
             Container metadata dict or None if not found.
+
         """
         result = self._run(["inspect", name, "--format", "json"])
         if result.returncode != 0:
@@ -173,6 +179,7 @@ class ContainerRunner:
 
         Raises:
             SessionStartError: If restart failed.
+
         """
         logger.info("Restarting stopped container: %s", name)
         result = self._run(["start", name])
@@ -192,6 +199,7 @@ class ContainerRunner:
 
         Returns:
             List of command arguments.
+
         """
         args = [
             "run",
@@ -243,6 +251,7 @@ class ContainerRunner:
             SessionExistsError: If container already exists and is running.
             SessionStartError: If container failed to start.
             ContainerRuntimeNotFoundError: If runtime is not installed.
+
         """
         # Check if container already exists
         if self.exists(config.name):
@@ -292,6 +301,7 @@ class ContainerRunner:
         Raises:
             SessionNotFoundError: If container doesn't exist.
             SessionStopError: If container couldn't be stopped.
+
         """
         if not self.exists(name):
             raise SessionNotFoundError(name, "container")
@@ -332,6 +342,7 @@ class ContainerRunner:
 
         Note:
             Use Ctrl+P Ctrl+Q to detach from the container.
+
         """
         if not self.exists(name):
             raise SessionNotFoundError(name, "container")
@@ -352,7 +363,7 @@ class ContainerRunner:
         # On Windows, os.execvp doesn't work well with paths containing spaces
         # Use subprocess.run which handles this correctly
         try:
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(
                 [binary, "attach", name],
                 check=False,
             )
@@ -378,6 +389,7 @@ class ContainerRunner:
 
         Raises:
             SessionNotFoundError: If container doesn't exist.
+
         """
         info = self._inspect(name)
         if info is None:
@@ -432,6 +444,7 @@ class ContainerRunner:
 
         Raises:
             SessionNotFoundError: If container doesn't exist.
+
         """
         if not self.exists(name):
             raise SessionNotFoundError(name, "container")
@@ -449,6 +462,7 @@ class ContainerRunner:
 
         Returns:
             True if container exists, False otherwise.
+
         """
         return self._inspect(name) is not None
 
@@ -464,6 +478,7 @@ class ContainerRunner:
 
         Returns:
             List of parsed container dicts.
+
         """
         try:
             parsed = json.loads(raw)
@@ -494,6 +509,7 @@ class ContainerRunner:
 
         Returns:
             SessionStatus or None if the data is unparseable.
+
         """
         try:
             name = data.get("Names") or data.get("Name", "")
@@ -523,6 +539,7 @@ class ContainerRunner:
 
         Returns:
             List of SessionStatus for all containers.
+
         """
         result = self._run(["ps", "-a", "--format", "json"])
 
@@ -561,6 +578,7 @@ class ContainerRunner:
 
         Raises:
             SessionNotFoundError: If container doesn't exist.
+
         """
         validate_command(command)
         if not self.exists(name):

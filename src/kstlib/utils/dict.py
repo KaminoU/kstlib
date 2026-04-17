@@ -38,6 +38,7 @@ def deep_merge(
         >>> base = {"a": {"x": 1}, "b": 2}
         >>> deep_merge(base, {"a": {"y": 2}, "c": 3})
         {'a': {'x': 1, 'y': 2}, 'b': 2, 'c': 3}
+
     """
     if _depth > MAX_MERGE_DEPTH:
         raise RecursionError(f"deep_merge exceeded maximum depth ({MAX_MERGE_DEPTH})")

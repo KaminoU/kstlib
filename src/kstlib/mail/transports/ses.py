@@ -25,6 +25,7 @@ Examples:
             aws_access_key_id="AKIA...",
             aws_secret_access_key="secret...",
         )
+
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ class SesResponse:
 
     Attributes:
         message_id: The unique message ID assigned by SES.
+
     """
 
     message_id: str
@@ -90,6 +92,7 @@ class SesTransport(AsyncMailTransport):
                 aws_secret_access_key="secret...",
             )
             await transport.send(message)
+
     """
 
     def __init__(
@@ -146,6 +149,7 @@ class SesTransport(AsyncMailTransport):
             MailTransportError: If the SES API call fails.
             MailConfigurationError: If boto3 is not installed or AWS
                 credentials cannot be resolved.
+
         """
         try:
             import boto3
@@ -204,6 +208,7 @@ class SesTransport(AsyncMailTransport):
 
         Returns:
             Raw MIME bytes suitable for ``send_raw_email``.
+
         """
         return message.as_bytes()
 
@@ -216,6 +221,7 @@ class SesTransport(AsyncMailTransport):
 
         Returns:
             A boto3 SES client instance.
+
         """
         kwargs: dict[str, Any] = {
             "service_name": "ses",

@@ -29,6 +29,7 @@ Examples:
     ...     template=\"\"\"<p>CPU: {{ metrics.cpu }}%</p>\"\"\",
     ...     collectors={"metrics": get_metrics},
     ... )
+
 """
 
 from __future__ import annotations
@@ -62,6 +63,7 @@ class MonitoringResult:
         collected_at: Timestamp when data was collected.
         rendered_at: Timestamp when HTML was rendered.
         errors: List of collector errors (if fail_fast=False).
+
     """
 
     html: str
@@ -110,6 +112,7 @@ class MonitoringService:
         >>> service = MonitoringService(template="<p>{{ msg }}</p>")
         >>> service.add_collector("msg", lambda: "Hello").run_sync().html
         '<p>Hello</p>'
+
     """
 
     def __init__(
@@ -127,6 +130,7 @@ class MonitoringService:
             collectors: Optional initial collectors dict.
             inline_css: Use inline CSS for email compatibility.
             fail_fast: Raise immediately on collector errors.
+
         """
         self._template = template
         self._collectors: dict[str, Collector] = dict(collectors) if collectors else {}
@@ -167,6 +171,7 @@ class MonitoringService:
             >>> service = MonitoringService(template="<p>{{ x }} + {{ y }}</p>")
             >>> service.add_collector("x", lambda: 1).add_collector("y", lambda: 2)
             <kstlib.monitoring.service.MonitoringService object at ...>
+
         """
         self._collectors[name] = collector
         return self
@@ -182,6 +187,7 @@ class MonitoringService:
 
         Raises:
             KeyError: If collector name not found.
+
         """
         del self._collectors[name]
         return self
@@ -218,6 +224,7 @@ class MonitoringService:
 
         Raises:
             CollectorError: If fail_fast=True and any collector fails.
+
         """
         data: dict[str, Any] = {}
         errors: list[CollectorError] = []
@@ -262,6 +269,7 @@ class MonitoringService:
 
         Raises:
             RenderError: If template rendering fails.
+
         """
         from kstlib.monitoring._styles import get_css_classes
 
@@ -295,6 +303,7 @@ class MonitoringService:
             >>> result = asyncio.run(service.run())
             >>> "Hello" in result.html
             True
+
         """
         collected_at = datetime.now(timezone.utc)
         data, errors = await self.collect()
@@ -326,6 +335,7 @@ class MonitoringService:
             ... )
             >>> "World" in service.run_sync().html
             True
+
         """
         try:
             loop = asyncio.get_running_loop()
@@ -369,6 +379,7 @@ class MonitoringService:
             ...     msg["Subject"] = "Dashboard"
             ...     msg.set_content(html, subtype="html")
             ...     return msg
+
         """
         result = await self.run()
 

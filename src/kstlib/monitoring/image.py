@@ -9,6 +9,7 @@ Examples:
     >>> img = MonitorImage(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50, alt="Logo")
     >>> "data:image/png;base64," in img.render()
     True
+
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ def _detect_mime_type(data: bytes) -> str | None:
 
     Returns:
         MIME type string if recognized, or None.
+
     """
     for mime, signatures in _MAGIC_SIGNATURES.items():
         for sig in signatures:
@@ -87,12 +89,13 @@ def _validate_svg(data: bytes) -> None:
 
     Raises:
         RenderError: If dangerous content is detected.
+
     """
     try:
         text = data.decode("utf-8")
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as err:
         msg = "SVG content is not valid UTF-8"
-        raise RenderError(msg)  # noqa: B904 - intentional chain break for clean message
+        raise RenderError(msg) from err
     if _SVG_DANGEROUS_PATTERN.search(text):
         msg = "SVG contains dangerous content (script or event handler)"
         raise RenderError(msg)
@@ -126,6 +129,7 @@ class MonitorImage:
         >>> img = MonitorImage(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50, alt="Logo")
         >>> "<img" in img.render()
         True
+
     """
 
     data: bytes | None = None
@@ -188,6 +192,7 @@ class MonitorImage:
             RenderError: If the image cannot be loaded, exceeds size
                 limits, has an unsupported format, or (for SVG) contains
                 dangerous content.
+
         """
         _ = inline_css  # accepted for Renderable protocol, no effect on images
         raw = self._load_data()

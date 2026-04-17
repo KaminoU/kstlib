@@ -17,6 +17,7 @@ class AuthFlow(str, Enum):
         CLIENT_CREDENTIALS: Machine-to-machine authentication (no user interaction).
         DEVICE_CODE: For devices with limited input capabilities.
         REFRESH_TOKEN: Token refresh flow (internal use).
+
     """
 
     AUTHORIZATION_CODE = "authorization_code"
@@ -69,6 +70,7 @@ class Token:  # pylint: disable=too-many-instance-attributes
         True
         >>> token.is_refreshable
         True
+
     """
 
     access_token: str = field(repr=False)
@@ -86,6 +88,7 @@ class Token:  # pylint: disable=too-many-instance-attributes
 
         Returns:
             True if expired or expiration is unknown and token is old (>1h).
+
         """
         if self.expires_at is None:
             # Conservative: assume expired after 1 hour if no expiry info
@@ -98,6 +101,7 @@ class Token:  # pylint: disable=too-many-instance-attributes
 
         Returns:
             True if a refresh_token is available.
+
         """
         return self.refresh_token is not None
 
@@ -115,6 +119,7 @@ class Token:  # pylint: disable=too-many-instance-attributes
 
         Returns:
             True if token expires within 60 seconds or is already expired.
+
         """
         if self.expires_at is None:
             return self.is_expired
@@ -144,6 +149,7 @@ class Token:  # pylint: disable=too-many-instance-attributes
             >>> token = Token.from_response(response)
             >>> token.scope
             ['openid', 'profile']
+
         """
         now = datetime.now(timezone.utc)
 
@@ -187,6 +193,7 @@ class Token:  # pylint: disable=too-many-instance-attributes
 
         Returns:
             Dictionary representation suitable for JSON serialization.
+
         """
         return {
             "access_token": self.access_token,
@@ -208,6 +215,7 @@ class Token:  # pylint: disable=too-many-instance-attributes
 
         Returns:
             Token instance.
+
         """
         expires_at = None
         if data.get("expires_at"):
@@ -250,6 +258,7 @@ class PreflightResult:
         ... )
         >>> result.success
         True
+
     """
 
     step: str
@@ -278,6 +287,7 @@ class PreflightReport:
         results: List of individual step results.
         started_at: When the preflight started.
         completed_at: When the preflight finished.
+
     """
 
     provider_name: str

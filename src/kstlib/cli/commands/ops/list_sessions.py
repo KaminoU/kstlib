@@ -56,6 +56,7 @@ def _load_config_sessions() -> dict[str, dict[str, Any]]:
 
     Returns:
         Validated session configs keyed by session name.
+
     """
     config = get_config()
     ops_config: dict[str, Any] = config.get("ops", {})  # type: ignore[no-untyped-call]
@@ -102,6 +103,7 @@ def _validate_config_session(name: str, data: dict[str, Any]) -> None:
 
     Raises:
         ValueError: If any field is invalid.
+
     """
     validate_session_name(name)
 
@@ -147,6 +149,7 @@ def _collect_sessions(backend: str | None) -> list[SessionStatus]:
 
     Returns:
         List of SessionStatus from queried backends plus config-defined sessions.
+
     """
     sessions: list[SessionStatus] = []
 
@@ -215,6 +218,7 @@ def list_sessions(
         kstlib ops list
         kstlib ops list --backend tmux
         kstlib ops list --backend container --json
+
     """
     sessions = _collect_sessions(backend)
 

@@ -27,6 +27,7 @@ class SecretResolver:
         >>> from kstlib.secrets.models import SecretRequest
         >>> resolver = SecretResolver([get_provider("environment")], name="app")
         >>> # resolver.resolve(SecretRequest(name="API_KEY"))
+
     """
 
     def __init__(self, providers: Sequence[SecretProvider], *, name: str | None = None) -> None:
@@ -35,6 +36,7 @@ class SecretResolver:
         Args:
             providers: Ordered sequence of secret providers to query.
             name: Human-readable name for this resolver (used in error messages).
+
         """
         self._providers = list(providers)
         self._name = name or "default"
@@ -55,6 +57,7 @@ class SecretResolver:
 
         Raises:
             SecretNotFoundError: If the secret is not found and required=True.
+
         """
         for provider in self._providers:
             record = provider.resolve(request)
@@ -77,6 +80,7 @@ class SecretResolver:
 
         Raises:
             SecretNotFoundError: If the secret is not found and required=True.
+
         """
         for provider in self._providers:
             record = await provider.resolve_async(request)
@@ -118,6 +122,7 @@ def get_secret_resolver(
         >>> resolver = get_secret_resolver()  # uses defaults
         >>> resolver.name
         'default'
+
     """
     config = config or {}
     providers: list[SecretProvider] = []
@@ -175,6 +180,7 @@ def resolve_secret(
         >>> record = resolve_secret("api.key", secrets={"api.key": "test-value"})
         >>> record.source
         <SecretSource.KWARGS: 'kwargs'>
+
     """
     if config is None:
         global_config = get_config()

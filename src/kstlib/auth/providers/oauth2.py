@@ -82,6 +82,7 @@ class OAuth2Provider(AbstractAuthProvider):
         >>> #       client_id: my-app
         >>> #       client_secret: sops://secrets.yaml#github.secret
         >>> provider = OAuth2Provider.from_config("github")  # doctest: +SKIP
+
     """
 
     @classmethod
@@ -112,6 +113,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         Example:
             >>> provider = OAuth2Provider.from_config("github")  # doctest: +SKIP
+
         """
         auth_config, token_storage = load_provider_from_config(
             provider_name,
@@ -143,6 +145,7 @@ class OAuth2Provider(AbstractAuthProvider):
             config: Provider configuration.
             token_storage: Token storage backend.
             http_client: Optional custom HTTP client.
+
         """
         super().__init__(name, config, token_storage)
         self._http_client = http_client
@@ -223,6 +226,7 @@ class OAuth2Provider(AbstractAuthProvider):
         Note:
             ssl_ca_bundle takes precedence over ssl_verify=False.
             This is intentional: if you specify a CA bundle, you want verification.
+
         """
         if self.config.ssl_ca_bundle:
             return self.config.ssl_ca_bundle
@@ -242,6 +246,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         Returns:
             Tuple of (authorization_url, state).
+
         """
         if state is not None:
             logger.warning(
@@ -288,6 +293,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         Raises:
             TokenExchangeError: If exchange fails.
+
         """
         # Validate state (mandatory CSRF protection)
         if not self._pending_state:
@@ -311,7 +317,8 @@ class OAuth2Provider(AbstractAuthProvider):
         if code_verifier:
             data["code_verifier"] = code_verifier
 
-        assert self.config.token_url is not None  # Validated in __init__
+        if self.config.token_url is None:
+            raise ConfigurationError("token_url is required for token exchange but is not configured")
         headers = {"Accept": "application/json"}
         try:
             response = self.http_client.post(
@@ -337,7 +344,7 @@ class OAuth2Provider(AbstractAuthProvider):
         logger.info("Token exchange successful for provider '%s'", self.name)
         return token
 
-    def refresh(self, token: Token | None = None) -> Token:
+    def refresh(self, token: Token | None = None) -> Token:  # noqa: C901
         """Refresh an expired token.
 
         Args:
@@ -348,6 +355,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         Raises:
             TokenRefreshError: If refresh fails.
+
         """
         if token is None:
             token = self.get_token(auto_refresh=False)
@@ -367,7 +375,8 @@ class OAuth2Provider(AbstractAuthProvider):
         if self.config.client_secret:
             data["client_secret"] = self.config.client_secret
 
-        assert self.config.token_url is not None  # Validated in __init__
+        if self.config.token_url is None:
+            raise ConfigurationError("token_url is required for token refresh but is not configured")
         headers = {"Accept": "application/json"}
         try:
             response = self.http_client.post(
@@ -423,6 +432,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         Returns:
             True if revoked, False if revocation not supported.
+
         """
         if not self.config.revoke_url:
             logger.debug("Revocation not configured for provider '%s'", self.name)
@@ -491,6 +501,7 @@ class OAuth2Provider(AbstractAuthProvider):
             >>> provider = OAuth2Provider.from_config("github")  # doctest: +SKIP
             >>> userinfo = provider.get_userinfo()  # doctest: +SKIP
             >>> print(userinfo["login"])  # doctest: +SKIP
+
         """
         if not self.config.userinfo_url:
             msg = (
@@ -532,6 +543,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         Returns:
             PreflightReport with validation results.
+
         """
         report = PreflightReport(provider_name=self.name)
 
@@ -654,6 +666,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         Returns:
             Tuple of (pretty_print, max_body_length).
+
         """
         try:
             from kstlib.config import load_config

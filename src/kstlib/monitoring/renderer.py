@@ -14,6 +14,7 @@ Examples:
     >>> html = render_template("<p>{{ s | render }}</p>", {"s": cell})
     >>> "status-ok" in html
     True
+
 """
 
 from __future__ import annotations
@@ -51,10 +52,11 @@ def render_html(value: Any, inline_css: bool = False) -> Markup:
         >>> from kstlib.monitoring.renderer import render_html
         >>> str(render_html("<b>bold</b>"))
         '&lt;b&gt;bold&lt;/b&gt;'
+
     """
     if isinstance(value, Renderable):
-        return Markup(value.render(inline_css=inline_css))  # noqa: S704
-    return Markup(_html.escape(str(value)))  # noqa: S704
+        return Markup(value.render(inline_css=inline_css))
+    return Markup(_html.escape(str(value)))
 
 
 def create_environment(**kwargs: Any) -> Environment:
@@ -77,9 +79,10 @@ def create_environment(**kwargs: Any) -> Environment:
         >>> env = create_environment()
         >>> "render" in env.filters
         True
+
     """
     kwargs.setdefault("autoescape", True)
-    env = Environment(**kwargs)  # noqa: S701
+    env = Environment(**kwargs)
     env.filters["render"] = render_html
     return env
 
@@ -117,6 +120,7 @@ def render_template(
         >>> from kstlib.monitoring.renderer import render_template
         >>> render_template("Hello {{ name }}", {"name": "World"}, inline_css=True)
         'Hello World'
+
     """
     if not isinstance(source, str):
         raise TypeError(f"source must be str, got {type(source).__name__}")

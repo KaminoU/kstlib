@@ -82,6 +82,7 @@ class AuthProviderConfig:  # pylint: disable=too-many-instance-attributes
                 token_url="https://old-idp.local/token",
                 jwks_uri="https://old-idp.local/certs",
             )
+
     """
 
     client_id: str
@@ -151,6 +152,7 @@ class AbstractAuthProvider(ABC):
         name: Provider identifier (matches config key).
         config: Provider configuration.
         token_storage: Storage backend for tokens.
+
     """
 
     def __init__(
@@ -165,6 +167,7 @@ class AbstractAuthProvider(ABC):
             name: Provider identifier.
             config: Provider configuration.
             token_storage: Token storage backend.
+
         """
         self.name = name
         self.config = config
@@ -200,6 +203,7 @@ class AbstractAuthProvider(ABC):
 
         Returns:
             Tuple of (authorization_url, state).
+
         """
 
     @abstractmethod
@@ -222,6 +226,7 @@ class AbstractAuthProvider(ABC):
 
         Raises:
             TokenExchangeError: If the exchange fails.
+
         """
 
     @abstractmethod
@@ -236,6 +241,7 @@ class AbstractAuthProvider(ABC):
 
         Raises:
             TokenRefreshError: If refresh fails or no refresh_token available.
+
         """
 
     @abstractmethod
@@ -247,6 +253,7 @@ class AbstractAuthProvider(ABC):
 
         Returns:
             True if revoked successfully, False if revocation not supported.
+
         """
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -261,6 +268,7 @@ class AbstractAuthProvider(ABC):
 
         Returns:
             Token if available, None otherwise.
+
         """
         if self._current_token is None:
             if logger.isEnabledFor(TRACE_LEVEL):
@@ -307,6 +315,7 @@ class AbstractAuthProvider(ABC):
 
         Args:
             token: Token to save.
+
         """
         self._current_token = token
         self.token_storage.save(self.name, token)
@@ -326,6 +335,7 @@ class AbstractAuthProvider(ABC):
 
         Returns:
             PreflightReport with results for each validation step.
+
         """
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -375,6 +385,7 @@ def load_provider_from_config(
 
     Raises:
         ConfigurationError: If provider not found or type mismatch.
+
     """
     from kstlib.auth.config import (
         build_provider_config,

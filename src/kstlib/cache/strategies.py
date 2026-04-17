@@ -78,6 +78,7 @@ class CacheStrategy(ABC):
 
         Returns:
             Cached value or None if not found/expired
+
         """
 
     @abstractmethod
@@ -87,6 +88,7 @@ class CacheStrategy(ABC):
         Args:
             key: Cache key
             value: Value to cache
+
         """
 
     @abstractmethod
@@ -108,6 +110,7 @@ class CacheStrategy(ABC):
 
         Returns:
             Hash-based cache key
+
         """
         # Include function module and name
         key_parts = [func.__module__, func.__qualname__]
@@ -148,6 +151,7 @@ class TTLCacheStrategy(CacheStrategy):
         >>> cache.set("key1", "value1")
         >>> cache.get("key1")
         'value1'
+
     """
 
     def __init__(
@@ -171,6 +175,7 @@ class TTLCacheStrategy(CacheStrategy):
 
         Returns:
             Cached value or None if expired/not found
+
         """
         self._maybe_cleanup()
 
@@ -192,6 +197,7 @@ class TTLCacheStrategy(CacheStrategy):
         Args:
             key: Cache key
             value: Value to cache
+
         """
         # If key exists, remove it first to update order
         if key in self._cache:
@@ -238,6 +244,7 @@ class LRUCacheStrategy(CacheStrategy):
         >>> cache.set("key1", "value1")
         >>> cache.get("key1")
         'value1'
+
     """
 
     def __init__(self, maxsize: int = 128, typed: bool = False) -> None:
@@ -254,6 +261,7 @@ class LRUCacheStrategy(CacheStrategy):
 
         Returns:
             Cached value or None if not found
+
         """
         if key not in self._store:
             return None
@@ -267,6 +275,7 @@ class LRUCacheStrategy(CacheStrategy):
         Args:
             key: Cache key
             value: Value to cache
+
         """
         # If key exists, update and move to end
         if key in self._store:
@@ -304,6 +313,7 @@ class FileCacheStrategy(CacheStrategy):
     Examples:
         >>> cache = FileCacheStrategy(cache_dir=".cache", check_mtime=True)
         >>> # Cache will invalidate if the source file changes
+
     """
 
     #: Default maximum entries for in-memory cache layer.
@@ -350,6 +360,7 @@ class FileCacheStrategy(CacheStrategy):
 
         Returns:
             Cached value or None if not found/invalid
+
         """
         self._validate_key(key)
         # Check file cache for mtime validation
@@ -412,6 +423,7 @@ class FileCacheStrategy(CacheStrategy):
             key: Cache key
             value: Value to cache
             source_path: Optional source file path for mtime tracking
+
         """
         self._validate_key(key)
         # Store in memory cache

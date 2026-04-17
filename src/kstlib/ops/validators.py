@@ -110,6 +110,7 @@ def validate_session_name(name: str) -> str:
         Traceback (most recent call last):
             ...
         ValueError: Session name cannot be empty
+
     """
     if not name:
         raise ValueError("Session name cannot be empty")
@@ -144,6 +145,7 @@ def validate_image_name(image: str) -> str:
         'python:3.10-slim'
         >>> validate_image_name("registry.io/path/image:tag")
         'registry.io/path/image:tag'
+
     """
     if not image:
         raise ValueError("Image name cannot be empty")
@@ -176,6 +178,7 @@ def validate_volumes(volumes: list[str]) -> list[str]:
         ['./data:/app/data']
         >>> validate_volumes(["./logs:/app/logs:ro"])
         ['./logs:/app/logs:ro']
+
     """
     if len(volumes) > MAX_VOLUMES:
         raise ValueError(f"Too many volumes (max {MAX_VOLUMES})")
@@ -211,6 +214,7 @@ def validate_ports(ports: list[str]) -> list[str]:
         ['8080']
         >>> validate_ports(["8080:80/tcp"])
         ['8080:80/tcp']
+
     """
     if len(ports) > MAX_PORTS:
         raise ValueError(f"Too many ports (max {MAX_PORTS})")
@@ -248,6 +252,7 @@ def validate_env(env: dict[str, str]) -> dict[str, str]:
     Examples:
         >>> validate_env({"APP_ENV": "production"})
         {'APP_ENV': 'production'}
+
     """
     if len(env) > MAX_ENV_VARS:
         raise ValueError(f"Too many env vars (max {MAX_ENV_VARS})")
@@ -292,6 +297,7 @@ def validate_command(command: str | None, *, strict: bool = True) -> str | None:
         True
         >>> validate_command("echo a; echo b", strict=False)
         'echo a; echo b'
+
     """
     if command is None:
         return None
@@ -333,6 +339,7 @@ def validate_send_keys(keys: str) -> str:
         'C-c'
         >>> validate_send_keys("echo hello")
         'echo hello'
+
     """
     if not keys:
         raise ValueError("Keys cannot be empty")

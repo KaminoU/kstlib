@@ -51,6 +51,7 @@ Examples:
     >>> sw.lap("Step 1")  # doctest: +SKIP
     >>> sw.stop()  # doctest: +SKIP
     >>> sw.summary()  # doctest: +SKIP
+
 """
 
 from kstlib.metrics.decorators import (

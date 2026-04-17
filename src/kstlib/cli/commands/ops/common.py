@@ -138,6 +138,7 @@ def _rebuild_with_overrides(
 
     Returns:
         New SessionManager with overrides applied.
+
     """
     cfg = manager.config
     kwargs: dict[str, Any] = {
@@ -171,6 +172,7 @@ def _try_from_config(
 
     Returns:
         SessionManager if found in config, None otherwise.
+
     """
     try:
         manager = SessionManager.from_config(name)
@@ -187,7 +189,52 @@ def _try_from_config(
     return manager
 
 
-def get_session_manager(  # noqa: C901, PLR0912, PLR0913
+def _detect_backend(name: str, socket_name: str | None) -> str | None:
+    """Return the detected backend name for ``name``, or ``None`` if unknown."""
+    detected = auto_detect_backend(name, socket_name=socket_name)
+    return detected.value if detected is not None else None
+
+
+def _scan_tmux_sockets(name: str) -> tuple[str | None, str | None]:
+    """Scan custom tmux sockets for a session matching ``name``.
+
+    Returns:
+        Tuple of (backend, socket_name). Both are ``None`` if no match is
+        found. When a socket holds the session, ``("tmux", <sock>)`` is
+        returned.
+    """
+    for sock in discover_tmux_sockets():
+        try:
+            runner = TmuxRunner(socket_name=sock)
+        except BackendNotFoundError:
+            continue
+        if runner.exists(name):
+            return "tmux", sock
+    return None, None
+
+
+def _build_session_manager(
+    name: str,
+    *,
+    backend: str | None,
+    image: str | None,
+    command: str | None,
+    socket_name: str | None,
+) -> SessionManager:
+    """Instantiate a SessionManager from explicit options."""
+    kwargs: dict[str, Any] = {}
+    if backend:
+        kwargs["backend"] = backend
+    if image:
+        kwargs["image"] = image
+    if command:
+        kwargs["command"] = command
+    if socket_name:
+        kwargs["socket_name"] = socket_name
+    return SessionManager(name, **kwargs)
+
+
+def get_session_manager(
     name: str,
     *,
     backend: str | None = None,
@@ -215,44 +262,27 @@ def get_session_manager(  # noqa: C901, PLR0912, PLR0913
 
     Raises:
         typer.Exit: On configuration error or ambiguous session.
+
     """
     try:
-        # Try to load from config first (CLI args override config values)
         if from_config:
             manager = _try_from_config(name, backend=backend, image=image, command=command)
             if manager is not None:
                 return manager
 
-        # Auto-detect backend if not specified
         if backend is None:
-            detected = auto_detect_backend(name, socket_name=socket_name)
-            if detected is not None:
-                backend = detected.value
+            backend = _detect_backend(name, socket_name)
 
-        # If still not found and no explicit socket, scan custom tmux sockets
         if backend is None and socket_name is None:
-            for sock in discover_tmux_sockets():
-                try:
-                    runner = TmuxRunner(socket_name=sock)
-                    if runner.exists(name):
-                        backend = "tmux"
-                        socket_name = sock
-                        break
-                except BackendNotFoundError:
-                    pass
+            backend, socket_name = _scan_tmux_sockets(name)
 
-        # Create with explicit options
-        kwargs: dict[str, Any] = {}
-        if backend:
-            kwargs["backend"] = backend
-        if image:
-            kwargs["image"] = image
-        if command:
-            kwargs["command"] = command
-        if socket_name:
-            kwargs["socket_name"] = socket_name
-
-        return SessionManager(name, **kwargs)
+        return _build_session_manager(
+            name,
+            backend=backend,
+            image=image,
+            command=command,
+            socket_name=socket_name,
+        )
     except SessionAmbiguousError as e:
         exit_error(str(e))
     except OpsError as e:
@@ -267,6 +297,7 @@ def handle_ops_error(e: OpsError) -> CommandResult:
 
     Returns:
         CommandResult with error status.
+
     """
     return CommandResult(
         status=CommandStatus.ERROR,

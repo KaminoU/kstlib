@@ -23,6 +23,7 @@ Examples:
     ...     pass
     >>> load_data()  # doctest: +SKIP
     [STEP 1] load_data ⏱ 0.001s | 🧠 Peak: 64 KB
+
 """
 
 from __future__ import annotations
@@ -141,6 +142,7 @@ def _format_bytes(num_bytes: int) -> str:
         '1.0 KB'
         >>> _format_bytes(1536 * 1024 * 1024)
         '1.5 GB'
+
     """
     value = float(num_bytes)
     for unit in ("B", "KB", "MB", "GB", "TB"):
@@ -158,6 +160,7 @@ def _format_time(seconds: float) -> str:
         '0.500s'
         >>> _format_time(90)
         '1m 30s'
+
     """
     if seconds < 60:
         return f"{seconds:.3f}s"
@@ -214,6 +217,7 @@ class MetricsRecord:
         module: Module name.
         file: Source file.
         line: Source line.
+
     """
 
     number: int | None
@@ -270,6 +274,7 @@ def get_metrics() -> list[MetricsRecord]:
         >>> records = get_metrics()
         >>> isinstance(records, list)
         True
+
     """
     with _records_lock:
         return list(_records)
@@ -280,6 +285,7 @@ def clear_metrics() -> None:
 
     Examples:
         >>> clear_metrics()
+
     """
     global _step_counter, _program_start
     with _records_lock:
@@ -424,6 +430,7 @@ def metrics(
         >>> @metrics("Loading configuration")
         ... def load_config():
         ...     pass
+
     """
     # Handle @metrics (no parens, func passed directly)
     if callable(func_or_title):
@@ -550,6 +557,7 @@ def metrics_context(
         >>> with metrics_context("Loading data") as m:  # doctest: +SKIP
         ...     data = load_file()
         [Loading data] ⏱ 1.23s | 🧠 Peak: 256 MB
+
     """
     cfg = _get_config()
     do_time = time if time is not None else cfg["time"]
@@ -621,6 +629,7 @@ def metrics_summary(*, show_percentages: bool = True, style: str = "table") -> N
 
     Examples:
         >>> metrics_summary()  # doctest: +SKIP
+
     """
     records = [r for r in get_metrics() if r.number is not None]
     if not records:
@@ -776,6 +785,7 @@ class Stopwatch:
         >>> sw.lap("Step 1")  # doctest: +SKIP
         >>> _ = sw.stop()
         >>> sw.summary()  # doctest: +SKIP
+
     """
 
     name: str = "Stopwatch"
@@ -919,6 +929,7 @@ class CallStats:
         2
         >>> stats.avg_time
         0.75
+
     """
 
     name: str
@@ -1045,6 +1056,7 @@ def call_stats(
         >>> stats = get_call_stats("api_call")
         >>> stats.call_count
         2
+
     """
 
     def decorator(fn: Callable[P, R]) -> Callable[P, R]:

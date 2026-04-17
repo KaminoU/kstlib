@@ -23,6 +23,7 @@ class AbstractStep(Protocol):
     Examples:
         >>> def run_step(step: AbstractStep, config: StepConfig) -> StepResult:
         ...     return step.execute(config)
+
     """
 
     def execute(
@@ -39,6 +40,7 @@ class AbstractStep(Protocol):
 
         Returns:
             StepResult with status, stdout, stderr, duration, etc.
+
         """
         ...
 

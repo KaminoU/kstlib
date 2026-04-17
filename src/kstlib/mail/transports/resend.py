@@ -24,6 +24,7 @@ Examples:
 
         import os
         transport = ResendTransport(api_key=os.environ["RESEND_API_KEY"])
+
 """
 
 from __future__ import annotations
@@ -56,6 +57,7 @@ class ResendResponse:
 
     Attributes:
         id: The unique ID assigned to the sent email.
+
     """
 
     id: str
@@ -96,6 +98,7 @@ class ResendTransport(AsyncMailTransport):
             message.add_alternative("<h1>Welcome!</h1>", subtype="html")
 
             await transport.send(message)
+
     """
 
     def __init__(
@@ -114,6 +117,7 @@ class ResendTransport(AsyncMailTransport):
 
         Raises:
             MailConfigurationError: If api_key is empty.
+
         """
         if not api_key:
             raise MailConfigurationError("Resend API key is required")
@@ -147,6 +151,7 @@ class ResendTransport(AsyncMailTransport):
         Raises:
             MailTransportError: If the API request fails.
             MailConfigurationError: If required fields are missing.
+
         """
         try:
             import httpx
@@ -205,6 +210,7 @@ class ResendTransport(AsyncMailTransport):
 
         Raises:
             MailConfigurationError: If required fields are missing.
+
         """
         from_addr = message.get("From")
         if not from_addr:
@@ -252,6 +258,7 @@ class ResendTransport(AsyncMailTransport):
 
         Returns:
             List of email addresses.
+
         """
         if not header_value:
             return []
@@ -263,6 +270,7 @@ class ResendTransport(AsyncMailTransport):
         Args:
             message: The email message.
             payload: The API payload to update.
+
         """
         # Get the message body - handle multipart
         # Note: get_content() adds trailing newline, so we strip it
@@ -295,6 +303,7 @@ class ResendTransport(AsyncMailTransport):
 
         Returns:
             List of attachment dicts with filename and base64 content.
+
         """
         attachments: list[dict[str, str]] = []
 
@@ -324,5 +333,6 @@ class ResendTransport(AsyncMailTransport):
 
         Raises:
             MailTransportError: Always raises with error details.
+
         """
         handle_http_error_response(response, "Resend", log)

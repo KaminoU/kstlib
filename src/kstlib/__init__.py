@@ -187,23 +187,16 @@ def __getattr__(name: str) -> Any:
     # Handle lazy imports
     if name in _LAZY_IMPORTS:
         module_path, attr_name = _LAZY_IMPORTS[name]
-        try:
-            module = importlib.import_module(module_path)
-            attr = getattr(module, attr_name)
-            _loaded[name] = attr
-            return attr
-        except (ImportError, AttributeError):
-            # ConfigNotLoadedError might not exist in minimal installs
-            if name == "ConfigNotLoadedError":
-                _loaded[name] = None
-                return None
-            raise
+        module = importlib.import_module(module_path)
+        attr = getattr(module, attr_name)
+        _loaded[name] = attr
+        return attr
 
     raise AttributeError(f"module 'kstlib' has no attribute {name!r}")
 
 
 # Auto-install rich traceback if KSTLIB_TRACEBACK=1 (opt-in for fast imports)
-# Default changed from "1" to "0" for metricsormance - users must opt-in now
+# Default changed from "1" to "0" for performance - users must opt-in now
 if TYPE_CHECKING:
     # For static analysis - provide type hints for lazy-loaded symbols
     # pylint: disable=useless-import-alias

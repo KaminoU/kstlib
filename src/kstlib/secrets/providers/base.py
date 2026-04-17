@@ -28,6 +28,7 @@ class SecretProvider(ABC):
         Returns:
             A ``SecretRecord`` if the provider can handle the request, otherwise
             ``None``.
+
         """
 
     async def resolve_async(self, request: SecretRequest) -> SecretRecord | None:

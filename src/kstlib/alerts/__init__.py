@@ -85,6 +85,7 @@ Examples:
             config=app_config["alerts"],
             credential_resolver=resolver,
         )
+
 """
 
 from kstlib.alerts.exceptions import (

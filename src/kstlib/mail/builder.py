@@ -32,7 +32,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
-    from kstlib.mail.transport import MailTransport
+    from kstlib.mail.transport import AsyncMailTransport, MailTransport
+    from kstlib.mail.transports.resend import ResendTransport
+    from kstlib.mail.transports.smtp import SMTPTransport
+
+    TransportLike = MailTransport | AsyncMailTransport
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -60,6 +64,7 @@ class NotifyResult:
         return_value: Function return value (if success and include_return=True).
         exception: Exception raised (if failure).
         traceback_str: Formatted traceback string (if failure and include_traceback=True).
+
     """
 
     function_name: str
@@ -78,6 +83,14 @@ class MailBuilder:
     Supports plain text and HTML bodies, file attachments, inline images,
     and template-based content with placeholder substitution.
 
+    Transport resolution cascade, highest priority first:
+
+    1. ``transport=`` kwarg (explicit instance, backward compatible)
+    2. ``preset=`` kwarg (named preset under ``mail.presets`` in config)
+    3. ``mail.default`` in ``kstlib.conf.yml`` (auto-resolved preset name)
+    4. ``None``: no transport. ``.build()`` still works. ``.send()`` raises
+       ``MailConfigurationError``.
+
     Example:
         Build an email without sending (useful for inspection)::
 
@@ -93,25 +106,60 @@ class MailBuilder:
             >>> msg["Subject"]
             'Welcome!'
 
-        With a configured transport for actual delivery::
+        With a configured transport for actual delivery (explicit)::
 
             >>> from kstlib.mail import MailBuilder
             >>> from kstlib.mail.transports import SMTPTransport
             >>> transport = SMTPTransport(host="smtp.example.com", port=587)
             >>> mail = MailBuilder(transport=transport)
             >>> # mail.sender(...).to(...).subject(...).message(...).send()
+
+        Config-driven via a named preset::
+
+            >>> mail = MailBuilder(preset="corporate")  # doctest: +SKIP
+            >>> # mail.sender(...).to(...).message(...).send()
+
+        Config-driven via ``mail.default`` preset::
+
+            >>> mail = MailBuilder()  # doctest: +SKIP
+            >>> # Uses preset referenced by mail.default in kstlib.conf.yml
+
     """
 
     def __init__(
         self,
         *,
         transport: MailTransport | None = None,
+        preset: str | None = None,
         encoding: str = _DEFAULT_ENCODING,
         filesystem: MailFilesystemGuards | None = None,
         limits: MailLimits | None = None,
     ) -> None:
-        """Initialise the builder with optional transport, charset, and guardrails."""
-        self._transport = transport
+        """Initialise the builder with optional transport, preset, charset, and guardrails.
+
+        Args:
+            transport: Explicit transport instance. Takes priority over ``preset``
+                and the config default. Backward compatible: passing this is
+                equivalent to the pre-preset API.
+            preset: Name of a preset declared under ``mail.presets`` in
+                ``kstlib.conf.yml``. Resolved immediately. Raises
+                ``MailConfigurationError`` if the preset does not exist.
+            encoding: Character encoding for message bodies (default: utf-8).
+            filesystem: Filesystem guardrails for attachments, inline
+                resources, and templates.
+            limits: Message and attachment limits.
+
+        Raises:
+            MailConfigurationError: If ``preset`` is passed but does not
+                resolve to a valid preset in configuration.
+
+        """
+        if transport is not None:
+            self._transport: TransportLike | None = transport
+        elif preset is not None:
+            self._transport = _build_transport_from_preset(preset)
+        else:
+            self._transport = _resolve_default_transport()
         self._encoding = encoding
         self._filesystem = filesystem or MailFilesystemGuards.default()
         self._limits = limits or get_mail_limits()
@@ -187,6 +235,7 @@ class MailBuilder:
 
         Raises:
             MailValidationError: If content_type is unsupported.
+
         """
         body = self._resolve_body(content, template, placeholders, extra_placeholders)
 
@@ -210,6 +259,7 @@ class MailBuilder:
         Raises:
             MailValidationError: If no paths provided, attachment limit exceeded,
                 or file size exceeds configured limits.
+
         """
         if not paths:
             raise MailValidationError("attach() expects at least one file path")
@@ -233,6 +283,7 @@ class MailBuilder:
 
         Raises:
             MailValidationError: If cid is empty or file size exceeds limits.
+
         """
         if not cid:
             raise MailValidationError("Inline resources require a non-empty content ID")
@@ -256,6 +307,7 @@ class MailBuilder:
 
         Raises:
             MailValidationError: If sender, recipient, or body is missing.
+
         """
         sender = self._validate_ready()
         message = self._initialise_message(sender)
@@ -272,10 +324,19 @@ class MailBuilder:
         Raises:
             MailConfigurationError: If no transport has been configured.
             MailTransportError: If the transport fails to deliver the message.
+
         """
+        from kstlib.mail.transport import AsyncMailTransport, MailTransport
+
         if self._transport is None:
             raise MailConfigurationError("No mail transport configured")
-
+        if isinstance(self._transport, AsyncMailTransport):
+            raise MailConfigurationError(
+                f"Transport '{type(self._transport).__name__}' is async-only; "
+                "use it directly via `await transport.send(message)` instead of "
+                "MailBuilder.send()."
+            )
+        assert isinstance(self._transport, MailTransport)
         message = self.build()
         try:
             self._transport.send(message)
@@ -302,7 +363,7 @@ class MailBuilder:
             snapshot = copy.deepcopy(self)
         finally:
             self._transport = transport
-        snapshot._transport = transport  # noqa: SLF001
+        snapshot._transport = transport
         return snapshot
 
     @overload
@@ -364,11 +425,12 @@ class MailBuilder:
             >>> @mail.notify(on_error_only=True)
             ... def extract():
             ...     return {"rows": 100}
+
         """
 
         def decorator(fn: Callable[P, R]) -> Callable[P, R]:
             builder = self._snapshot()
-            effective_subject = subject if subject is not None else builder._subject  # noqa: SLF001
+            effective_subject = subject if subject is not None else builder._subject
 
             if inspect.iscoroutinefunction(fn):
 
@@ -390,9 +452,7 @@ class MailBuilder:
                                 duration_ms=duration_ms,
                                 return_value=result if include_return else None,
                             )
-                            builder._send_notification(  # noqa: SLF001
-                                notify_result, effective_subject, include_return
-                            )
+                            builder._send_notification(notify_result, effective_subject, include_return)
                         return result  # type: ignore[no-any-return]
                     except BaseException as exc:
                         ended_at = datetime.now(timezone.utc)
@@ -408,9 +468,7 @@ class MailBuilder:
                             exception=exc,
                             traceback_str=tb_str,
                         )
-                        builder._send_notification(  # noqa: SLF001
-                            notify_result, effective_subject, include_return
-                        )
+                        builder._send_notification(notify_result, effective_subject, include_return)
                         raise
 
                 return async_wrapper  # type: ignore[return-value]
@@ -433,9 +491,7 @@ class MailBuilder:
                             duration_ms=duration_ms,
                             return_value=result if include_return else None,
                         )
-                        builder._send_notification(  # noqa: SLF001
-                            notify_result, effective_subject, include_return
-                        )
+                        builder._send_notification(notify_result, effective_subject, include_return)
                     return result
                 except BaseException as exc:
                     ended_at = datetime.now(timezone.utc)
@@ -451,9 +507,7 @@ class MailBuilder:
                         exception=exc,
                         traceback_str=tb_str,
                     )
-                    builder._send_notification(  # noqa: SLF001
-                        notify_result, effective_subject, include_return
-                    )
+                    builder._send_notification(notify_result, effective_subject, include_return)
                     raise
 
             return sync_wrapper
@@ -626,6 +680,171 @@ def _detect_mime(path: Path) -> tuple[str, str]:
         return "application", "octet-stream"
     maintype, subtype = guessed.split("/", 1)
     return maintype, subtype
+
+
+# ----------------------------------------------------------------------
+# Config-driven transport resolution
+# ----------------------------------------------------------------------
+
+
+_SUPPORTED_TRANSPORTS = ("smtp", "resend")
+
+
+def _load_mail_config() -> Any:
+    """Read ``mail`` section from kstlib configuration.
+
+    Returns:
+        The ``mail`` section as a Box/dict, or ``None`` if unavailable.
+
+    Raises:
+        MailConfigurationError: If the config loader cannot be imported or
+            raises while reading.
+
+    """
+    try:
+        from kstlib.config import get_config
+    except ImportError as exc:  # pragma: no cover - config is always present
+        raise MailConfigurationError("kstlib.config is not available") from exc
+
+    try:
+        cfg: Any = get_config()
+    except Exception as exc:
+        raise MailConfigurationError(f"Failed to load kstlib configuration: {exc}") from exc
+
+    if not hasattr(cfg, "get"):
+        return None
+    return cfg.get("mail")
+
+
+def _resolve_default_transport() -> TransportLike | None:
+    """Resolve the transport from ``mail.default`` in configuration.
+
+    Returns ``None`` when no default is configured or when the config is
+    unavailable. The returned ``None`` preserves the legacy behaviour:
+    ``.build()`` keeps working and ``.send()`` raises at call time.
+
+    Raises:
+        MailConfigurationError: If ``mail.default`` points to an unknown
+            preset. This is a user-visible misconfiguration, so fail fast.
+
+    """
+    try:
+        mail_cfg = _load_mail_config()
+    except MailConfigurationError:
+        return None
+
+    if mail_cfg is None or not hasattr(mail_cfg, "get"):
+        return None
+
+    default_name = mail_cfg.get("default")
+    if not default_name:
+        return None
+    return _build_transport_from_preset(str(default_name))
+
+
+def _build_transport_from_preset(preset_name: str) -> TransportLike:
+    """Build a transport from a named preset in the configuration.
+
+    Args:
+        preset_name: Name of the preset defined under ``mail.presets``.
+
+    Returns:
+        Configured ``MailTransport`` instance ready to use.
+
+    Raises:
+        MailConfigurationError: If the preset is not found, the transport
+            field is missing or unsupported, or required fields are absent.
+
+    """
+    mail_cfg = _load_mail_config()
+    if mail_cfg is None:
+        raise MailConfigurationError(
+            f"Preset '{preset_name}' cannot be resolved: 'mail' section missing from configuration"
+        )
+
+    presets = mail_cfg.get("presets") if hasattr(mail_cfg, "get") else None
+    if not presets or preset_name not in presets:
+        available = sorted(presets.keys()) if presets else []
+        raise MailConfigurationError(f"Preset '{preset_name}' not found in mail.presets. Available: {available}")
+
+    preset_cfg = presets[preset_name]
+    transport_type = preset_cfg.get("transport") if hasattr(preset_cfg, "get") else None
+    if not transport_type:
+        raise MailConfigurationError(
+            f"Preset '{preset_name}' is missing required field 'transport'. Supported: {list(_SUPPORTED_TRANSPORTS)}"
+        )
+
+    if transport_type == "smtp":
+        return _build_smtp_transport(preset_cfg)
+    if transport_type == "resend":
+        return _build_resend_transport(preset_cfg)
+    raise MailConfigurationError(
+        f"Unknown transport type '{transport_type}' in preset '{preset_name}'. Supported: {list(_SUPPORTED_TRANSPORTS)}"
+    )
+
+
+def _build_smtp_transport(cfg: Any) -> SMTPTransport:
+    """Build ``SMTPTransport`` from a preset config section.
+
+    Args:
+        cfg: Box/dict with smtp preset fields (host, port, login, password,
+            starttls, ssl, timeout).
+
+    Returns:
+        Configured ``SMTPTransport`` instance.
+
+    Raises:
+        MailConfigurationError: If the ``host`` field is missing.
+
+    """
+    from kstlib.mail.transports.smtp import SMTPCredentials, SMTPSecurity, SMTPTransport
+
+    host = cfg.get("host") if hasattr(cfg, "get") else None
+    if not host:
+        raise MailConfigurationError("SMTP preset requires a 'host' field")
+
+    port = cfg.get("port", 587)
+    timeout = cfg.get("timeout")
+
+    login = cfg.get("login")
+    password = cfg.get("password")
+    credentials = SMTPCredentials(username=login, password=password) if login else None
+
+    security = SMTPSecurity(
+        use_ssl=bool(cfg.get("ssl", False)),
+        use_starttls=bool(cfg.get("starttls", True)),
+    )
+
+    return SMTPTransport(
+        host=str(host),
+        port=int(port),
+        credentials=credentials,
+        security=security,
+        timeout=float(timeout) if timeout is not None else None,
+    )
+
+
+def _build_resend_transport(cfg: Any) -> ResendTransport:
+    """Build ``ResendTransport`` from a preset config section.
+
+    Args:
+        cfg: Box/dict with resend preset fields (api_key, timeout).
+
+    Returns:
+        Configured ``ResendTransport`` instance.
+
+    Raises:
+        MailConfigurationError: If the ``api_key`` field is missing.
+
+    """
+    from kstlib.mail.transports.resend import ResendTransport
+
+    api_key = cfg.get("api_key") if hasattr(cfg, "get") else None
+    if not api_key:
+        raise MailConfigurationError("Resend preset requires an 'api_key' field")
+
+    timeout = cfg.get("timeout", 30.0)
+    return ResendTransport(api_key=str(api_key), timeout=float(timeout))
 
 
 __all__ = ["MailBuilder", "NotifyResult"]

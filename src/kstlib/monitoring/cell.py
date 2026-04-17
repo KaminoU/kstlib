@@ -30,6 +30,7 @@ class StatusCell:
         >>> cell = StatusCell("UP", StatusLevel.OK)
         >>> "<span" in cell.render()
         True
+
     """
 
     label: str
@@ -43,6 +44,7 @@ class StatusCell:
 
         Returns:
             HTML ``<span>`` string.
+
         """
         escaped = html.escape(self.label)
         if inline_css:

@@ -17,6 +17,7 @@ Examples:
                 await db.execute("CREATE TABLE test (id INTEGER)")
 
         asyncio.run(main())
+
 """
 
 from __future__ import annotations
@@ -44,9 +45,10 @@ def is_sqlcipher_available() -> bool:
     Examples:
         >>> is_sqlcipher_available()  # doctest: +SKIP
         True
+
     """
     try:
-        import sqlcipher3  # noqa: F401
+        import sqlcipher3
 
         return True
     except ImportError:
@@ -88,6 +90,7 @@ def connect(
         >>> key = resolve_cipher_key(sops_path="secrets.yml")  # doctest: +SKIP
         >>> async with connect("app.db", cipher_key=key) as db:  # doctest: +SKIP
         ...     pass
+
     """
     if not cipher_key:
         raise EncryptionError("cipher_key is required for encrypted connections")

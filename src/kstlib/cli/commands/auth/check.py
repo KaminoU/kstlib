@@ -27,6 +27,7 @@ def _render_normal(report: TokenCheckReport) -> None:
 
     Args:
         report: Completed token validation report.
+
     """
     style = "green" if report.valid else "red"
     title = "Token VALID" if report.valid else "Token INVALID"
@@ -55,6 +56,7 @@ def _render_verbose(report: TokenCheckReport) -> None:
 
     Args:
         report: Completed token validation report.
+
     """
     _render_normal(report)
     console.print()
@@ -84,6 +86,7 @@ def _render_json(report: TokenCheckReport) -> None:
 
     Args:
         report: Completed token validation report.
+
     """
     sys.stdout.write(json.dumps(report.to_dict(), indent=2, default=str) + "\n")
 
@@ -101,6 +104,7 @@ def _build_summary_table(report: TokenCheckReport) -> Table:
 
     Returns:
         Rich Table with summary rows.
+
     """
     table = Table(show_header=False, box=None)
     table.add_column("Field", style="dim")
@@ -131,6 +135,7 @@ def _add_claims_rows(table: Table, payload: dict[str, Any]) -> None:
     Args:
         table: Rich table to add rows to.
         payload: JWT payload dict.
+
     """
     if payload.get("iss"):
         table.add_row("Issuer", str(payload["iss"]))
@@ -147,6 +152,7 @@ def _add_expiry_row(table: Table, payload: dict[str, Any]) -> None:
     Args:
         table: Rich table to add row to.
         payload: JWT payload dict.
+
     """
     exp = payload.get("exp")
     if exp is None:
@@ -167,6 +173,7 @@ def _render_verification_instructions(report: TokenCheckReport) -> None:
 
     Args:
         report: Token validation report.
+
     """
     console.print()
     console.print(
@@ -187,6 +194,7 @@ def _render_x509_panel(x509_info: dict[str, Any]) -> None:
 
     Args:
         x509_info: Dictionary with certificate details from x5c parsing.
+
     """
     table = Table(show_header=False, box=None)
     table.add_column("Field", style="dim")
@@ -215,6 +223,7 @@ def _format_payload_timestamps(payload: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         Copy with formatted timestamp values.
+
     """
     formatted = dict(payload)
     for key in ("exp", "iat", "nbf", "auth_time"):
@@ -232,6 +241,7 @@ def _format_json(data: Any) -> str:
 
     Returns:
         Formatted JSON string.
+
     """
     return json.dumps(data, indent=2, default=str)
 
@@ -244,6 +254,7 @@ def _format_duration(seconds: int) -> str:
 
     Returns:
         Formatted duration string.
+
     """
     if seconds > 3600:
         return f"{seconds // 3600}h {(seconds % 3600) // 60}m"
@@ -338,6 +349,7 @@ def _resolve_token_source(
 
     Returns:
         Tuple of (jwt_string, token_label, auth_provider_or_None).
+
     """
     if token_str is not None:
         label = "access_token" if access_token else "id_token"
@@ -373,6 +385,7 @@ def _resolve_expectations(
 
     Returns:
         Tuple of (expected_issuer, expected_audience).
+
     """
     if token_str is not None or auth_provider is None:
         return None, None
@@ -395,6 +408,7 @@ def _build_check_ssl_context(auth_provider: Any) -> bool | str:
 
     Returns:
         Value suitable for httpx verify parameter.
+
     """
     if auth_provider is not None:
         config = getattr(auth_provider, "config", None)
@@ -420,6 +434,7 @@ def _output_report(
         report: Token validation report.
         verbose: Whether to show verbose output.
         as_json: Whether to output JSON.
+
     """
     if as_json:
         _render_json(report)

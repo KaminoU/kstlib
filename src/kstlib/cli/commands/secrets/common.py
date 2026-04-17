@@ -240,6 +240,7 @@ def find_sops_config(start_path: Path | None = None) -> Path | None:
 
     Returns:
         Path to .sops.yaml if found, None otherwise.
+
     """
     config_name = ".sops.yaml"
 

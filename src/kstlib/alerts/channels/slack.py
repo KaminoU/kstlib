@@ -35,6 +35,7 @@ Examples:
             config={"credentials": "slack_webhook"},
             credential_resolver=resolver,
         )
+
 """
 
 from __future__ import annotations
@@ -100,6 +101,7 @@ def _mask_webhook_url(url: str) -> str:
     Examples:
         >>> _mask_webhook_url("https://hooks.slack.com/services/T123/B456/xyz")
         'https://hooks.slack.com/services/T***/B***/***'
+
     """
     if not url or "hooks.slack.com" not in url:
         return "***"
@@ -123,6 +125,7 @@ def _truncate(text: str, max_length: int) -> str:
 
     Returns:
         Truncated text with '...' if exceeded.
+
     """
     if len(text) <= max_length:
         return text
@@ -161,6 +164,7 @@ class SlackChannel(AsyncAlertChannel):
                 icon_emoji=":fire:",
                 timeout=5.0,
             )
+
     """
 
     def __init__(
@@ -190,6 +194,7 @@ class SlackChannel(AsyncAlertChannel):
 
         Raises:
             AlertConfigurationError: If webhook_url is invalid.
+
         """
         if not webhook_url:
             raise AlertConfigurationError("Slack webhook URL is required")
@@ -240,6 +245,7 @@ class SlackChannel(AsyncAlertChannel):
 
         Raises:
             AlertDeliveryError: If the webhook request fails.
+
         """
         try:
             import httpx
@@ -303,6 +309,7 @@ class SlackChannel(AsyncAlertChannel):
 
         Returns:
             Dict suitable for JSON serialization.
+
         """
         # Truncate to Slack limits (use formatted_title for timestamp support)
         title = _truncate(alert.formatted_title, MAX_TITLE_LENGTH)
@@ -353,6 +360,7 @@ class SlackChannel(AsyncAlertChannel):
 
         Raises:
             AlertConfigurationError: If configuration is invalid.
+
         """
         # Get webhook URL from credentials
         cred_name = config.get("credentials")

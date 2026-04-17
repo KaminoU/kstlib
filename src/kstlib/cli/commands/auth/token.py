@@ -88,6 +88,7 @@ def _validate_token_options(
         header: Whether Authorization header format was requested.
         copy: Whether clipboard copy was requested.
         show_refresh: Whether refresh token display was requested.
+
     """
     if as_json and not decode:
         exit_error("--json requires --decode.")

@@ -94,7 +94,7 @@ class TestValidateCallableTarget:
 
     def test_empty_target(self) -> None:
         """Reject empty targets."""
-        with pytest.raises(PipelineConfigError, match="cannot be empty"):
+        with pytest.raises(PipelineConfigError, match="must not be empty"):
             validate_callable_target("")
 
     def test_too_long(self) -> None:

@@ -62,6 +62,7 @@ class AsyncDatabase:
         With SOPS:
 
         >>> db = AsyncDatabase("app.db", cipher_sops="secrets.yml")  # doctest: +SKIP
+
     """
 
     path: str | Path
@@ -170,6 +171,7 @@ class AsyncDatabase:
         Examples:
             >>> async with db.connection() as conn:  # doctest: +SKIP
             ...     await conn.execute("SELECT 1")
+
         """
         pool = self._ensure_pool()
         async with pool.connection() as conn:
@@ -191,6 +193,7 @@ class AsyncDatabase:
             >>> async with db.transaction() as conn:  # doctest: +SKIP
             ...     await conn.execute("INSERT INTO users VALUES (?)", ("alice",))
             ...     await conn.execute("INSERT INTO users VALUES (?)", ("bob",))
+
         """
         pool = self._ensure_pool()
         conn = await pool.acquire()
@@ -224,6 +227,7 @@ class AsyncDatabase:
 
         Examples:
             >>> await db.execute("CREATE TABLE test (id INTEGER)")  # doctest: +SKIP
+
         """
         pool = self._ensure_pool()
         async with pool.connection() as conn:
@@ -250,6 +254,7 @@ class AsyncDatabase:
             ...     "INSERT INTO test VALUES (?)",
             ...     [(1,), (2,), (3,)]
             ... )
+
         """
         pool = self._ensure_pool()
         async with pool.connection() as conn:
@@ -271,6 +276,7 @@ class AsyncDatabase:
 
         Examples:
             >>> row = await db.fetch_one("SELECT * FROM test WHERE id=?", (1,))  # doctest: +SKIP
+
         """
         pool = self._ensure_pool()
         async with pool.connection() as conn:
@@ -297,6 +303,7 @@ class AsyncDatabase:
 
         Examples:
             >>> rows = await db.fetch_all("SELECT * FROM test")  # doctest: +SKIP
+
         """
         pool = self._ensure_pool()
         async with pool.connection() as conn:
@@ -323,6 +330,7 @@ class AsyncDatabase:
 
         Examples:
             >>> count = await db.fetch_value("SELECT count(*) FROM test")  # doctest: +SKIP
+
         """
         row = await self.fetch_one(sql, parameters)
         return row[0] if row else None
@@ -339,6 +347,7 @@ class AsyncDatabase:
         Examples:
             >>> await db.table_exists("users")  # doctest: +SKIP
             False
+
         """
         sql = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?"
         count = await self.fetch_value(sql, (table_name,))

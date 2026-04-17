@@ -7,8 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from kstlib.config.exceptions import KstlibError
 
-class RapiError(Exception):
+
+class RapiError(KstlibError):
     """Base exception for all RAPI errors.
 
     Attributes:
@@ -20,6 +22,7 @@ class RapiError(Exception):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.RapiError: Something went wrong
+
     """
 
     def __init__(
@@ -33,6 +36,7 @@ class RapiError(Exception):
         Args:
             message: Human-readable error message.
             details: Additional error context.
+
         """
         super().__init__(message)
         self.message = message
@@ -51,6 +55,7 @@ class CredentialError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.CredentialError: Credential 'github' failed: Environment variable not set
+
     """
 
     def __init__(self, credential_name: str, reason: str) -> None:
@@ -59,6 +64,7 @@ class CredentialError(RapiError):
         Args:
             credential_name: Name of the credential that failed.
             reason: Reason for the failure.
+
         """
         super().__init__(
             f"Credential '{credential_name}' failed: {reason}",
@@ -80,6 +86,7 @@ class EndpointNotFoundError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.EndpointNotFoundError: Endpoint 'unknown.endpoint' not found
+
     """
 
     def __init__(
@@ -92,6 +99,7 @@ class EndpointNotFoundError(RapiError):
         Args:
             endpoint_ref: The endpoint reference that was not found.
             searched_apis: List of API names that were searched.
+
         """
         super().__init__(
             f"Endpoint '{endpoint_ref}' not found",
@@ -113,6 +121,7 @@ class EndpointAmbiguousError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.EndpointAmbiguousError: Endpoint 'get_data' is ambiguous, found in: api1, api2
+
     """
 
     def __init__(self, endpoint_name: str, matching_apis: list[str]) -> None:
@@ -121,6 +130,7 @@ class EndpointAmbiguousError(RapiError):
         Args:
             endpoint_name: The ambiguous endpoint name.
             matching_apis: List of API names containing this endpoint.
+
         """
         super().__init__(
             f"Endpoint '{endpoint_name}' is ambiguous, found in: {', '.join(matching_apis)}",
@@ -143,6 +153,7 @@ class RequestError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.RequestError: Server error
+
     """
 
     def __init__(
@@ -160,6 +171,7 @@ class RequestError(RapiError):
             status_code: HTTP status code (if available).
             response_body: Response body (if available).
             retryable: Whether the error is potentially retryable.
+
         """
         super().__init__(
             message,
@@ -186,6 +198,7 @@ class ResponseTooLargeError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.ResponseTooLargeError: Response size 15000000 exceeds limit 10000000
+
     """
 
     def __init__(self, response_size: int, max_size: int) -> None:
@@ -194,6 +207,7 @@ class ResponseTooLargeError(RapiError):
         Args:
             response_size: Actual response size in bytes.
             max_size: Maximum allowed size in bytes.
+
         """
         super().__init__(
             f"Response size {response_size} exceeds limit {max_size}",
@@ -220,6 +234,7 @@ class ConfirmationRequiredError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.ConfirmationRequiredError: ... requires confirmation...
+
     """
 
     def __init__(
@@ -235,6 +250,7 @@ class ConfirmationRequiredError(RapiError):
             endpoint_ref: Full endpoint reference (api.endpoint).
             expected: Expected confirmation string.
             actual: Actual confirmation string provided (None if missing).
+
         """
         if actual is None:
             message = f"Endpoint '{endpoint_ref}' requires confirmation. Pass confirm=\"{expected}\" to proceed."
@@ -269,6 +285,7 @@ class SafeguardMissingError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.SafeguardMissingError: ... requires a safeguard...
+
     """
 
     def __init__(self, endpoint_ref: str, method: str) -> None:
@@ -277,6 +294,7 @@ class SafeguardMissingError(RapiError):
         Args:
             endpoint_ref: Full endpoint reference (api.endpoint).
             method: HTTP method that requires the safeguard.
+
         """
         message = (
             f"Endpoint '{endpoint_ref}' uses method {method} which requires a safeguard. "
@@ -306,6 +324,7 @@ class EndpointCollisionError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.EndpointCollisionError: Endpoint 'api.create' defined in multiple files...
+
     """
 
     def __init__(self, endpoint_ref: str, source_files: list[str]) -> None:
@@ -314,6 +333,7 @@ class EndpointCollisionError(RapiError):
         Args:
             endpoint_ref: Full endpoint reference (api.endpoint).
             source_files: List of files defining this endpoint.
+
         """
         message = (
             f"Endpoint '{endpoint_ref}' defined in multiple files: {', '.join(source_files)}. "
@@ -325,6 +345,42 @@ class EndpointCollisionError(RapiError):
         )
         self.endpoint_ref = endpoint_ref
         self.source_files = source_files
+
+
+class ServerNotFoundError(RapiError):
+    """Raised when a named server profile does not exist.
+
+    Attributes:
+        server_name: The server name that was not found.
+        available: List of available server names.
+
+    Examples:
+        >>> raise ServerNotFoundError("staging", available=["source", "target"])
+        Traceback (most recent call last):
+        ...
+        kstlib.rapi.exceptions.ServerNotFoundError: Server profile 'staging' not found...
+
+    """
+
+    def __init__(self, server_name: str, available: list[str] | None = None) -> None:
+        """Initialize ServerNotFoundError.
+
+        Args:
+            server_name: The server name that was not found.
+            available: List of available server names.
+
+        """
+        available = available or []
+        if available:
+            hint = f" Available: {', '.join(sorted(available))}"
+        else:
+            hint = " No server profiles configured (add rapi.servers section to config)."
+        super().__init__(
+            f"Server profile '{server_name}' not found.{hint}",
+            details={"server_name": server_name, "available": available},
+        )
+        self.server_name = server_name
+        self.available = available
 
 
 class EnvVarError(RapiError):
@@ -342,6 +398,7 @@ class EnvVarError(RapiError):
         Traceback (most recent call last):
         ...
         kstlib.rapi.exceptions.EnvVarError: Environment variable 'VIYA_HOST' is not set...
+
     """
 
     def __init__(self, var_name: str, source: str | None = None) -> None:
@@ -350,6 +407,7 @@ class EnvVarError(RapiError):
         Args:
             var_name: Name of the missing environment variable.
             source: Source file or context where the variable was referenced.
+
         """
         if source:
             message = f"Environment variable '{var_name}' is not set (required by {source}). Use ${{VAR:-default}} for optional variables."
@@ -374,4 +432,5 @@ __all__ = [
     "RequestError",
     "ResponseTooLargeError",
     "SafeguardMissingError",
+    "ServerNotFoundError",
 ]

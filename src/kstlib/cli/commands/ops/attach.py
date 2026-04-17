@@ -30,6 +30,7 @@ def attach(
         kstlib ops attach dev
         kstlib ops attach prod --backend container
         kstlib ops attach orion --socket orion
+
     """
     try:
         manager = get_session_manager(name, backend=backend, socket_name=socket)

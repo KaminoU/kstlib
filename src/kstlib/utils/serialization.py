@@ -17,6 +17,7 @@ Example:
     <root>
       <item>test</item>
     </root>
+
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ import json
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
-from xml.dom import minidom
+
+from defusedxml import minidom
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,6 +50,7 @@ def _default_encoder(obj: Any) -> Any:
 
     Raises:
         TypeError: If object is not serializable.
+
     """
     if isinstance(obj, datetime):
         return obj.isoformat()
@@ -82,6 +85,7 @@ def to_json(
     Example:
         >>> to_json({"key": "value"})
         '{\n  "key": "value"\n}'
+
     """
     encoder = default if default is not None else _default_encoder
     return json.dumps(data, indent=indent, sort_keys=sort_keys, default=encoder)
@@ -109,10 +113,10 @@ def to_xml(
         >>> formatted = to_xml(xml)
         >>> '<root>' in formatted and '  <item>' in formatted
         True
+
     """
     try:
-        # S318: Safe here - only used for display formatting, not for processing untrusted data
-        dom = minidom.parseString(xml_string.encode("utf-8"))  # noqa: S318
+        dom = minidom.parseString(xml_string)
         # toprettyxml adds extra blank lines, clean them up
         pretty = dom.toprettyxml(indent=indent)
         # Remove extra blank lines that minidom creates
@@ -140,6 +144,7 @@ def is_xml_content(content: str, content_type: str | None = None) -> bool:
         True
         >>> is_xml_content('{"key": "value"}')
         False
+
     """
     # Check content-type header first
     if content_type:
@@ -171,6 +176,7 @@ def to_yaml_like(data: dict[str, Any], *, indent: int = 0) -> str:
         items:
           - a
           - b
+
     """
     lines: list[str] = []
     prefix = "  " * indent
@@ -224,6 +230,7 @@ def format_output(
         {
           "key": "value"
         }
+
     """
     fmt = output_format.lower()
 
