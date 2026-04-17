@@ -89,6 +89,9 @@ __all__ = ["WebSocketManager"]
 
 log = logging.getLogger(__name__)
 
+#: WebSocket close code 1013 "Try Again Later" - server temporarily unavailable.
+WS_CODE_TRY_AGAIN_LATER = 1013
+
 # Type aliases for callbacks
 ShouldDisconnectCallback = Callable[[], bool]
 ShouldReconnectCallback = Callable[[], bool | float]
@@ -96,6 +99,7 @@ OnConnectCallback = Callable[[], Awaitable[None] | None]
 OnDisconnectCallback = Callable[[DisconnectReason], Awaitable[None] | None]
 OnMessageCallback = Callable[[Any], Awaitable[None] | None]
 OnAlertCallback = Callable[[str, str, Mapping[str, Any]], Awaitable[None] | None]
+DisconnectAlertCallback = Callable[[DisconnectReason, int], Awaitable[None] | None]
 
 
 def _check_websockets_installed() -> None:
@@ -152,6 +156,7 @@ class WebSocketManager:
         should_reconnect: ShouldReconnectCallback | None = None,
         on_connect: OnConnectCallback | None = None,
         on_disconnect: OnDisconnectCallback | None = None,
+        on_disconnect_alert: DisconnectAlertCallback | None = None,
         on_message: OnMessageCallback | None = None,
         on_alert: OnAlertCallback | None = None,
         # Connection settings
@@ -164,10 +169,14 @@ class WebSocketManager:
         max_reconnect_delay: float | None = None,
         max_reconnect_attempts: int | None = None,
         auto_reconnect: bool = True,
+        stable_connection_time: float | None = None,
+        server_unavailable_delay: float | None = None,
         # Proactive control settings
         disconnect_check_interval: float | None = None,
         reconnect_check_interval: float | None = None,
         disconnect_margin: float | None = None,
+        # Alert throttle
+        disconnect_alert_interval: float | None = None,
         # Queue settings
         queue_size: int | None = None,
         # Config
@@ -181,6 +190,10 @@ class WebSocketManager:
             should_reconnect: Callback returning True or delay (seconds) for reconnect.
             on_connect: Callback invoked after successful connection.
             on_disconnect: Callback invoked after disconnection with reason.
+            on_disconnect_alert: Throttled callback for disconnect alerts.
+                Receives (reason, count) where count is the number of
+                disconnects since the last alert. Fires at most once per
+                ``disconnect_alert_interval`` seconds.
             on_message: Callback invoked for each received message.
             on_alert: Callback for alerting (channel, message, context).
             ping_interval: Seconds between ping frames.
@@ -191,9 +204,17 @@ class WebSocketManager:
             max_reconnect_delay: Maximum delay for exponential backoff.
             max_reconnect_attempts: Maximum consecutive reconnection attempts.
             auto_reconnect: Whether to auto-reconnect on disconnection.
+            stable_connection_time: Seconds of stable connection required
+                before ``_reconnect_count`` is reset to 0. Protects against
+                flapping servers that accept the handshake then close.
+            server_unavailable_delay: Seconds to wait before any reconnect
+                attempt after receiving close code 1013 (Try Again Later).
             disconnect_check_interval: Seconds between should_disconnect checks.
             reconnect_check_interval: Seconds between should_reconnect checks.
             disconnect_margin: Seconds before platform limit to disconnect.
+            disconnect_alert_interval: Minimum seconds between calls to
+                ``on_disconnect_alert``. Aggregated count of skipped
+                disconnects is passed to the callback.
             queue_size: Maximum messages in queue (0 = unlimited).
             config: Optional config mapping for limits resolution.
 
@@ -229,6 +250,15 @@ class WebSocketManager:
         )
         self._disconnect_margin = disconnect_margin if disconnect_margin is not None else limits.disconnect_margin
         self._queue_size = queue_size if queue_size is not None else limits.queue_size
+        self._stable_connection_time = (
+            stable_connection_time if stable_connection_time is not None else limits.stable_connection_time
+        )
+        self._server_unavailable_delay = (
+            server_unavailable_delay if server_unavailable_delay is not None else limits.server_unavailable_delay
+        )
+        self._disconnect_alert_interval = (
+            disconnect_alert_interval if disconnect_alert_interval is not None else limits.disconnect_alert_interval
+        )
 
         # Settings
         self._reconnect_strategy = reconnect_strategy
@@ -239,6 +269,7 @@ class WebSocketManager:
         self._should_reconnect = should_reconnect
         self._on_connect = on_connect
         self._on_disconnect = on_disconnect
+        self._on_disconnect_alert = on_disconnect_alert
         self._on_message = on_message
         self._on_alert = on_alert
 
@@ -249,12 +280,16 @@ class WebSocketManager:
         self._reconnect_count = 0
         self._connect_time: float = 0.0
         self._scheduled_reconnect_delay: float | None = None
+        self._force_backoff_delay: float | None = None
+        self._disconnect_alert_count: int = 0
+        self._last_disconnect_alert_at: float = 0.0
 
         # Background tasks
         self._disconnect_check_task: asyncio.Task[None] | None = None
         self._reconnect_check_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
         self._ping_task: asyncio.Task[None] | None = None
+        self._stable_connection_task: asyncio.Task[None] | None = None
 
         # Events
         self._connected_event = asyncio.Event()
@@ -398,11 +433,17 @@ class WebSocketManager:
         ) from last_error
 
     async def _finalize_connection(self) -> None:
-        """Finalize successful connection setup."""
+        """Finalize successful connection setup.
+
+        Note: ``_reconnect_count`` is NOT reset here. A successful handshake
+        alone is not proof of a healthy connection - a flapping server can
+        accept the TCP/WS handshake then close immediately. The counter is
+        reset only after ``_stable_connection_time`` seconds of uptime by
+        ``_stable_connection_reset_loop``.
+        """
         self._state = ConnectionState.CONNECTED
         self._connected_event.set()
         self._connect_time = time.monotonic()
-        self._reconnect_count = 0
         self._stats.record_connect()
 
         log.info("WebSocket connected to %s", self._url)
@@ -428,6 +469,31 @@ class WebSocketManager:
         # Start proactive disconnect check if callback provided
         if self._should_disconnect is not None:
             self._disconnect_check_task = asyncio.create_task(self._disconnect_check_loop(), name="ws_disconnect_check")
+
+        # Start delayed reconnect-counter reset. Only scheduled if a previous
+        # reconnect has occurred. Avoids scheduling a no-op task on first connect.
+        if self._reconnect_count > 0:
+            self._stable_connection_task = asyncio.create_task(
+                self._stable_connection_reset_loop(),
+                name="ws_stable_connection_reset",
+            )
+
+    async def _stable_connection_reset_loop(self) -> None:
+        """Reset ``_reconnect_count`` after ``_stable_connection_time`` seconds.
+
+        Scheduled from ``_start_background_tasks``. If the connection drops
+        before the delay expires, ``_cancel_background_tasks`` cancels this
+        task WITHOUT resetting the counter, so the next reconnect attempt
+        keeps the exponential backoff growing.
+        """
+        await asyncio.sleep(self._stable_connection_time)
+        if self._state == ConnectionState.CONNECTED:
+            log.debug(
+                "Stable connection reached after %.1fs, resetting reconnect counter (was %d)",
+                self._stable_connection_time,
+                self._reconnect_count,
+            )
+            self._reconnect_count = 0
 
     def _parse_message(self, message: str | bytes) -> Any:
         """Parse incoming message, attempting JSON decode for strings."""
@@ -524,14 +590,26 @@ class WebSocketManager:
         if was_connected:
             self._stats.record_disconnect(proactive=reason.is_proactive)
 
+        # Code 1013 "Try Again Later": server explicitly asks clients to back off.
+        # Force a pre-reconnect delay regardless of the retry strategy.
+        if code == WS_CODE_TRY_AGAIN_LATER:
+            self._force_backoff_delay = self._server_unavailable_delay
+            log.warning(
+                "Server unavailable (1013), waiting %.0fs before reconnect",
+                self._server_unavailable_delay,
+            )
+
         # Cancel background tasks
         await self._cancel_background_tasks()
 
-        # Invoke on_disconnect callback
+        # Invoke on_disconnect callback (per-event)
         if self._on_disconnect is not None:
             result = self._on_disconnect(reason)
             if asyncio.iscoroutine(result):
                 await result
+
+        # Throttled alert callback (aggregated count since last alert)
+        await self._maybe_emit_disconnect_alert(reason)
 
         log.info("WebSocket disconnected: %s (code=%d)", reason.name, code)
 
@@ -551,6 +629,33 @@ class WebSocketManager:
         else:
             self._state = ConnectionState.DISCONNECTED
             self._disconnected_event.set()
+
+    async def _maybe_emit_disconnect_alert(self, reason: DisconnectReason) -> None:
+        """Emit ``on_disconnect_alert`` if the throttle window has elapsed.
+
+        The aggregated count is the number of disconnects observed since
+        the previous alert (including this one). After firing, the counter
+        is reset to 0 and the timestamp updated.
+        """
+        if self._on_disconnect_alert is None:
+            return
+
+        self._disconnect_alert_count += 1
+
+        now = time.monotonic()
+        if now - self._last_disconnect_alert_at < self._disconnect_alert_interval:
+            return
+
+        count = self._disconnect_alert_count
+        self._disconnect_alert_count = 0
+        self._last_disconnect_alert_at = now
+
+        try:
+            result = self._on_disconnect_alert(reason, count)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            log.exception("Error in on_disconnect_alert callback")
 
     async def _reconnect_check_loop(self) -> None:
         """Background task to check should_reconnect callback."""
@@ -582,10 +687,21 @@ class WebSocketManager:
                     log.warning("Error in should_reconnect callback: %s", e)
 
     async def _attempt_reconnect(self) -> None:
-        """Attempt to reconnect with retry logic."""
+        """Attempt to reconnect with retry logic.
+
+        Honors ``_force_backoff_delay`` first if set (e.g. after close
+        code 1013), then applies the strategy-based backoff.
+        """
         if self._shutdown_event.is_set():
             log.debug("Shutdown requested, skipping reconnect attempt")
             return
+
+        if self._force_backoff_delay is not None:
+            delay = self._force_backoff_delay
+            self._force_backoff_delay = None
+            await asyncio.sleep(delay)
+            if self._shutdown_event.is_set():
+                return
 
         self._reconnect_count += 1
 
@@ -635,12 +751,18 @@ class WebSocketManager:
         await asyncio.sleep(delay)
 
     async def _cancel_background_tasks(self) -> None:
-        """Cancel all background tasks."""
+        """Cancel all background tasks.
+
+        Note: cancelling ``_stable_connection_task`` does NOT reset
+        ``_reconnect_count``. If the connection was torn down before the
+        stable window elapsed, the caller is treated as still flapping.
+        """
         tasks = [
             self._receive_task,
             self._disconnect_check_task,
             self._reconnect_check_task,
             self._ping_task,
+            self._stable_connection_task,
         ]
         for task in tasks:
             if task is not None and not task.done():
@@ -652,6 +774,7 @@ class WebSocketManager:
         self._disconnect_check_task = None
         self._reconnect_check_task = None
         self._ping_task = None
+        self._stable_connection_task = None
 
     async def _resubscribe(self) -> None:
         """Re-subscribe to all channels after reconnection."""

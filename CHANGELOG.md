@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.1] - 2026-04-17
+
+### Fixed
+
+- **WebSocket reconnect counter** resets only after `stable_connection_time`
+  (default 60s) of uninterrupted connection, not on every successful handshake.
+  Exponential backoff now accumulates correctly during prolonged server outages.
+- **WebSocket code 1013** ("Try Again Later") is now detected explicitly and
+  forces a `server_unavailable_delay` (default 30s) before any reconnect,
+  instead of being treated as a generic server close.
+- **WebSocket disconnect alert throttle**: new `on_disconnect_alert` callback
+  with built-in `disconnect_alert_interval` (default 300s) and aggregated
+  disconnect count. Prevents alert storms during server outages (e.g. 3918
+  Slack alerts in 19 minutes during a Kraken trading engine outage).
+- **deps: authlib>=1.6.11**
+  ([GHSA-jj8c-mmj3-mmgv](https://github.com/advisories/GHSA-jj8c-mmj3-mmgv)) -
+  JWT algorithm confusion vulnerability.
+
 ## [2.2.0] - 2026-04-16
 
 ### Added
@@ -688,6 +706,7 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[2.2.1]: https://github.com/KaminoU/kstlib/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/KaminoU/kstlib/compare/v2.1.4...v2.2.0
 [2.1.4]: https://github.com/KaminoU/kstlib/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/KaminoU/kstlib/compare/v2.1.2...v2.1.3

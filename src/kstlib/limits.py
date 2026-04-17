@@ -200,6 +200,18 @@ HARD_MAX_WS_RECONNECT_CHECK = 60.0
 HARD_MIN_WS_DISCONNECT_MARGIN = 60.0
 HARD_MAX_WS_DISCONNECT_MARGIN = 3600.0
 
+#: WebSocket stable connection time bounds (seconds) - delay before resetting reconnect counter.
+HARD_MIN_WS_STABLE_CONNECTION_TIME = 10.0
+HARD_MAX_WS_STABLE_CONNECTION_TIME = 300.0
+
+#: WebSocket server unavailable (code 1013) backoff bounds (seconds).
+HARD_MIN_WS_SERVER_UNAVAILABLE_DELAY = 10.0
+HARD_MAX_WS_SERVER_UNAVAILABLE_DELAY = 300.0
+
+#: WebSocket disconnect alert interval bounds (seconds) - throttle window for alerts.
+HARD_MIN_WS_DISCONNECT_ALERT_INTERVAL = 30.0
+HARD_MAX_WS_DISCONNECT_ALERT_INTERVAL = 3600.0
+
 #: Maximum endpoint reference length (api.endpoint format) - protects against DoS.
 HARD_MAX_ENDPOINT_REF_LENGTH = 256
 
@@ -272,6 +284,9 @@ DEFAULT_WS_QUEUE_SIZE = 1000  # messages
 DEFAULT_WS_DISCONNECT_CHECK = 10.0  # seconds
 DEFAULT_WS_RECONNECT_CHECK = 5.0  # seconds
 DEFAULT_WS_DISCONNECT_MARGIN = 300.0  # seconds (5 minutes before 24h limit)
+DEFAULT_WS_STABLE_CONNECTION_TIME = 60.0  # seconds before resetting reconnect counter
+DEFAULT_WS_SERVER_UNAVAILABLE_DELAY = 30.0  # seconds to wait on code 1013
+DEFAULT_WS_DISCONNECT_ALERT_INTERVAL = 300.0  # seconds between throttled alerts
 
 DEFAULT_PIPELINE_TIMEOUT = 300.0  # seconds (5 minutes)
 DEFAULT_PIPELINE_ON_ERROR = "fail_fast"
@@ -925,6 +940,9 @@ class WebSocketLimits:
         disconnect_check_interval: Seconds between should_disconnect checks.
         reconnect_check_interval: Seconds between should_reconnect checks.
         disconnect_margin: Seconds before platform limit to disconnect.
+        stable_connection_time: Seconds of stable connection before resetting reconnect counter.
+        server_unavailable_delay: Seconds to wait on server code 1013 before reconnect.
+        disconnect_alert_interval: Seconds between throttled disconnect alerts.
 
     """
 
@@ -938,6 +956,9 @@ class WebSocketLimits:
     disconnect_check_interval: float
     reconnect_check_interval: float
     disconnect_margin: float
+    stable_connection_time: float
+    server_unavailable_delay: float
+    disconnect_alert_interval: float
 
 
 def get_websocket_limits(
@@ -1022,6 +1043,24 @@ def get_websocket_limits(
             DEFAULT_WS_DISCONNECT_MARGIN,
             HARD_MIN_WS_DISCONNECT_MARGIN,
             HARD_MAX_WS_DISCONNECT_MARGIN,
+        ),
+        stable_connection_time=_parse_float_config(
+            _get_nested(config, "websocket", "reconnect", "stable_connection_time"),
+            DEFAULT_WS_STABLE_CONNECTION_TIME,
+            HARD_MIN_WS_STABLE_CONNECTION_TIME,
+            HARD_MAX_WS_STABLE_CONNECTION_TIME,
+        ),
+        server_unavailable_delay=_parse_float_config(
+            _get_nested(config, "websocket", "reconnect", "server_unavailable_delay"),
+            DEFAULT_WS_SERVER_UNAVAILABLE_DELAY,
+            HARD_MIN_WS_SERVER_UNAVAILABLE_DELAY,
+            HARD_MAX_WS_SERVER_UNAVAILABLE_DELAY,
+        ),
+        disconnect_alert_interval=_parse_float_config(
+            _get_nested(config, "websocket", "alert", "disconnect_interval"),
+            DEFAULT_WS_DISCONNECT_ALERT_INTERVAL,
+            HARD_MIN_WS_DISCONNECT_ALERT_INTERVAL,
+            HARD_MAX_WS_DISCONNECT_ALERT_INTERVAL,
         ),
     )
 

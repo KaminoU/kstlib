@@ -56,7 +56,7 @@ dependencies = [
 
     # --- HTTP Client & Auth ---
     "httpx>=0.28,<1",  # Modern async HTTP client (OAuth2/OIDC flows)
-    "authlib>=1.6.9,<2", # OAuth2/OIDC client + JWT signature verification
+    "authlib>=1.6.11,<2", # OAuth2/OIDC client + JWT signature verification (GHSA-jj8c-mmj3-mmgv: CSRF in cache-backed OAuth state)
 
     # --- Time & Scheduling ---
     "pendulum>=3.0,<4", # Modern datetime library with timezone support

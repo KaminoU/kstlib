@@ -56,6 +56,9 @@ class TestWebSocketLimits:
             disconnect_check_interval=10.0,
             reconnect_check_interval=5.0,
             disconnect_margin=300.0,
+            stable_connection_time=60.0,
+            server_unavailable_delay=30.0,
+            disconnect_alert_interval=300.0,
         )
         with pytest.raises(AttributeError):
             limits.ping_interval = 15.0  # type: ignore[misc]
@@ -73,6 +76,9 @@ class TestWebSocketLimits:
             disconnect_check_interval=10.0,
             reconnect_check_interval=5.0,
             disconnect_margin=300.0,
+            stable_connection_time=60.0,
+            server_unavailable_delay=30.0,
+            disconnect_alert_interval=300.0,
         )
         assert limits.ping_interval == 20.0
         assert limits.ping_timeout == 10.0
@@ -84,6 +90,9 @@ class TestWebSocketLimits:
         assert limits.disconnect_check_interval == 10.0
         assert limits.reconnect_check_interval == 5.0
         assert limits.disconnect_margin == 300.0
+        assert limits.stable_connection_time == 60.0
+        assert limits.server_unavailable_delay == 30.0
+        assert limits.disconnect_alert_interval == 300.0
 
 
 class TestGetWebSocketLimits:
