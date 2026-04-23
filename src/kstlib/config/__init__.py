@@ -34,6 +34,7 @@ from kstlib.config.loader import (
     load_config,
     load_from_env,
     load_from_file,
+    reload_config,
     require_config,
 )
 from kstlib.config.sops import (
@@ -71,6 +72,7 @@ __all__ = [
     "load_config",
     "load_from_env",
     "load_from_file",
+    "reload_config",
     "require_config",
     "reset_decryptor",
 ]

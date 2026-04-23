@@ -9,6 +9,7 @@ import functools
 import html
 import inspect
 import mimetypes
+import ssl
 import time
 import traceback
 from dataclasses import dataclass
@@ -17,8 +18,10 @@ from email.message import EmailMessage
 from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar, overload
 
 from kstlib.limits import MailLimits, get_mail_limits
+from kstlib.logging import get_logger
 from kstlib.mail.exceptions import MailConfigurationError, MailTransportError, MailValidationError
 from kstlib.mail.filesystem import MailFilesystemGuards
+from kstlib.ssl import get_ssl_config, validate_ca_bundle_path
 from kstlib.utils import (
     EmailAddress,
     ValidationError,
@@ -27,6 +30,8 @@ from kstlib.utils import (
     parse_email_address,
     replace_placeholders,
 )
+
+log = get_logger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -43,6 +48,10 @@ R = TypeVar("R")
 
 
 _DEFAULT_ENCODING = "utf-8"
+
+# Envelope fields that may appear under ``mail.presets.<name>.defaults``.
+# Any other key is logged once as a WARNING and ignored (forward-compat).
+_KNOWN_PRESET_ENVELOPE_DEFAULTS: frozenset[str] = frozenset({"sender", "reply_to"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +100,30 @@ class MailBuilder:
     4. ``None``: no transport. ``.build()`` still works. ``.send()`` raises
        ``MailConfigurationError``.
 
+    Preset envelope defaults:
+        A preset may declare a ``defaults`` subsection with ``sender`` and
+        ``reply_to`` keys. These are applied automatically when the builder
+        is initialised with ``preset=`` or when the config's ``mail.default``
+        resolves to such a preset. User-provided values via ``.sender()`` or
+        ``.reply_to()`` always override the preset defaults (user wins).
+
+        Deliberately scoped to ``sender`` and ``reply_to`` only:
+        ``to``/``cc``/``bcc`` are excluded on purpose to prevent silent
+        accidental sends to the preset's audience. Unsupported keys inside
+        ``defaults`` are logged once as a WARNING and ignored (forward
+        compatibility).
+
+        Example YAML::
+
+            mail:
+              presets:
+                corporate:
+                  transport: smtp
+                  host: smtp-secure.corp.local
+                  defaults:
+                    sender: "Service Notifications <notify@corp.local>"
+                    reply_to: "Service Notifications <notify@corp.local>"
+
     Example:
         Build an email without sending (useful for inspection)::
 
@@ -114,10 +147,10 @@ class MailBuilder:
             >>> mail = MailBuilder(transport=transport)
             >>> # mail.sender(...).to(...).subject(...).message(...).send()
 
-        Config-driven via a named preset::
+        Config-driven via a named preset (defaults.sender is pre-filled)::
 
             >>> mail = MailBuilder(preset="corporate")  # doctest: +SKIP
-            >>> # mail.sender(...).to(...).message(...).send()
+            >>> # mail.to(...).subject(...).message(...).send()
 
         Config-driven via ``mail.default`` preset::
 
@@ -140,10 +173,13 @@ class MailBuilder:
         Args:
             transport: Explicit transport instance. Takes priority over ``preset``
                 and the config default. Backward compatible: passing this is
-                equivalent to the pre-preset API.
+                equivalent to the pre-preset API. When set, preset envelope
+                defaults are **not** applied.
             preset: Name of a preset declared under ``mail.presets`` in
                 ``kstlib.conf.yml``. Resolved immediately. Raises
                 ``MailConfigurationError`` if the preset does not exist.
+                Any ``defaults.sender`` / ``defaults.reply_to`` declared on
+                the preset are applied right after transport resolution.
             encoding: Character encoding for message bodies (default: utf-8).
             filesystem: Filesystem guardrails for attachments, inline
                 resources, and templates.
@@ -151,15 +187,22 @@ class MailBuilder:
 
         Raises:
             MailConfigurationError: If ``preset`` is passed but does not
-                resolve to a valid preset in configuration.
+                resolve to a valid preset in configuration, or if a preset
+                default has a non-string value.
+            MailValidationError: If a preset default holds an unparseable
+                email address.
 
         """
+        resolved_preset_name: str | None
         if transport is not None:
             self._transport: TransportLike | None = transport
+            resolved_preset_name = None
         elif preset is not None:
             self._transport = _build_transport_from_preset(preset)
+            resolved_preset_name = preset
         else:
             self._transport = _resolve_default_transport()
+            resolved_preset_name = _resolve_default_preset_name() if self._transport is not None else None
         self._encoding = encoding
         self._filesystem = filesystem or MailFilesystemGuards.default()
         self._limits = limits or get_mail_limits()
@@ -173,6 +216,11 @@ class MailBuilder:
         self._html_body: str | None = None
         self._attachments: list[Path] = []
         self._inline: list[_InlineResource] = []
+
+        if resolved_preset_name is not None:
+            envelope_defaults = _load_preset_envelope_defaults(resolved_preset_name)
+            if envelope_defaults:
+                self._apply_preset_envelope_defaults(envelope_defaults)
 
     # ------------------------------------------------------------------
     # Addressing
@@ -587,6 +635,38 @@ class MailBuilder:
         except ValidationError as exc:
             raise MailValidationError(str(exc)) from exc
 
+    def _apply_preset_envelope_defaults(self, defaults: Mapping[str, Any]) -> None:
+        """Seed ``_sender`` / ``_reply_to`` from a preset's ``defaults`` section.
+
+        User-provided values via :meth:`sender` or :meth:`reply_to` overwrite
+        these seeds by the natural assignment pattern - no extra bookkeeping
+        required.
+
+        Args:
+            defaults: Envelope defaults dict, already filtered to the
+                supported keys by :func:`_load_preset_envelope_defaults`.
+
+        Raises:
+            MailConfigurationError: If a supported key is present with a
+                non-string value.
+            MailValidationError: If a supported key holds an unparseable
+                email address (propagated from :meth:`_parse_address`).
+
+        """
+        sender = defaults.get("sender")
+        if sender is not None:
+            if not isinstance(sender, str):
+                msg = f"preset defaults.sender must be a string, got {type(sender).__name__}: {sender!r}"
+                raise MailConfigurationError(msg)
+            self._sender = self._parse_address(sender)
+
+        reply_to = defaults.get("reply_to")
+        if reply_to is not None:
+            if not isinstance(reply_to, str):
+                msg = f"preset defaults.reply_to must be a string, got {type(reply_to).__name__}: {reply_to!r}"
+                raise MailConfigurationError(msg)
+            self._reply_to = self._parse_address(reply_to)
+
     def _parse_addresses(self, values: Iterable[str]) -> list[EmailAddress]:
         try:
             return normalize_address_list(values)
@@ -742,6 +822,83 @@ def _resolve_default_transport() -> TransportLike | None:
     return _build_transport_from_preset(str(default_name))
 
 
+def _resolve_default_preset_name() -> str | None:
+    """Return the preset name referenced by ``mail.default``, or ``None``.
+
+    Swallows any config loading error and returns ``None`` so that
+    ``MailBuilder()`` stays usable even when the config file is missing.
+    Mirrors the silent-empty contract of :func:`_load_mail_config`.
+    """
+    try:
+        mail_cfg = _load_mail_config()
+    except MailConfigurationError:
+        return None
+    if mail_cfg is None or not hasattr(mail_cfg, "get"):
+        return None
+    default_name = mail_cfg.get("default")
+    if not default_name:
+        return None
+    return str(default_name)
+
+
+def _load_preset_envelope_defaults(preset_name: str) -> dict[str, Any]:
+    """Read the ``defaults`` subsection of a named mail preset.
+
+    Returns an empty dict silently when the config is unavailable, the
+    preset does not exist, the preset has no ``defaults`` section, or the
+    section is empty / of the wrong shape. Only keys in
+    :data:`_KNOWN_PRESET_ENVELOPE_DEFAULTS` are returned; any other key is
+    logged once as a WARNING (batched, one log per call) and ignored. This
+    keeps old YAML files working when kstlib later adds new supported keys.
+
+    Args:
+        preset_name: Name of the preset declared under ``mail.presets``.
+
+    Returns:
+        Dict containing only the supported keys present in the preset
+        defaults. Empty dict if nothing is configured.
+
+    Examples:
+        >>> _load_preset_envelope_defaults("corporate")  # doctest: +SKIP
+        {'sender': 'Service Notifications <notify@corp.local>'}
+
+    """
+    try:
+        mail_cfg = _load_mail_config()
+    except MailConfigurationError:
+        return {}
+    if mail_cfg is None or not hasattr(mail_cfg, "get"):
+        return {}
+    presets = mail_cfg.get("presets")
+    if presets is None or not hasattr(presets, "get"):
+        return {}
+    preset_cfg = presets.get(preset_name)
+    if preset_cfg is None or not hasattr(preset_cfg, "get"):
+        return {}
+    raw_defaults = preset_cfg.get("defaults")
+    if raw_defaults is None or not hasattr(raw_defaults, "items"):
+        return {}
+
+    known: dict[str, Any] = {}
+    unknown: list[str] = []
+    for key, value in raw_defaults.items():
+        key_str = str(key)
+        if key_str in _KNOWN_PRESET_ENVELOPE_DEFAULTS:
+            known[key_str] = value
+        else:
+            unknown.append(key_str)
+
+    if unknown:
+        log.warning(
+            "mail preset %r has unsupported defaults keys: %s. Supported keys are: %s. Unsupported keys are ignored.",
+            preset_name,
+            sorted(unknown),
+            sorted(_KNOWN_PRESET_ENVELOPE_DEFAULTS),
+        )
+
+    return known
+
+
 def _build_transport_from_preset(preset_name: str) -> TransportLike:
     """Build a transport from a named preset in the configuration.
 
@@ -783,18 +940,213 @@ def _build_transport_from_preset(preset_name: str) -> TransportLike:
     )
 
 
+def _load_mail_ssl_section() -> Any | None:
+    """Return the ``mail.ssl`` section of the configuration, or ``None``.
+
+    Isolates the defensive imports/lookups so :func:`_resolve_mail_ssl_config`
+    stays readable. Returns ``None`` whenever the section is missing or the
+    config loader cannot be reached.
+    """
+    try:
+        mail_section = _load_mail_config()
+    except MailConfigurationError:
+        return None
+    if mail_section is None or not hasattr(mail_section, "get"):
+        return None
+    ssl_section = mail_section.get("ssl")
+    if ssl_section is None or not hasattr(ssl_section, "get"):
+        return None
+    return ssl_section
+
+
+def _load_root_ssl_config() -> Any | None:
+    """Return the root-level :class:`kstlib.ssl.SSLConfig`, or ``None``.
+
+    Swallows any loading error (missing config, unreadable YAML) and yields
+    ``None`` so the caller keeps cascading to the Python default.
+    """
+    try:
+        return get_ssl_config()
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
+
+
+def _cascade_mail_ssl_level(
+    verify: Any,
+    ca_bundle: Any,
+    source: str | None,
+) -> tuple[Any, Any, str | None]:
+    """Apply the ``mail.ssl.*`` cascade level to a partial resolution."""
+    if verify is not None and ca_bundle is not None:
+        return verify, ca_bundle, source
+    mail_ssl = _load_mail_ssl_section()
+    if mail_ssl is None:
+        return verify, ca_bundle, source
+    if verify is None:
+        candidate = mail_ssl.get("verify")
+        if candidate is not None:
+            verify = candidate
+            source = "mail.ssl"
+    if ca_bundle is None:
+        ca_bundle = mail_ssl.get("ca_bundle")
+    return verify, ca_bundle, source
+
+
+def _cascade_root_ssl_level(
+    verify: Any,
+    ca_bundle: Any,
+    source: str | None,
+) -> tuple[Any, Any, str | None]:
+    """Apply the root ``ssl.*`` cascade level to a partial resolution."""
+    if verify is not None and ca_bundle is not None:
+        return verify, ca_bundle, source
+    root_ssl = _load_root_ssl_config()
+    if root_ssl is None:
+        return verify, ca_bundle, source
+    if verify is None:
+        verify = root_ssl.verify
+        source = "ssl (root)"
+    if ca_bundle is None:
+        ca_bundle = root_ssl.ca_bundle
+    return verify, ca_bundle, source
+
+
+def _validate_mail_ssl_types(verify: Any, ca_bundle: Any) -> tuple[bool, str | None]:
+    """Reject non-bool verify and non-str ca_bundle before SSLContext creation."""
+    if not isinstance(verify, bool):
+        msg = f"mail SSL verify must be bool, got {type(verify).__name__}: {verify!r}"
+        raise TypeError(msg)
+    if ca_bundle is not None and not isinstance(ca_bundle, str):
+        msg = f"mail SSL ca_bundle must be str or null, got {type(ca_bundle).__name__}"
+        raise TypeError(msg)
+    return verify, ca_bundle
+
+
+def _warn_if_mail_verify_disabled(verify: bool, source: str | None) -> None:
+    """Emit a single source-tagged WARNING when verify resolved to ``False``."""
+    if verify is False:
+        log.warning(
+            "[SECURITY] SSL certificate verification disabled for mail transport "
+            "(source: %s). This exposes the SMTP session to MITM attacks. Use only "
+            "in trusted environments, or provide ssl_ca_bundle to validate against a private CA.",
+            source,
+        )
+
+
+def _resolve_mail_ssl_config(preset_cfg: Any) -> tuple[bool, str | None]:
+    """Resolve SSL ``(verify, ca_bundle)`` via a 4-level cascade.
+
+    Priority (highest to lowest):
+
+    1. Preset level: ``preset_cfg.ssl_verify`` / ``preset_cfg.ssl_ca_bundle``
+    2. Mail level:   ``config.mail.ssl.verify`` / ``config.mail.ssl.ca_bundle``
+    3. Root level:   ``config.ssl.verify`` / ``config.ssl.ca_bundle``
+       (read via :func:`kstlib.ssl.get_ssl_config`)
+    4. Python defaults: ``True`` / ``None``
+
+    The two keys cascade **independently**: ``ssl_verify`` can come from the
+    preset while ``ssl_ca_bundle`` comes from ``mail.ssl``, for example.
+
+    When the resolved ``ssl_verify`` is ``False``, a single WARNING is logged
+    naming the source level (``"preset"``, ``"mail.ssl"``, ``"ssl (root)"``
+    or ``"default"``) to help operators debug misconfigured relays.
+
+    Args:
+        preset_cfg: Preset configuration section (Box or dict) for the
+            SMTP transport being built.
+
+    Returns:
+        Tuple ``(ssl_verify, ssl_ca_bundle)``. ``ssl_verify`` is always a
+        bool. ``ssl_ca_bundle`` is either the raw path string (path
+        validation is performed downstream in
+        :func:`_build_smtp_ssl_context`) or ``None``.
+
+    Raises:
+        TypeError: If a resolved ``ssl_verify`` value is not a bool, or if
+            ``ssl_ca_bundle`` is not a string. YAML may emit ``"yes"`` or
+            other non-bool scalars; we reject rather than silently coerce.
+
+    """
+    verify: Any = preset_cfg.get("ssl_verify") if hasattr(preset_cfg, "get") else None
+    ca_bundle: Any = preset_cfg.get("ssl_ca_bundle") if hasattr(preset_cfg, "get") else None
+    source: str | None = "preset" if verify is not None else None
+
+    verify, ca_bundle, source = _cascade_mail_ssl_level(verify, ca_bundle, source)
+    verify, ca_bundle, source = _cascade_root_ssl_level(verify, ca_bundle, source)
+
+    if verify is None:
+        verify = True
+        source = "default"
+
+    resolved_verify, resolved_ca_bundle = _validate_mail_ssl_types(verify, ca_bundle)
+    _warn_if_mail_verify_disabled(resolved_verify, source)
+    return resolved_verify, resolved_ca_bundle
+
+
+def _build_smtp_ssl_context(ssl_verify: bool, ssl_ca_bundle: str | None) -> ssl.SSLContext:
+    """Build a stdlib :class:`ssl.SSLContext` from resolved cascade values.
+
+    Precedence rule: ``ssl_ca_bundle`` takes priority over ``ssl_verify``.
+    Providing a CA bundle expresses intent to verify (against that bundle),
+    so the returned context keeps ``verify_mode=CERT_REQUIRED`` and
+    ``check_hostname=True``. Only when no CA bundle is set and
+    ``ssl_verify`` is ``False`` does the context fall back to ``CERT_NONE``.
+
+    This function is **pure**: it does not read configuration nor emit log
+    warnings. The cascade and the security warning live in
+    :func:`_resolve_mail_ssl_config`.
+
+    Args:
+        ssl_verify: Resolved verify flag (bool).
+        ssl_ca_bundle: Resolved CA bundle path, or ``None``.
+
+    Returns:
+        Configured :class:`ssl.SSLContext` suitable for
+        :meth:`smtplib.SMTP.starttls` or :class:`smtplib.SMTP_SSL`.
+
+    Raises:
+        MailConfigurationError: If ``ssl_ca_bundle`` is set but invalid
+            (path traversal, null byte, missing file, non-PEM content,
+            unreadable, etc.). Validation is delegated to
+            :func:`kstlib.ssl.validate_ca_bundle_path`.
+
+    """
+    if ssl_ca_bundle is not None:
+        try:
+            validated_path = validate_ca_bundle_path(ssl_ca_bundle)
+        except (TypeError, ValueError) as exc:
+            msg = f"Invalid ssl_ca_bundle for mail transport: {exc}"
+            raise MailConfigurationError(msg) from exc
+        return ssl.create_default_context(cafile=validated_path)
+
+    if not ssl_verify:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+    return ssl.create_default_context()
+
+
 def _build_smtp_transport(cfg: Any) -> SMTPTransport:
     """Build ``SMTPTransport`` from a preset config section.
 
+    SSL configuration follows a 4-level cascade (preset > ``mail.ssl`` >
+    root ``ssl`` > Python default). See :func:`_resolve_mail_ssl_config`
+    for the detailed priority rules and :func:`_build_smtp_ssl_context`
+    for the context construction.
+
     Args:
         cfg: Box/dict with smtp preset fields (host, port, login, password,
-            starttls, ssl, timeout).
+            starttls, ssl, timeout, ssl_verify, ssl_ca_bundle).
 
     Returns:
         Configured ``SMTPTransport`` instance.
 
     Raises:
-        MailConfigurationError: If the ``host`` field is missing.
+        MailConfigurationError: If the ``host`` field is missing or if
+            ``ssl_ca_bundle`` is invalid.
+        TypeError: If ``ssl_verify`` is not a bool (after cascade).
 
     """
     from kstlib.mail.transports.smtp import SMTPCredentials, SMTPSecurity, SMTPTransport
@@ -810,9 +1162,13 @@ def _build_smtp_transport(cfg: Any) -> SMTPTransport:
     password = cfg.get("password")
     credentials = SMTPCredentials(username=login, password=password) if login else None
 
+    ssl_verify, ssl_ca_bundle = _resolve_mail_ssl_config(cfg)
+    ssl_context = _build_smtp_ssl_context(ssl_verify, ssl_ca_bundle)
+
     security = SMTPSecurity(
         use_ssl=bool(cfg.get("ssl", False)),
         use_starttls=bool(cfg.get("starttls", True)),
+        ssl_context=ssl_context,
     )
 
     return SMTPTransport(

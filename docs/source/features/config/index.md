@@ -288,6 +288,53 @@ config = get_config(max_age=0)  # Force reload
 clear_config()               # Clear cache entirely
 ```
 
+(config-interactive-usage)=
+
+### Interactive usage (Jupyter / REPL)
+
+The config singleton is intentionally cached: services that run for hours
+should not re-read the YAML files on every access. In interactive sessions
+though, you often edit the config and want the change to take effect
+immediately, without restarting the kernel.
+
+```{warning}
+If you edit a `kstlib.conf.yml` file (for example
+`/etc/xdg/kstlib/kstlib.conf.yml`, `~/.config/kstlib.conf.yml`, or the one
+in your current working directory) while a Python session is running, call
+`reload_config()` to force a refresh. Without this, the singleton cache
+keeps the old values and `get_config()` will continue to return the stale
+`Box`.
+```
+
+`reload_config()` is the explicit, discoverable alias for "flush the cache
+and re-read from disk". It is equivalent to `clear_config()` followed by
+`get_config()`, but expresses the intent in a single call.
+
+```python
+from kstlib.config import reload_config
+
+# ... you just edited ~/.config/kstlib.conf.yml in another window ...
+cfg = reload_config()
+print(cfg.mail.default)  # reflects the edit
+```
+
+It is also available at the top level, consistent with `get_config` and
+`clear_config`:
+
+```python
+import kstlib
+
+cfg = kstlib.reload_config()
+```
+
+When to use which:
+
+| Call | Purpose |
+| - | - |
+| `reload_config()` | One-shot refresh in interactive work. Clearest intent. |
+| `get_config(force_reload=True)` | Same behaviour, but the intent is hidden in a kwarg. |
+| `clear_config()` | Only flushes the cache. The next `get_config()` call reloads. Useful in tests that want to isolate the cache boundary explicitly. |
+
 ## Configuration
 
 ### CLI Export
@@ -492,14 +539,17 @@ Fix: Review your include chain and remove the circular dependency.
 
 ### Config not updating after file change
 
-Config is cached by default. Force reload:
+Config is cached by default. In interactive sessions, force a reload with
+`reload_config()`:
 
 ```python
-from kstlib.config import clear_config, get_config
+from kstlib.config import reload_config
 
-clear_config()
-config = get_config()  # Fresh load
+config = reload_config()  # Flush cache + reload from disk
 ```
+
+See [Interactive usage (Jupyter / REPL)](config-interactive-usage) for the
+full discussion and alternatives.
 
 ### Environment variable not found
 
@@ -524,3 +574,4 @@ Full autodoc: {doc}`../../api/config`
 | `load_from_file(path)` | Load from specific file |
 | `get_config()` | Get cached config (singleton) |
 | `clear_config()` | Clear the config cache |
+| `reload_config()` | Flush cache + reload from disk (Jupyter/REPL) |

@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [2.3.0] - 2026-04-24
+
+### Added
+
+- **`kstlib.config.reload_config()`**: ergonomic alias for "flush the
+  singleton cache and reload from disk". Equivalent to
+  `clear_config()` + `get_config()` but expresses the intent in a single
+  call, designed for Jupyter / REPL sessions where the YAML files have
+  been edited mid-session. Also re-exported at the top level as
+  `kstlib.reload_config` for consistency with `get_config` /
+  `clear_config`. Purely additive, no backward-compat break.
+- **Mail preset SSL context with 4-level cascade.** SMTP presets now
+  resolve their `ssl.SSLContext` through a cascade (preset >
+  `mail.ssl.*` > root `ssl.*` > Python default). The two keys
+  `ssl_verify` and `ssl_ca_bundle` cascade independently, so a preset
+  can disable verification while a higher level provides a CA bundle.
+  `ssl_ca_bundle` paths are validated via
+  {func}`kstlib.ssl.validate_ca_bundle_path` (7-layer hardening:
+  type/null-byte/empty/exists/file/readable/PEM). New
+  `mail.ssl: {verify, ca_bundle}` defaults shipped in the packaged
+  `kstlib.conf.yml`. Unlocks enterprise/internal PKI usage that was
+  previously impossible through presets (users had to bypass
+  `MailBuilder` and expose secrets).
+- **Mail preset envelope defaults** (`sender`, `reply_to`). A preset may
+  now declare a `defaults:` subsection under
+  `mail.presets.<name>.defaults`. Both fields are applied automatically
+  when the builder is created via `MailBuilder(preset="...")` or when
+  `mail.default` resolves to a preset with defaults. User-provided
+  values via `.sender()` / `.reply_to()` always override. Explicit
+  `MailBuilder(transport=...)` short-circuits the logic entirely.
+  **Scope is intentionally narrow**: `to`/`cc`/`bcc` are refused by
+  design to prevent silent accidental sends. Unknown keys under
+  `defaults` are logged once as WARNING and ignored (forward-compat).
+
+### Security
+
+- **WARNING log on `ssl_verify=false` for mail transports.** Every SMTP
+  preset built with a resolved `ssl_verify=False` (at any cascade level)
+  now emits a single WARNING naming the source level (`preset`,
+  `mail.ssl`, `ssl (root)` or `default`). Helps operators detect
+  accidental verification disablement. Precedence: when both a CA bundle
+  and `ssl_verify=false` are present, the CA bundle wins and
+  verification stays enabled (`CERT_REQUIRED`) - documented.
+
 ## [2.2.1] - 2026-04-17
 
 ### Fixed
@@ -706,6 +764,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/KaminoU/kstlib/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/KaminoU/kstlib/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/KaminoU/kstlib/compare/v2.1.4...v2.2.0
 [2.1.4]: https://github.com/KaminoU/kstlib/compare/v2.1.3...v2.1.4

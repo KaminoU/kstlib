@@ -1064,6 +1064,47 @@ def clear_config() -> None:
     _default_loader.cache = None
 
 
+def reload_config(filename: str = CONFIG_FILENAME) -> Box:
+    """Force-reload the singleton configuration from disk.
+
+    Equivalent to ``clear_config()`` followed by ``get_config()``, but explicit
+    and discoverable in a single import. Designed for interactive sessions
+    (Jupyter, REPL) where the underlying YAML files have been edited and the
+    cached config needs to be refreshed without restarting the kernel.
+
+    Args:
+        filename: Config filename to search for. Defaults to
+            ``kstlib.conf.yml``.
+
+    Returns:
+        Freshly loaded ``Box`` configuration object. The singleton cache is
+        updated in-place, so subsequent ``get_config()`` calls return the same
+        fresh object.
+
+    Raises:
+        ConfigFileNotFoundError: If no configuration file is found in any
+            search location.
+
+    Note:
+        When to use which:
+
+        - ``reload_config()``: explicit one-shot refresh (Jupyter/REPL).
+        - ``get_config(force_reload=True)``: same effect, but the intent is
+          hidden in a kwarg.
+        - ``clear_config()``: only flushes the cache; the next
+          ``get_config()`` call triggers the actual reload. Useful in tests
+          that want to isolate the cache boundary.
+
+    Examples:
+        >>> from kstlib.config import reload_config
+        >>> cfg = reload_config()  # doctest: +SKIP
+        >>> cfg.mail.default  # doctest: +SKIP
+        'corporate'
+
+    """
+    return get_config(filename=filename, force_reload=True)
+
+
 __all__ = [
     "AutoDiscoveryConfig",
     "ConfigLoader",
@@ -1072,5 +1113,6 @@ __all__ = [
     "load_config",
     "load_from_env",
     "load_from_file",
+    "reload_config",
     "require_config",
 ]

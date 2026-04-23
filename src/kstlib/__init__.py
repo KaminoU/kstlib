@@ -69,6 +69,7 @@ __all__ = [
     "ops",
     "pipeline",
     "rapi",
+    "reload_config",
     "require_config",
     "resilience",
     "secrets",
@@ -117,6 +118,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "load_config": ("kstlib.config.loader", "load_config"),
     "load_from_env": ("kstlib.config.loader", "load_from_env"),
     "load_from_file": ("kstlib.config.loader", "load_from_file"),
+    "reload_config": ("kstlib.config.loader", "reload_config"),
     "require_config": ("kstlib.config.loader", "require_config"),
     # Logging
     "LogManager": ("kstlib.logging", "LogManager"),
@@ -249,6 +251,9 @@ if TYPE_CHECKING:
     )
     from kstlib.config.loader import (
         load_from_file as load_from_file,
+    )
+    from kstlib.config.loader import (
+        reload_config as reload_config,
     )
     from kstlib.config.loader import (
         require_config as require_config,

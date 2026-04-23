@@ -264,6 +264,202 @@ smtp = SMTPTransport(host="smtp.example.com", port=465, use_ssl=True)
 smtp = SMTPTransport(host="smtp.example.com", port=587, use_starttls=True)
 ```
 
+(mail-preset-envelope-defaults)=
+
+### Preset envelope defaults
+
+A `mail.preset` may declare a `defaults:` subsection to pre-fill envelope
+fields that do not change between messages. The current scope is
+**intentionally narrow**: only `sender` and `reply_to` are supported.
+Anything declared under another key is logged once as a WARNING and
+ignored, so old YAML files keep working when kstlib later adds new
+supported keys.
+
+```{warning}
+**Do NOT pre-fill `to`, `cc`, or `bcc`.** This is refused by design.
+Pre-filling recipients in a preset means that a caller who forgets to
+set `.to(...)` would silently send to the preset's audience. The feature
+is deliberately scoped to the sender-side envelope fields where the
+identity is service-owned and stable (typically a service mailbox).
+```
+
+#### Cascade
+
+| Priority | Source | Applies when |
+| - | - | - |
+| 1 | `.sender(value)` / `.reply_to(value)` on the builder | User-provided, always wins |
+| 2 | `mail.presets.<name>.defaults.sender` / `.reply_to` | A preset is resolved (either `preset=` kwarg or `mail.default`) |
+| 3 | Nothing | The builder starts with `None` / empty - existing behaviour |
+
+#### YAML example
+
+```yaml
+mail:
+  default: corporate
+  presets:
+    corporate:
+      transport: smtp
+      host: smtp-secure.corp.local
+      port: 25
+      starttls: true
+      login: svc_mail
+      password: "..."
+      defaults:
+        sender: "Service Notifications <notify@corp.local>"
+        reply_to: "Service Notifications <notify@corp.local>"
+```
+
+#### Python usage
+
+```python
+from kstlib.mail import MailBuilder
+
+# Sender and reply_to come from the preset, no need to retype them:
+(
+    MailBuilder(preset="corporate")
+    .to("oncall@corp.local")
+    .subject("Heartbeat KO")
+    .message("Service did not check in at 09:00.")
+    .send()
+)
+
+# Explicit override wins, preset default is ignored:
+(
+    MailBuilder(preset="corporate")
+    .sender("Incident Bot <incidents@corp.local>")
+    .to("oncall@corp.local")
+    .subject("Manual alert")
+    .message("...")
+    .send()
+)
+
+# Same behaviour when mail.default resolves to "corporate":
+MailBuilder().to("oncall@corp.local").subject("...").message("...").send()
+```
+
+#### Behaviour notes
+
+- **`MailBuilder(transport=custom_transport)` short-circuits the preset
+  logic entirely.** An explicit transport means the caller is not going
+  through a preset at all, so no envelope defaults are applied - mirror
+  of the transport resolution rule.
+- **Invalid email formats surface at init time** via `MailValidationError`.
+  Non-string values (a YAML list where a string was expected, for
+  example) surface via `MailConfigurationError`. Both fail fast rather
+  than at `.send()` time.
+- **Forward compatibility**: unsupported keys inside `defaults` are
+  logged once per builder instance as `WARNING` in `kstlib.mail.builder`
+  and ignored.
+
+(mail-ssl-tls-configuration)=
+
+### SSL / TLS configuration
+
+SMTP presets resolve their SSL context through a **4-level cascade**. Each
+of the two keys (`ssl_verify`, `ssl_ca_bundle`) is resolved independently,
+so a preset can disable verification while a higher level still provides
+a CA bundle, and vice versa.
+
+#### Priority (highest to lowest)
+
+| Level | Source | Keys |
+| - | - | - |
+| 1 | Preset section | `mail.presets.<name>.ssl_verify`, `.ssl_ca_bundle` |
+| 2 | Mail-scoped | `mail.ssl.verify`, `mail.ssl.ca_bundle` |
+| 3 | Root-global | `ssl.verify`, `ssl.ca_bundle` |
+| 4 | Python default | `True`, `None` |
+
+```{note}
+When both `ssl_ca_bundle` and `ssl_verify=false` are resolved, the CA
+bundle wins. Providing a bundle expresses intent to verify against that
+bundle, so the context keeps `verify_mode=CERT_REQUIRED` and
+`check_hostname=True`. To fully disable verification, leave
+`ssl_ca_bundle` unset at every level and set `ssl_verify: false`.
+```
+
+#### YAML examples
+
+**Strict public CA** (the default, no configuration required):
+
+```yaml
+mail:
+  default: external
+  presets:
+    external:
+      transport: smtp
+      host: smtp.example.com
+      port: 587
+      starttls: true
+```
+
+**Private CA bundle for an internal relay**:
+
+```yaml
+mail:
+  ssl:
+    verify: true
+    ca_bundle: /etc/ssl/certs/corp-ca.pem
+  presets:
+    corporate:
+      transport: smtp
+      host: smtp-secure.corp.local
+      port: 25
+      starttls: true
+      login: svc_mail
+      password: "..."
+```
+
+**Per-preset override** (one relay has its own PKI, everything else uses
+the default trust store):
+
+```yaml
+mail:
+  presets:
+    legacy_internal:
+      transport: smtp
+      host: legacy.corp.local
+      port: 25
+      starttls: true
+      ssl_ca_bundle: /etc/ssl/certs/legacy-corp-ca.pem
+    modern_external:
+      transport: smtp
+      host: smtp.example.com
+      port: 587
+      starttls: true
+```
+
+**Disabling verification** (testing, isolated lab environment only):
+
+```yaml
+mail:
+  presets:
+    lab:
+      transport: smtp
+      host: lab-smtp.internal
+      port: 25
+      starttls: true
+      ssl_verify: false
+```
+
+```{warning}
+Setting `ssl_verify: false` at any level emits a WARNING log at
+transport build time naming the source (`preset`, `mail.ssl`,
+`ssl (root)` or `default`). It disables certificate verification
+entirely and exposes the SMTP session to MITM attacks. Prefer
+`ssl_ca_bundle: /path/to/private-ca.pem` for private PKIs.
+```
+
+#### Hardening
+
+Every resolved `ssl_ca_bundle` path goes through
+{func}`kstlib.ssl.validate_ca_bundle_path` (7 layers: type check,
+null-byte rejection, empty-string rejection, existence, file-not-dir,
+readability, PEM header + size check). An invalid path raises
+`MailConfigurationError` at build time, not at send time.
+
+A non-bool `ssl_verify` (for instance `"yes"` parsed as a YAML string)
+raises `TypeError` at build time. There is no silent coercion.
+
 ## Common Patterns
 
 ### Alert notification

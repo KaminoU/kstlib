@@ -16,6 +16,8 @@ Pair this reference with {doc}`../features/config/index` for the feature guide.
   not thrash the filesystem.
 - `require_config()` mirrors `get_config()` but raises immediately when no configuration has been loaded yet.
 - `clear_config()` flushes the memoized cascade, useful in tests when multiple fixtures run in the same process.
+- `reload_config()` is the ergonomic alias for "flush and reload from disk", intended for interactive sessions
+  (Jupyter, REPL) where the YAML files have been edited mid-session.
 
 ---
 
@@ -46,6 +48,13 @@ Pair this reference with {doc}`../features/config/index` for the feature guide.
 
 ```{eval-rst}
 .. autofunction:: kstlib.config.clear_config
+   :noindex:
+```
+
+### reload_config
+
+```{eval-rst}
+.. autofunction:: kstlib.config.reload_config
    :noindex:
 ```
 

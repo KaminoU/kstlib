@@ -358,6 +358,21 @@ mail:
   # Leave null to force callers to pass transport= or preset= explicitly.
   default: null
 
+  # SSL/TLS configuration for mail transports.
+  #
+  # Values here override the root ``ssl:`` section (bottom of this file)
+  # for mail only, and are themselves overridden by ``ssl_verify`` and
+  # ``ssl_ca_bundle`` keys set inside an individual preset. Each key
+  # cascades independently: you can set ``verify: false`` here and still
+  # provide ``ssl_ca_bundle`` at the preset level.
+  #
+  # Security: setting ``verify: false`` at any level emits a WARNING log
+  # at transport build time. Prefer ``ca_bundle: /path/to/private-ca.pem``
+  # for internal PKI rather than disabling verification outright.
+  ssl:
+    verify: true
+    ca_bundle: null
+
   # Named transport presets. Each preset declares a "transport" field
   # (smtp or resend) and backend-specific parameters. Define your own
   # presets here and reference them via MailBuilder(preset="name").
@@ -368,11 +383,18 @@ mail:
   #   transport: smtp
   #   host: smtp-secure.corp.local
   #   port: 25
-  #   login: svc_user
+  #   login: svc_mail
   #   password: "secret"
   #   starttls: false
   #   ssl: false
   #   timeout: 30
+  #   # Optional SSL overrides for this preset (highest priority in the cascade):
+  #   ssl_verify: false
+  #   ssl_ca_bundle: /etc/ssl/certs/corp-ca.pem
+  #   # Optional envelope defaults (sender / reply_to only, never to/cc/bcc):
+  #   defaults:
+  #     sender: "Service Notifications <notify@corp.local>"
+  #     reply_to: "Service Notifications <notify@corp.local>"
   #
   # transactional:
   #   transport: resend

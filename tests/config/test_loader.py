@@ -978,3 +978,143 @@ def test_include_rejects_symlinks(tmp_path: Any) -> None:
 
     with pytest.raises(ConfigFormatError, match="[Ss]ymlink"):
         load_config(path=main)
+
+
+# ============================================================================
+# reload_config() tests (8 scenarios per feat-config-reload-alias request)
+# ============================================================================
+
+
+def test_reload_config_refreshes_after_file_edit(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """reload_config() returns the new value when the file changed on disk."""
+    from kstlib.config import reload_config
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("app:\n  version: 1\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cfg_loader.clear_config()
+    initial = get_config()
+    assert initial.app.version == 1
+
+    conf_file.write_text("app:\n  version: 2\n", encoding="utf-8")
+
+    fresh = reload_config()
+    assert fresh.app.version == 2
+
+
+def test_reload_config_without_prior_cache(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """reload_config() loads normally when the cache is empty (first call)."""
+    from kstlib.config import reload_config
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("app:\n  name: fresh\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cfg_loader.clear_config()
+    assert cfg_loader._default_loader.cache is None
+
+    config = reload_config()
+    assert config.app.name == "fresh"
+
+
+def test_reload_config_with_custom_filename(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """reload_config(filename=...) reads the given filename instead of the default."""
+    from kstlib.config import reload_config
+
+    custom = tmp_path / "custom.conf.yml"
+    custom.write_text("app:\n  source: custom\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cfg_loader.clear_config()
+    config = reload_config(filename="custom.conf.yml")
+    assert config.app.source == "custom"
+
+
+def test_reload_config_raises_when_file_missing(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """reload_config() raises ConfigFileNotFoundError when no file (nor package defaults) is found.
+
+    The cascade normally falls back on the shipped package defaults, so to
+    exercise the error path we must disable both the package defaults and
+    every search location (system dirs, user home, cwd).
+    """
+    from kstlib.config import reload_config
+
+    home_dir = tmp_path / "empty_home"
+    home_dir.mkdir()
+    cwd_dir = tmp_path / "empty_cwd"
+    cwd_dir.mkdir()
+    monkeypatch.setattr(pathlib.Path, "home", lambda: home_dir)
+    monkeypatch.chdir(cwd_dir)
+    monkeypatch.setattr(cfg_loader, "_get_system_config_paths", lambda filename: [])
+    monkeypatch.setattr(cfg_loader, "_load_default_config", lambda encoding: {})
+
+    cfg_loader.clear_config()
+    with pytest.raises(ConfigFileNotFoundError):
+        reload_config(filename="nonexistent.yml")
+
+
+def test_reload_config_is_idempotent(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """Repeated reload_config() calls always reload (no cache reuse)."""
+    from kstlib.config import reload_config
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("app:\n  version: 1\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cfg_loader.clear_config()
+    first = reload_config()
+    assert first.app.version == 1
+
+    conf_file.write_text("app:\n  version: 2\n", encoding="utf-8")
+    second = reload_config()
+    assert second.app.version == 2
+
+    conf_file.write_text("app:\n  version: 3\n", encoding="utf-8")
+    third = reload_config()
+    assert third.app.version == 3
+
+
+def test_reload_config_after_clear_config(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """reload_config() works the same whether or not clear_config() was called first."""
+    from kstlib.config import clear_config, reload_config
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("app:\n  name: baseline\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cfg_loader.clear_config()
+    get_config()
+
+    clear_config()
+    config = reload_config()
+    assert config.app.name == "baseline"
+
+
+def test_reload_config_leaves_cache_coherent_with_get_config(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """After reload_config(), a subsequent get_config() returns the same Box."""
+    from kstlib.config import reload_config
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("app:\n  version: 42\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cfg_loader.clear_config()
+    reloaded = reload_config()
+    cached = get_config()
+
+    assert cached is reloaded
+    assert cached.app.version == 42
+
+
+def test_reload_config_exported_top_level(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
+    """reload_config is reachable via both `kstlib` and `kstlib.config` namespaces."""
+    import kstlib
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("app:\n  name: top_level\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cfg_loader.clear_config()
+    config = kstlib.reload_config()
+    assert config.app.name == "top_level"

@@ -334,3 +334,298 @@ class TestConfigLoaderErrors:
         _mock_mail_config(monkeypatch, None)
         mail = MailBuilder()
         assert mail._transport is None  # noqa: SLF001
+
+
+# ============================================================================
+# Preset envelope defaults (feat-mail-preset-envelope-defaults)
+# ============================================================================
+
+
+def _preset_with_defaults(defaults: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Build a minimal smtp preset dict with optional ``defaults`` section."""
+    preset: dict[str, Any] = {"transport": "smtp", "host": "smtp-secure.corp.local"}
+    if defaults is not None:
+        preset["defaults"] = defaults
+    return preset
+
+
+class TestPresetEnvelopeDefaults:
+    """4-scenario base cascade for ``defaults.sender`` and ``defaults.reply_to``."""
+
+    def test_sender_default_applied_from_named_preset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Preset declares defaults.sender -> pre-filled on MailBuilder(preset=...)."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {"sender": "Service Notifications <notify@corp.local>"},
+                    ),
+                },
+            },
+        )
+        mail = MailBuilder(preset="corporate")
+        assert mail._sender is not None  # noqa: SLF001
+        assert mail._sender.formatted == "Service Notifications <notify@corp.local>"  # noqa: SLF001
+        assert mail._reply_to is None  # noqa: SLF001
+
+    def test_reply_to_default_applied_from_named_preset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Preset declares defaults.reply_to -> pre-filled on MailBuilder(preset=...)."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {"reply_to": "Support Desk <support@corp.local>"},
+                    ),
+                },
+            },
+        )
+        mail = MailBuilder(preset="corporate")
+        assert mail._reply_to is not None  # noqa: SLF001
+        assert mail._reply_to.formatted == "Support Desk <support@corp.local>"  # noqa: SLF001
+        assert mail._sender is None  # noqa: SLF001
+
+    def test_both_defaults_applied_together(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Both defaults.sender and defaults.reply_to set -> both applied."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {
+                            "sender": "Service Notifications <notify@corp.local>",
+                            "reply_to": "Support Desk <support@corp.local>",
+                        },
+                    ),
+                },
+            },
+        )
+        mail = MailBuilder(preset="corporate")
+        assert mail._sender is not None  # noqa: SLF001
+        assert mail._reply_to is not None  # noqa: SLF001
+        assert mail._sender.formatted == "Service Notifications <notify@corp.local>"  # noqa: SLF001
+        assert mail._reply_to.formatted == "Support Desk <support@corp.local>"  # noqa: SLF001
+
+    def test_preset_without_defaults_leaves_addresses_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Preset without defaults section -> sender and reply_to remain None."""
+        _mock_mail_config(
+            monkeypatch,
+            {"presets": {"corporate": _preset_with_defaults(None)}},
+        )
+        mail = MailBuilder(preset="corporate")
+        assert mail._sender is None  # noqa: SLF001
+        assert mail._reply_to is None  # noqa: SLF001
+
+    def test_empty_defaults_section_is_noop(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """defaults: {} -> behaves like a preset with no defaults section."""
+        _mock_mail_config(
+            monkeypatch,
+            {"presets": {"corporate": _preset_with_defaults({})}},
+        )
+        mail = MailBuilder(preset="corporate")
+        assert mail._sender is None  # noqa: SLF001
+        assert mail._reply_to is None  # noqa: SLF001
+
+
+class TestPresetEnvelopeDefaultsUserOverride:
+    """User-provided values via .sender() / .reply_to() always win."""
+
+    def test_user_sender_overrides_preset_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """.sender('other@z') overrides the preset default sender."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {"sender": "Service Notifications <notify@corp.local>"},
+                    ),
+                },
+            },
+        )
+        mail = MailBuilder(preset="corporate").sender("other@corp.local")
+        assert mail._sender is not None  # noqa: SLF001
+        assert mail._sender.formatted == "other@corp.local"  # noqa: SLF001
+
+    def test_user_reply_to_overrides_preset_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """.reply_to('rr@z') overrides the preset default reply_to."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {"reply_to": "Support Desk <support@corp.local>"},
+                    ),
+                },
+            },
+        )
+        mail = MailBuilder(preset="corporate").reply_to("explicit@corp.local")
+        assert mail._reply_to is not None  # noqa: SLF001
+        assert mail._reply_to.formatted == "explicit@corp.local"  # noqa: SLF001
+
+    def test_partial_override_keeps_unset_field_as_preset_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """User sets only sender -> reply_to stays the preset default."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {
+                            "sender": "Service Notifications <notify@corp.local>",
+                            "reply_to": "Support Desk <support@corp.local>",
+                        },
+                    ),
+                },
+            },
+        )
+        mail = MailBuilder(preset="corporate").sender("explicit@corp.local")
+        assert mail._sender is not None  # noqa: SLF001
+        assert mail._reply_to is not None  # noqa: SLF001
+        assert mail._sender.formatted == "explicit@corp.local"  # noqa: SLF001
+        assert mail._reply_to.formatted == "Support Desk <support@corp.local>"  # noqa: SLF001
+
+
+class TestPresetEnvelopeDefaultsResolution:
+    """How defaults are (or are not) applied depending on builder constructor args."""
+
+    def test_no_preset_and_no_mail_default_yields_no_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """MailBuilder() with neither preset= nor mail.default -> no defaults applied."""
+        _mock_mail_config(monkeypatch, {"presets": {}})
+        mail = MailBuilder()
+        assert mail._sender is None  # noqa: SLF001
+        assert mail._reply_to is None  # noqa: SLF001
+
+    def test_mail_default_preset_defaults_are_applied(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """mail.default='corporate' with defaults -> defaults applied on MailBuilder()."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "default": "corporate",
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {"sender": "Service Notifications <notify@corp.local>"},
+                    ),
+                },
+            },
+        )
+        mail = MailBuilder()
+        assert mail._sender is not None  # noqa: SLF001
+        assert mail._sender.formatted == "Service Notifications <notify@corp.local>"  # noqa: SLF001
+
+    def test_explicit_transport_short_circuits_preset_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """MailBuilder(transport=X) must NOT apply preset defaults, even if mail.default is set."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "default": "corporate",
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {"sender": "Service Notifications <notify@corp.local>"},
+                    ),
+                },
+            },
+        )
+        stub = _StubTransport()
+        mail = MailBuilder(transport=stub)
+        assert mail._transport is stub  # noqa: SLF001
+        assert mail._sender is None  # noqa: SLF001
+        assert mail._reply_to is None  # noqa: SLF001
+
+
+class TestPresetEnvelopeDefaultsErrorPaths:
+    """Invalid inputs surface as clear errors at builder init time, not at send time."""
+
+    def test_unparseable_sender_raises_mail_validation_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """defaults.sender with invalid email format -> MailValidationError at init."""
+        from kstlib.mail.exceptions import MailValidationError
+
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults({"sender": "not-an-email-at-all"}),
+                },
+            },
+        )
+        with pytest.raises(MailValidationError):
+            MailBuilder(preset="corporate")
+
+    def test_non_string_sender_raises_mail_configuration_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """defaults.sender holding a non-string (dict, int, list) -> MailConfigurationError."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {"sender": {"name": "svc", "email": "notify@corp.local"}},
+                    ),
+                },
+            },
+        )
+        with pytest.raises(MailConfigurationError, match="defaults.sender must be a string"):
+            MailBuilder(preset="corporate")
+
+
+class TestPresetEnvelopeDefaultsBackwardCompat:
+    """Pre-existing presets without a defaults section must keep behaving identically."""
+
+    def test_existing_preset_without_defaults_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A preset without defaults -> same sender/reply_to state as before the feature."""
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": {
+                        "transport": "smtp",
+                        "host": "smtp-secure.corp.local",
+                        "port": 25,
+                        "login": "svc_mail",
+                        "password": "secret",
+                        "starttls": True,
+                    },
+                },
+            },
+        )
+        mail = MailBuilder(preset="corporate")
+        assert mail._sender is None  # noqa: SLF001
+        assert mail._reply_to is None  # noqa: SLF001
+        assert mail._transport is not None  # noqa: SLF001
+
+
+class TestPresetEnvelopeDefaultsUnknownKeys:
+    """Unsupported keys under defaults are logged once and ignored (forward compat)."""
+
+    def test_unknown_defaults_keys_logged_and_ignored(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Unknown keys (e.g. 'subject', 'to') -> single WARNING + ignored, known keys applied."""
+        import logging
+
+        _mock_mail_config(
+            monkeypatch,
+            {
+                "presets": {
+                    "corporate": _preset_with_defaults(
+                        {
+                            "sender": "Service Notifications <notify@corp.local>",
+                            "subject": "pre-filled subject (unsupported)",
+                            "to": "oncall@corp.local (unsupported)",
+                        },
+                    ),
+                },
+            },
+        )
+        with caplog.at_level(logging.WARNING, logger="kstlib.mail.builder"):
+            mail = MailBuilder(preset="corporate")
+
+        assert mail._sender is not None  # noqa: SLF001
+        assert mail._sender.formatted == "Service Notifications <notify@corp.local>"  # noqa: SLF001
+        assert mail._to == []  # noqa: SLF001
+        assert mail._subject == ""  # noqa: SLF001
+
+        warnings = [rec for rec in caplog.records if "unsupported defaults keys" in rec.message]
+        assert len(warnings) == 1
+        message = warnings[0].getMessage()
+        assert "subject" in message
+        assert "to" in message
+        assert "'corporate'" in message
