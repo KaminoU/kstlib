@@ -335,6 +335,16 @@ When to use which:
 | `get_config(force_reload=True)` | Same behaviour, but the intent is hidden in a kwarg. |
 | `clear_config()` | Only flushes the cache. The next `get_config()` call reloads. Useful in tests that want to isolate the cache boundary explicitly. |
 
+```{note}
+**Known issue fixed in 2.3.1**: on kstlib 2.3.0, importing `kstlib.mail` as
+the very first kstlib symbol in a fresh Python process (for example
+right after `Restart Kernel` in Jupyter) could raise `ImportError` due
+to a circular import between `kstlib.limits` and `kstlib.config.loader`.
+Affected versions: 2.3.0 only. Workaround for users still on 2.3.0:
+`import kstlib.config` before the first `from kstlib.mail import ...`.
+Upgrading to 2.3.1 or later removes the need for the workaround.
+```
+
 ## Configuration
 
 ### CLI Export
@@ -575,3 +585,76 @@ Full autodoc: {doc}`../../api/config`
 | `get_config()` | Get cached config (singleton) |
 | `clear_config()` | Clear the config cache |
 | `reload_config()` | Flush cache + reload from disk (Jupyter/REPL) |
+
+(config-path-resolution)=
+
+## Path resolution in configuration
+
+When a configuration value is a filesystem path, for example
+`ssl_ca_bundle`, `attachments_root`, `credentials.path`, or
+`logging.handlers.file.path`, kstlib resolves it with Python's standard
+path logic:
+
+1. **Absolute paths** are used as-is:
+   `/etc/ssl/certs/corp-ca.pem`
+2. **Tilde-prefixed paths** are expanded to the user's home:
+   `~/ca-bundles/corp.pem` becomes `/home/alice/ca-bundles/corp.pem`
+3. **Relative paths** are resolved against the **current working directory
+   of the Python process**, NOT the directory of the YAML file that
+   declared the path.
+
+### Why this matters
+
+Point 3 is a common source of surprise, especially in interactive
+environments such as Jupyter:
+
+- You have `ssl_ca_bundle: ./corp-ca.pem` in your config, with
+  `corp-ca.pem` sitting next to your notebook file.
+- Your JupyterHub launches the kernel with `cwd=/home/alice`, which
+  does not contain the file.
+- kstlib raises `MailConfigurationError: ssl_ca_bundle path does not
+  exist: ./corp-ca.pem`.
+
+The same trap applies to scripts launched by cron, systemd units,
+container entry points, or any process whose cwd does not match the
+directory holding the YAML file.
+
+### Recommended practice
+
+Always use **absolute paths** or **home-expanded paths** in your YAML:
+
+```yaml
+mail:
+  presets:
+    corporate:
+      ssl_ca_bundle: /etc/ssl/certs/corp-ca.pem         # absolute
+      # or
+      ssl_ca_bundle: ~/.config/kstlib/corp-ca.pem       # home-expanded
+```
+
+Absolute paths are unambiguous across Jupyter, scripts, scheduled jobs,
+and container processes.
+
+### Debugging a relative path
+
+If you must use a relative path, verify the Python process cwd:
+
+```python
+import os
+
+print(f"Process cwd: {os.getcwd()}")
+```
+
+The relative path is resolved against this value. If the printed cwd
+differs from where your YAML and its referenced files sit, the path
+will not resolve. Either `os.chdir(...)` before the import, or switch
+to an absolute path.
+
+### Future direction
+
+Resolving relative paths against the YAML file that declared them is a
+candidate enhancement on the backlog (tracked as
+`feat-config-paths-relative-to-yaml`). Implementing it requires kstlib
+to track, for every configuration value, the file it originated from,
+which is a substantial refactor of the loader. For now, use absolute
+paths to avoid ambiguity across different execution contexts.

@@ -19,6 +19,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [2.3.1] - 2026-04-25
+
+### Fixed
+
+- **Circular import when `from kstlib.mail import ...` (or any import
+  path entering through `kstlib.limits`) is the first kstlib import in
+  a fresh Python process.** Affected 2.3.0 users running scripts from
+  command line or Jupyter kernels just after `Restart Kernel`. The
+  cycle was triggered by `kstlib.config.loader` and `kstlib.config.sops`
+  reading constants from `kstlib.limits` while the latter was still
+  initialising (transitively reached through
+  `kstlib.utils.formatting` -> `kstlib.utils.validators` ->
+  `kstlib.config.exceptions`). Fix reorders `kstlib.limits` so all
+  `HARD_*` and `DEFAULT_*` constants are defined before the cross-module
+  import. **Workaround for users still on 2.3.0**: `import kstlib.config`
+  before the first `from kstlib.mail import ...`. Upgrading to 2.3.1
+  removes the need for the workaround.
+- **`TypeError: 'NoneType' object is not iterable` on any kstlib command
+  that loads the configuration when a user-provided YAML carried an
+  empty `include:` key** (or `include: null`, or a list whose items had
+  been commented out). `dict.pop("include", [])` returns `None` when the
+  key is present with a `null` value, and the downstream
+  `for inc in includes:` loop exploded. Fix routes the raw value
+  through a new private helper `_normalize_includes` in
+  `kstlib.config.loader` with four rules: empty/`None`/whitespace is
+  silent `[]`, single string is wrapped after strip, list entries that
+  are `None`/empty/whitespace are dropped with a single
+  `WARNING kstlib.config.loader` log naming the source file, drop
+  count, and original indices, and any other type (or non-string list
+  item) raises `ConfigFormatError` consistent with the rest of the
+  loader's validation.
+
+### Tests
+
+- **New `tests/test_no_circular_imports.py`**: 32 parametrised tests
+  that import every public `kstlib.*` top-level module, a curated set
+  of public symbols, and historical cycle-guard submodules
+  (`kstlib.config.sops`) in isolated Python subprocesses. Subprocesses
+  start with an empty `sys.modules`, which is the only condition under
+  which import cycles surface (pytest's own init pre-loads enough of
+  the package to mask them). Regression guard for the 2.3.0 cycle
+  above.
+- **New `tests/config/test_loader_include_normalization.py`**: 22 tests
+  covering every branch of `_normalize_includes` (silent empty cases,
+  string stripping, list filtering with `caplog` assertions on the
+  warning message, and every illegitimate type path) plus two
+  integration smoke tests that exercise `_load_with_includes` against
+  tmp_path YAML files.
+
 ## [2.3.0] - 2026-04-24
 
 ### Added
@@ -764,7 +813,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/KaminoU/kstlib/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/KaminoU/kstlib/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/KaminoU/kstlib/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/KaminoU/kstlib/compare/v2.1.4...v2.2.0

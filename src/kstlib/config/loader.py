@@ -318,6 +318,76 @@ def _load_any_config_file(
     return data
 
 
+def _normalize_includes(raw: Any, source_path: pathlib.Path) -> list[str]:
+    """Normalize the raw ``include`` YAML value to a clean list of paths.
+
+    Handles the common footgun where an author leaves ``include:`` with an
+    empty body (or comments out every entry) and gets a cryptic
+    ``TypeError: 'NoneType' object is not iterable`` at iteration time.
+    Normalization rules:
+
+    1. Missing key, ``None``, ``[]``, empty string, or whitespace-only
+       string produces an empty list silently. Commenting out a key is a
+       legitimate editing pattern, not an error worth logging.
+    2. A non-empty string is wrapped as a single-element list after
+       ``strip()``.
+    3. A list whose individual items are ``None``, empty, or whitespace-only
+       has those entries dropped with a single ``WARNING`` log message
+       naming the source file, the drop count, and the original indices.
+    4. Any other top-level type (``int``, ``dict``, ...) or any non-string
+       list item raises :exc:`ConfigFormatError`, consistent with the rest
+       of this loader.
+
+    Args:
+        raw: Raw value of the ``include`` key popped from the YAML mapping.
+        source_path: Path of the YAML file that declared the include, used
+            in log and error messages for actionable feedback.
+
+    Returns:
+        Cleaned list of include path strings. Never ``None`` and never
+        containing ``None`` or empty entries.
+
+    Raises:
+        ConfigFormatError: If ``raw`` is not ``None``, ``str``, or ``list``,
+            or if any list element is not a ``str``.
+
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        return [stripped] if stripped else []
+    if not isinstance(raw, list):
+        raise ConfigFormatError(f"include must be string or list, got {type(raw).__name__} (file: {source_path})")
+
+    cleaned: list[str] = []
+    dropped: list[int] = []
+    for idx, item in enumerate(raw):
+        if item is None:
+            dropped.append(idx)
+            continue
+        if not isinstance(item, str):
+            raise ConfigFormatError(f"include[{idx}] must be string, got {type(item).__name__} (file: {source_path})")
+        stripped = item.strip()
+        if not stripped:
+            dropped.append(idx)
+            continue
+        cleaned.append(stripped)
+
+    if dropped:
+        # Lazy import: keep loader import graph shallow (see kstlib.limits
+        # circular import fix).
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "include in %s: dropped %d empty entries at indices %s",
+            source_path,
+            len(dropped),
+            dropped,
+        )
+    return cleaned
+
+
 def _load_with_includes(
     path: pathlib.Path,
     loaded_paths: set[pathlib.Path] | None = None,
@@ -365,9 +435,7 @@ def _load_with_includes(
     loaded_paths.add(path)
 
     data = _load_any_config_file(path, encoding, sops_decrypt=sops_decrypt)
-    includes = data.pop("include", [])
-    if isinstance(includes, str):
-        includes = [includes]
+    includes = _normalize_includes(data.pop("include", []), path)
 
     # Get real extension (handles .sops.yml -> .yml)
     parent_ext = get_real_extension(path) if is_sops_file(path) else path.suffix.lower()

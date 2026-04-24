@@ -16,51 +16,25 @@ Example:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import Any
-
-from kstlib.utils.formatting import format_bytes, parse_size_string
-
-__all__ = [
-    "HARD_MAX_CONFIG_FILE_SIZE",
-    "HARD_MAX_DATETIME_FORMAT_LENGTH",
-    "HARD_MAX_DISPLAY_VALUE_LENGTH",
-    "HARD_MAX_ENDPOINT_REF_LENGTH",
-    "HARD_MAX_EPOCH_TIMESTAMP",
-    "HARD_MAX_PIPELINE_STEPS",
-    "HARD_MAX_PIPELINE_TIMEOUT",
-    "HARD_MAX_RAPI_UPLOAD_SIZE",
-    "HARD_MAX_STEP_ARGS",
-    "HARD_MAX_TIMEZONE_LENGTH",
-    "HARD_MIN_EPOCH_TIMESTAMP",
-    "HARD_MIN_PIPELINE_TIMEOUT",
-    "AlertsLimits",
-    "CacheLimits",
-    "DatabaseLimits",
-    "MailLimits",
-    "PipelineLimits",
-    "RapiLimits",
-    "RapiRenderConfig",
-    "ResilienceLimits",
-    "SopsLimits",
-    "WebSocketLimits",
-    "clamp_with_limits",
-    "get_alerts_limits",
-    "get_cache_limits",
-    "get_db_limits",
-    "get_mail_limits",
-    "get_pipeline_limits",
-    "get_rapi_limits",
-    "get_rapi_render_config",
-    "get_resilience_limits",
-    "get_sops_limits",
-    "get_websocket_limits",
-]
-
 # =============================================================================
+# Pre-import constants (hard limits + defaults)
+#
+# Defined BEFORE any cross-module import to break a latent circular import.
+# During `kstlib.limits` initialisation, importing `kstlib.utils.formatting`
+# transitively triggers `kstlib.config.__init__`, which re-enters
+# `kstlib.limits` from two points:
+#   - `kstlib.config.loader` -> reads HARD_MAX_CONFIG_FILE_SIZE
+#   - `kstlib.config.sops`   -> reads DEFAULT_MAX_SOPS_CACHE_ENTRIES and
+#                               HARD_MAX_SOPS_CACHE_ENTRIES
+# Both the HARD_* block below and the DEFAULT_* block that follows must
+# therefore be defined before the cross-module import. If these constants
+# sat at their usual position (after imports), Python would raise
+# ImportError on the cycle re-entry into a still-initialising kstlib.limits.
+#
+# See: fix-circular-import-mail request (2026-04-24).
+# =============================================================================
+
 # Hard limits (deep defense - cannot be exceeded via config)
-# =============================================================================
 
 #: Absolute maximum attachment size (25 MiB) - protects against memory exhaustion.
 HARD_MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024
@@ -240,9 +214,7 @@ HARD_MIN_EPOCH_TIMESTAMP = 0
 #: Maximum valid epoch timestamp (year 2100) - protects against overflow.
 HARD_MAX_EPOCH_TIMESTAMP = 4102444800
 
-# =============================================================================
 # Default limits (used when config is not available)
-# =============================================================================
 
 DEFAULT_MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25 MiB
 DEFAULT_MAX_ATTACHMENTS = 20
@@ -290,6 +262,52 @@ DEFAULT_WS_DISCONNECT_ALERT_INTERVAL = 300.0  # seconds between throttled alerts
 
 DEFAULT_PIPELINE_TIMEOUT = 300.0  # seconds (5 minutes)
 DEFAULT_PIPELINE_ON_ERROR = "fail_fast"
+
+# =============================================================================
+# Cross-module imports (intentionally after pre-import constants, see note above)
+# =============================================================================
+
+from collections.abc import Mapping  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
+from typing import Any  # noqa: E402
+
+from kstlib.utils.formatting import format_bytes, parse_size_string  # noqa: E402
+
+__all__ = [
+    "HARD_MAX_CONFIG_FILE_SIZE",
+    "HARD_MAX_DATETIME_FORMAT_LENGTH",
+    "HARD_MAX_DISPLAY_VALUE_LENGTH",
+    "HARD_MAX_ENDPOINT_REF_LENGTH",
+    "HARD_MAX_EPOCH_TIMESTAMP",
+    "HARD_MAX_PIPELINE_STEPS",
+    "HARD_MAX_PIPELINE_TIMEOUT",
+    "HARD_MAX_RAPI_UPLOAD_SIZE",
+    "HARD_MAX_STEP_ARGS",
+    "HARD_MAX_TIMEZONE_LENGTH",
+    "HARD_MIN_EPOCH_TIMESTAMP",
+    "HARD_MIN_PIPELINE_TIMEOUT",
+    "AlertsLimits",
+    "CacheLimits",
+    "DatabaseLimits",
+    "MailLimits",
+    "PipelineLimits",
+    "RapiLimits",
+    "RapiRenderConfig",
+    "ResilienceLimits",
+    "SopsLimits",
+    "WebSocketLimits",
+    "clamp_with_limits",
+    "get_alerts_limits",
+    "get_cache_limits",
+    "get_db_limits",
+    "get_mail_limits",
+    "get_pipeline_limits",
+    "get_rapi_limits",
+    "get_rapi_render_config",
+    "get_resilience_limits",
+    "get_sops_limits",
+    "get_websocket_limits",
+]
 
 
 @dataclass(frozen=True, slots=True)
