@@ -104,6 +104,16 @@ mistakes (directory traversal, missing roots) before interacting with the transp
    :noindex:
 ```
 
+### NotifyCollector
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.NotifyCollector
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
 ---
 
 ## Filesystem

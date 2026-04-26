@@ -19,6 +19,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [2.4.0] - 2026-04-26
+
+### Added
+
+- `MailBuilder.notify` accepts `mode="ok" | "ko" | "both"` (case-insensitive)
+  and `on_success_only=True` for symmetric filtering, completing the
+  pre-existing `on_error_only` shortcut.
+- `MailBuilder.notify(collector=...)` captures every result that passes the
+  active filter into a `NotifyCollector`, enabling run-summary emails. Capture
+  follows the active mode, so the double-decorator pattern records exactly one
+  entry per execution.
+- `NotifyCollector`: thread-safe, FIFO-bounded collector of `NotifyResult`
+  instances, with `render_html` / `render_plain` / `to_monitor_table` /
+  `to_context` helpers.
+- `MailBuilder.send_summary(collector, *, subject=None, format="html")`
+  shortcut to send a summary email built from a collector. Operates on an
+  internal snapshot so the original builder state is preserved.
+- `kstlib._shared.jinja` module exposing `render_jinja(source, context, *,
+  autoescape=False)` and `render_jinja_file(path, context, *,
+  autoescape=False, encoding="utf-8")` helpers. Internal cross-module
+  helpers; not part of the public top-level kstlib API. Used by
+  `MailBuilder` for template rendering.
+- Documentation table for `NotifyCollector.to_context()` keys with types,
+  plus a "Custom Jinja2 templates with NotifyCollector" section showing a
+  loop-over-results example.
+
+### Changed
+
+- `MailBuilder.message(template=...)` now renders templates with real
+  Jinja2 (loops, conditions, filters, attribute access) instead of the
+  previous regex-based `{{ var }}` substitution. Backward compatible for
+  simple `{{ var }}` templates. Two small semantic changes worth noting:
+  missing variables now render as empty strings (Jinja2
+  `ChainableUndefined`) instead of preserving the `{{ var }}` literal,
+  and non-scalar variables now render via Python `str()` instead of the
+  `"[object]"` placeholder.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [2.3.1] - 2026-04-25
 
 ### Fixed
@@ -813,7 +858,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/KaminoU/kstlib/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/KaminoU/kstlib/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/KaminoU/kstlib/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/KaminoU/kstlib/compare/v2.2.0...v2.2.1

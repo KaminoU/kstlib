@@ -25,6 +25,7 @@ Examples:
 """
 
 from kstlib.mail.builder import MailBuilder, NotifyResult
+from kstlib.mail.collector import NotifyCollector
 from kstlib.mail.exceptions import MailConfigurationError, MailError, MailTransportError, MailValidationError
 from kstlib.mail.filesystem import MailFilesystemGuards
 from kstlib.mail.transport import AsyncMailTransport, AsyncTransportWrapper, MailTransport
@@ -39,5 +40,6 @@ __all__ = [
     "MailTransport",
     "MailTransportError",
     "MailValidationError",
+    "NotifyCollector",
     "NotifyResult",
 ]

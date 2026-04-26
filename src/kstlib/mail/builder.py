@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar, overload
 
+from kstlib._shared.jinja import render_jinja
 from kstlib.limits import MailLimits, get_mail_limits
 from kstlib.logging import get_logger
 from kstlib.mail.exceptions import MailConfigurationError, MailTransportError, MailValidationError
@@ -28,7 +29,6 @@ from kstlib.utils import (
     format_bytes,
     normalize_address_list,
     parse_email_address,
-    replace_placeholders,
 )
 
 log = get_logger(__name__)
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
+    from kstlib.mail.collector import NotifyCollector
     from kstlib.mail.transport import AsyncMailTransport, MailTransport
     from kstlib.mail.transports.resend import ResendTransport
     from kstlib.mail.transports.smtp import SMTPTransport
@@ -58,6 +59,19 @@ _KNOWN_PRESET_ENVELOPE_DEFAULTS: frozenset[str] = frozenset({"sender", "reply_to
 class _InlineResource:
     cid: str
     path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class _NotifyConfig:
+    """Internal closure config for the notify decorator wrappers."""
+
+    builder: MailBuilder
+    subject: str
+    send_on_success: bool
+    send_on_failure: bool
+    collector: NotifyCollector | None
+    include_return: bool
+    include_traceback: bool
 
 
 @dataclass(slots=True)
@@ -429,6 +443,9 @@ class MailBuilder:
         *,
         subject: str | None = None,
         on_error_only: bool = False,
+        on_success_only: bool = False,
+        mode: str | None = None,
+        collector: NotifyCollector | None = None,
         include_return: bool = False,
         include_traceback: bool = True,
     ) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
@@ -440,13 +457,17 @@ class MailBuilder:
         *,
         subject: str | None = None,
         on_error_only: bool = False,
+        on_success_only: bool = False,
+        mode: str | None = None,
+        collector: NotifyCollector | None = None,
         include_return: bool = False,
         include_traceback: bool = True,
     ) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:
         """Send email notifications on function execution.
 
         Sends a notification email after the decorated function completes,
-        reporting success or failure with execution metrics.
+        reporting success or failure with execution metrics. Optionally
+        accumulates results into a :class:`NotifyCollector` for run summaries.
 
         Can be used with or without parentheses::
 
@@ -456,15 +477,43 @@ class MailBuilder:
             @mail.notify(subject="Step 1", on_error_only=True)
             def task(): ...
 
+            @mail.notify(mode="ok")
+            def check(): ...
+
+        Filtering modes (mutually exclusive with ``on_*_only``):
+
+        - ``mode="both"`` (default): notify on both success and failure.
+        - ``mode="ok"`` (alias of ``on_success_only=True``): notify only on
+          successful execution.
+        - ``mode="ko"`` (alias of ``on_error_only=True``): notify only on
+          exception.
+
+        ``mode`` is case-insensitive.
+
+        When ``collector`` is provided, every notification that passes the
+        active filter is also recorded into the collector (so the same gate
+        applies to mail send and to capture, guaranteeing one entry per
+        execution under the double-decorator pattern).
+
         Args:
             func: The function to decorate (when used without parentheses).
             subject: Override the builder's subject for this notification.
             on_error_only: Only send notification if the function raises.
+            on_success_only: Only send notification on successful return.
+            mode: Filtering mode (``"ok"``, ``"ko"``, or ``"both"``,
+                case-insensitive). Mutually exclusive with ``on_*_only``.
+            collector: Optional collector that records every result that
+                passes the active filter.
             include_return: Include return value in success notifications.
             include_traceback: Include traceback in failure notifications.
 
         Returns:
             Decorated function that sends notifications.
+
+        Raises:
+            MailValidationError: If ``mode`` and ``on_*_only`` are combined,
+                if ``on_error_only`` and ``on_success_only`` are both true,
+                or if ``mode`` is not in ``{"ok", "ko", "both"}``.
 
         Example:
             >>> from kstlib.mail import MailBuilder
@@ -475,94 +524,210 @@ class MailBuilder:
             ...     return {"rows": 100}
 
         """
+        effective_mode = self._resolve_notify_mode(
+            mode=mode,
+            on_error_only=on_error_only,
+            on_success_only=on_success_only,
+        )
 
         def decorator(fn: Callable[P, R]) -> Callable[P, R]:
             builder = self._snapshot()
-            effective_subject = subject if subject is not None else builder._subject
-
+            cfg = _NotifyConfig(
+                builder=builder,
+                subject=subject if subject is not None else builder._subject,
+                send_on_success=effective_mode in {"ok", "both"},
+                send_on_failure=effective_mode in {"ko", "both"},
+                collector=collector,
+                include_return=include_return,
+                include_traceback=include_traceback,
+            )
             if inspect.iscoroutinefunction(fn):
+                return self._build_async_notify_wrapper(fn, cfg)  # type: ignore[arg-type]
+            return self._build_sync_notify_wrapper(fn, cfg)
 
-                @functools.wraps(fn)
-                async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-                    start = time.perf_counter()
-                    started_at = datetime.now(timezone.utc)
-                    try:
-                        result = await fn(*args, **kwargs)
-                        ended_at = datetime.now(timezone.utc)
-                        duration_ms = (time.perf_counter() - start) * 1000
+        if func is not None:
+            return decorator(func)
+        return decorator
 
-                        if not on_error_only:
-                            notify_result = NotifyResult(
-                                function_name=fn.__name__,
-                                success=True,
-                                started_at=started_at,
-                                ended_at=ended_at,
-                                duration_ms=duration_ms,
-                                return_value=result if include_return else None,
-                            )
-                            builder._send_notification(notify_result, effective_subject, include_return)
-                        return result  # type: ignore[no-any-return]
-                    except BaseException as exc:
-                        ended_at = datetime.now(timezone.utc)
-                        duration_ms = (time.perf_counter() - start) * 1000
-                        tb_str = traceback.format_exc() if include_traceback else None
+    @staticmethod
+    def _resolve_notify_mode(
+        *,
+        mode: str | None,
+        on_error_only: bool,
+        on_success_only: bool,
+    ) -> str:
+        """Validate notify filter kwargs and return the effective mode."""
+        if mode is not None and (on_error_only or on_success_only):
+            raise MailValidationError("Use mode= OR on_error_only/on_success_only, not both")
+        if on_error_only and on_success_only:
+            raise MailValidationError("on_error_only and on_success_only are mutually exclusive")
+        if mode is not None:
+            if not isinstance(mode, str):
+                raise MailValidationError(f"mode must be 'ok', 'ko', or 'both', got: {mode!r}")
+            normalized = mode.lower()
+            if normalized not in {"ok", "ko", "both"}:
+                raise MailValidationError(f"mode must be 'ok', 'ko', or 'both', got: {mode!r}")
+            return normalized
+        if on_error_only:
+            return "ko"
+        if on_success_only:
+            return "ok"
+        return "both"
 
-                        notify_result = NotifyResult(
+    @staticmethod
+    def _record_notify_outcome(cfg: _NotifyConfig, notify_result: NotifyResult) -> None:
+        """Send the notification mail (best-effort) and capture into the collector."""
+        cfg.builder._send_notification(notify_result, cfg.subject, cfg.include_return)
+        if cfg.collector is not None:
+            cfg.collector.add(notify_result)
+
+    def _build_sync_notify_wrapper(
+        self,
+        fn: Callable[P, R],
+        cfg: _NotifyConfig,
+    ) -> Callable[P, R]:
+        """Build the sync wrapper for the notify decorator."""
+
+        @functools.wraps(fn)
+        def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            start = time.perf_counter()
+            started_at = datetime.now(timezone.utc)
+            try:
+                result = fn(*args, **kwargs)
+            except BaseException as exc:
+                ended_at = datetime.now(timezone.utc)
+                duration_ms = (time.perf_counter() - start) * 1000
+                if cfg.send_on_failure:
+                    self._record_notify_outcome(
+                        cfg,
+                        NotifyResult(
                             function_name=fn.__name__,
                             success=False,
                             started_at=started_at,
                             ended_at=ended_at,
                             duration_ms=duration_ms,
                             exception=exc,
-                            traceback_str=tb_str,
-                        )
-                        builder._send_notification(notify_result, effective_subject, include_return)
-                        raise
-
-                return async_wrapper  # type: ignore[return-value]
-
-            @functools.wraps(fn)
-            def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-                start = time.perf_counter()
-                started_at = datetime.now(timezone.utc)
-                try:
-                    result = fn(*args, **kwargs)
-                    ended_at = datetime.now(timezone.utc)
-                    duration_ms = (time.perf_counter() - start) * 1000
-
-                    if not on_error_only:
-                        notify_result = NotifyResult(
-                            function_name=fn.__name__,
-                            success=True,
-                            started_at=started_at,
-                            ended_at=ended_at,
-                            duration_ms=duration_ms,
-                            return_value=result if include_return else None,
-                        )
-                        builder._send_notification(notify_result, effective_subject, include_return)
-                    return result
-                except BaseException as exc:
-                    ended_at = datetime.now(timezone.utc)
-                    duration_ms = (time.perf_counter() - start) * 1000
-                    tb_str = traceback.format_exc() if include_traceback else None
-
-                    notify_result = NotifyResult(
+                            traceback_str=traceback.format_exc() if cfg.include_traceback else None,
+                        ),
+                    )
+                raise
+            ended_at = datetime.now(timezone.utc)
+            duration_ms = (time.perf_counter() - start) * 1000
+            if cfg.send_on_success:
+                self._record_notify_outcome(
+                    cfg,
+                    NotifyResult(
                         function_name=fn.__name__,
-                        success=False,
+                        success=True,
                         started_at=started_at,
                         ended_at=ended_at,
                         duration_ms=duration_ms,
-                        exception=exc,
-                        traceback_str=tb_str,
+                        return_value=result if cfg.include_return else None,
+                    ),
+                )
+            return result
+
+        return sync_wrapper
+
+    def _build_async_notify_wrapper(
+        self,
+        fn: Callable[P, R],
+        cfg: _NotifyConfig,
+    ) -> Callable[P, R]:
+        """Build the async wrapper for the notify decorator."""
+
+        @functools.wraps(fn)
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            start = time.perf_counter()
+            started_at = datetime.now(timezone.utc)
+            try:
+                result = await fn(*args, **kwargs)  # type: ignore[misc]
+            except BaseException as exc:
+                ended_at = datetime.now(timezone.utc)
+                duration_ms = (time.perf_counter() - start) * 1000
+                if cfg.send_on_failure:
+                    self._record_notify_outcome(
+                        cfg,
+                        NotifyResult(
+                            function_name=fn.__name__,
+                            success=False,
+                            started_at=started_at,
+                            ended_at=ended_at,
+                            duration_ms=duration_ms,
+                            exception=exc,
+                            traceback_str=traceback.format_exc() if cfg.include_traceback else None,
+                        ),
                     )
-                    builder._send_notification(notify_result, effective_subject, include_return)
-                    raise
+                raise
+            ended_at = datetime.now(timezone.utc)
+            duration_ms = (time.perf_counter() - start) * 1000
+            if cfg.send_on_success:
+                self._record_notify_outcome(
+                    cfg,
+                    NotifyResult(
+                        function_name=fn.__name__,
+                        success=True,
+                        started_at=started_at,
+                        ended_at=ended_at,
+                        duration_ms=duration_ms,
+                        return_value=result if cfg.include_return else None,
+                    ),
+                )
+            return result  # type: ignore[no-any-return]
 
-            return sync_wrapper
+        return async_wrapper  # type: ignore[return-value]
 
-        if func is not None:
-            return decorator(func)
-        return decorator
+    def send_summary(
+        self,
+        collector: NotifyCollector,
+        *,
+        subject: str | None = None,
+        format: Literal["html", "plain", "monitor_table"] = "html",  # noqa: A002 - public API name; mirrors documented format= kwarg
+    ) -> EmailMessage:
+        """Send a summary email built from a :class:`NotifyCollector`.
+
+        Operates on an isolated snapshot so the original builder state is
+        preserved for subsequent sends.
+
+        Args:
+            collector: The collector whose recorded results are rendered.
+            subject: Optional subject override for the summary email.
+                Falls back to the builder's current subject when omitted.
+            format: Output format for the body. ``"html"`` uses
+                :meth:`NotifyCollector.render_html`, ``"plain"`` uses
+                :meth:`NotifyCollector.render_plain`, ``"monitor_table"``
+                renders the collector's
+                :meth:`~NotifyCollector.to_monitor_table` with inline CSS
+                for email-safe HTML.
+
+        Returns:
+            The :class:`~email.message.EmailMessage` that was sent.
+
+        Raises:
+            MailValidationError: If ``format`` is not one of the supported
+                values.
+
+        """
+        if format not in {"html", "plain", "monitor_table"}:
+            raise MailValidationError(f"format must be 'html', 'plain', or 'monitor_table', got: {format!r}")
+
+        snapshot = self._snapshot()
+        if subject is not None:
+            snapshot._subject = subject
+        snapshot._attachments = []
+        snapshot._inline = []
+
+        if format == "plain":
+            snapshot._plain_body = collector.render_plain()
+            snapshot._html_body = None
+        elif format == "html":
+            snapshot._plain_body = None
+            snapshot._html_body = collector.render_html()
+        else:  # "monitor_table"
+            snapshot._plain_body = None
+            snapshot._html_body = collector.to_monitor_table().render(inline_css=True)
+
+        return snapshot.send()
 
     def _send_notification(
         self,
@@ -693,7 +858,7 @@ class MailBuilder:
         if extra_placeholders:
             merged.update(extra_placeholders)
         if merged:
-            content = replace_placeholders(content, merged)
+            content = render_jinja(content, merged)
         return content
 
     def _validate_ready(self) -> EmailAddress:

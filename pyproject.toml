@@ -368,7 +368,10 @@ ignore = [
 "src/kstlib/logging/__init__.py" = ["S110"]
 "src/kstlib/logging/manager.py" = ["S110"]
 # Mail builder - snapshot/notify path legitimately reassigns same-class private state
-"src/kstlib/mail/builder.py" = ["SLF001"]
+# PLR0913: Many kwargs - notify decorator API exposes mode/collector/include_* options (parametrised decorator pattern, mirrors metrics/decorators.py)
+"src/kstlib/mail/builder.py" = ["SLF001", "PLR0913"]
+# Shared Jinja2 helper - autoescape default is intentionally False: kstlib mail templates are author-controlled (dev), not user input. Callers opt in to autoescape=True for HTML user-facing content.
+"src/kstlib/_shared/jinja.py" = ["S701"]
 # Monitoring image - RenderError chain already raised via "from err"; no additional ignores needed here
 # Monitoring renderer - Markup values are escaped before wrapping; jinja2 Environment defaults to autoescape=True
 "src/kstlib/monitoring/renderer.py" = ["S701", "S704"]

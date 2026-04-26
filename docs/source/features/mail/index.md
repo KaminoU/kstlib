@@ -566,8 +566,17 @@ result = extract_data()
 |--------|---------|-------------|
 | `subject` | Builder's subject | Override the base subject for this function |
 | `on_error_only` | `False` | Only send notification on failure |
+| `on_success_only` | `False` | Only send notification on success |
+| `mode` | `None` | Filtering mode: `"ok"`, `"ko"`, or `"both"` (case-insensitive) |
+| `collector` | `None` | Optional `NotifyCollector` to record results |
 | `include_return` | `False` | Include return value in email body |
 | `include_traceback` | `True` | Include traceback in failure emails |
+
+`mode` is mutually exclusive with `on_error_only` / `on_success_only`. Mixing them raises `MailValidationError`. The aliases are:
+
+- `mode="ok"` is equivalent to `on_success_only=True`
+- `mode="ko"` is equivalent to `on_error_only=True`
+- `mode="both"` is the default (notify on both success and failure)
 
 ### Alert Only on Failure
 
@@ -576,6 +585,23 @@ result = extract_data()
 def quiet_job() -> str:
     """Silent on success, alerts on failure."""
     return "done"
+
+# Equivalent shorthand:
+@mail.notify(mode="ko")
+def quiet_job_v2() -> str:
+    return "done"
+```
+
+### Alert Only on Success
+
+```python
+@mail.notify(on_success_only=True)
+def heartbeat() -> None:
+    """Reports heartbeats only on a clean run."""
+
+# Equivalent shorthand:
+@mail.notify(mode="ok")
+def heartbeat_v2() -> None: ...
 ```
 
 ### Include Return Value
@@ -634,6 +660,173 @@ from kstlib.mail import NotifyResult
 ```{seealso}
 Run [notify_decorator.py](https://github.com/KaminoU/kstlib/blob/main/examples/mail/notify_decorator.py) for complete working examples using Ethereal Email.
 ```
+
+### Let Exceptions Bubble
+
+For `notify(on_error_only=True)` or `notify(mode="ko")` to fire, the exception must SORTIR (escape) the decorated function. The decorator catches exceptions at the wrapper level: if the function swallows them internally, the wrapper sees a clean return and treats it as a success.
+
+```python
+# Bad: exception is swallowed, the decorator never sees it
+@mail.notify(on_error_only=True)
+def check_proxy() -> None:
+    try:
+        ping_proxy(timeout=2)
+    except Exception as exc:
+        log.warning("oops: %s", exc)
+        # No re-raise: the decorator sees a clean return
+```
+
+```python
+# Good: re-raise (or wrap and raise) so the decorator can act
+@mail.notify(on_error_only=True)
+def check_proxy() -> None:
+    try:
+        ping_proxy(timeout=2)
+    except (TimeoutError, ConnectionError) as exc:
+        log.warning("proxy unreachable: %s", exc)
+        raise CheckError(f"proxy: {exc}") from exc
+
+# Then the main loop catches at its own level so the run continues
+for fn in CHECKS:
+    try:
+        fn()
+    except Exception as exc:
+        # The decorator already sent the mail; we just keep going.
+        log.info("%s: KO (%s)", fn.__name__, exc)
+```
+
+### NotifyCollector for Run Summaries
+
+When several decorated functions run in sequence and you want a single recap email at the end, pass a `NotifyCollector` to each decorator. Capture is filtered: it follows the active mode of the decorator that records it, so the same execution never gets recorded twice when several decorators share a collector.
+
+```python
+from kstlib.mail import MailBuilder, NotifyCollector
+
+collector = NotifyCollector(maxsize=500)
+
+mlok = MailBuilder(transport=t).sender("bot@x.com").to("users@x.com").subject("OK group")
+mlko = MailBuilder(transport=t).sender("bot@x.com").to("admins@x.com").subject("KO group")
+
+@mlok.notify(collector=collector, mode="ok")
+@mlko.notify(collector=collector, mode="ko")
+def check_proxy() -> None: ...
+
+@mlok.notify(collector=collector, mode="ok")
+@mlko.notify(collector=collector, mode="ko")
+def check_database() -> None: ...
+
+# Run the checks
+for fn in (check_proxy, check_database):
+    try:
+        fn()
+    except Exception:
+        pass  # the relevant decorator already mailed admins
+
+# Final summary mail
+mail = MailBuilder(transport=t).sender("bot@x.com").to("ops@x.com").subject("Run recap")
+mail.send_summary(collector, format="html")
+```
+
+`NotifyCollector` is thread-safe (`threading.Lock`) and bounded (`collections.deque(maxlen=maxsize)`, FIFO eviction).
+
+Available helpers:
+
+| Method / property | Returns | Use case |
+|-------------------|---------|----------|
+| `add(result)` | `None` | Manual capture (called automatically by `notify`) |
+| `reset()` | `None` | Clear every recorded entry |
+| `results` | `list[NotifyResult]` | Snapshot copy in insertion order |
+| `ok_count` / `ko_count` / `total_count` | `int` | Derived counters |
+| `render_html(include_tracebacks=True)` | `str` | Standalone HTML table with inline CSS |
+| `render_plain()` | `str` | Plain text summary |
+| `to_monitor_table()` | `MonitorTable` | Integration with `kstlib.monitoring` |
+| `to_context()` | `dict[str, Any]` | Context dict for an external Jinja template |
+
+### `send_summary` Shortcut
+
+`MailBuilder.send_summary(collector, format=...)` is a convenience that builds the summary email body from the collector and sends it in a single call. Available formats:
+
+| `format` | Body source |
+|----------|-------------|
+| `"html"` (default) | `collector.render_html()` |
+| `"plain"` | `collector.render_plain()` |
+| `"monitor_table"` | `collector.to_monitor_table().render(inline_css=True)` |
+
+The original builder state is preserved: `send_summary` operates on an internal snapshot, so subsequent `.send()` calls keep the original subject and body.
+
+For a custom template, bypass `send_summary` and feed `collector.to_context()` to `MailBuilder.message`:
+
+```python
+mail.message(template="my_summary.j2", placeholders=collector.to_context()).send()
+```
+
+### `to_context()` keys
+
+The dict returned by `collector.to_context()` exposes the following keys to Jinja2 templates:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `results` | `list[NotifyResult]` | Recorded results in insertion order |
+| `ok_count` | `int` | Number of successful results |
+| `ko_count` | `int` | Number of failed results |
+| `total_count` | `int` | Total number of results |
+| `ok_ratio` | `float` | Ratio OK / total (0.0 to 1.0; 0.0 if empty) |
+| `started_at` | `datetime \| None` | Min of all `started_at`; `None` if empty |
+| `ended_at` | `datetime \| None` | Max of all `ended_at`; `None` if empty |
+| `total_duration_ms` | `float` | Sum of all `duration_ms` |
+
+Each item in `results` is a `NotifyResult` instance with attributes: `function_name`, `success`, `started_at`, `ended_at`, `duration_ms`, `return_value`, `exception`, `traceback_str` (cf API reference).
+
+### Custom Jinja2 templates with NotifyCollector
+
+`MailBuilder.message(template=...)` renders templates with **real Jinja2** (loops, conditions, filters, attribute access). Combined with `collector.to_context()`, you can write a custom recap that iterates over `results`:
+
+```python
+from kstlib.mail import MailBuilder, NotifyCollector
+
+collector = NotifyCollector(maxsize=500)
+
+@mail.notify(collector=collector)
+def check_proxy(): ...
+
+@mail.notify(collector=collector)
+def check_database(): ...
+
+# ... run checks ...
+
+# Inline Jinja2 template with loop on results
+template = """
+<h1>Run summary</h1>
+<p>OK: {{ ok_count }} / {{ total_count }}
+   ({{ "%.0f" | format(ok_ratio * 100) }}%)</p>
+
+<table>
+  <tr><th>Function</th><th>Status</th><th>Duration (ms)</th></tr>
+  {% for r in results %}
+  <tr style="background:{{ '#dcfce7' if r.success else '#fee2e2' }}">
+    <td><code>{{ r.function_name }}</code></td>
+    <td>{{ "OK" if r.success else "FAILED" }}</td>
+    <td>{{ "%.2f" | format(r.duration_ms) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+"""
+
+recap = MailBuilder(transport=t).sender("bot@x.com").to("ops@x.com").subject("Run recap")
+recap.message(
+    content=template,
+    content_type="html",
+    placeholders=collector.to_context(),
+).send()
+
+# Or using a template file:
+recap.message(
+    template="path/to/summary.j2",
+    placeholders=collector.to_context(),
+).send()
+```
+
+Missing variables resolve to an empty string (Jinja2 `ChainableUndefined`), keeping templates forgiving toward optional fields.
 
 ## Debugging SMTP Connections
 
