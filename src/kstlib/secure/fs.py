@@ -14,6 +14,7 @@ Example:
 
 from __future__ import annotations
 
+import logging
 import os
 import stat
 from dataclasses import dataclass, replace
@@ -22,6 +23,8 @@ from typing import Final
 
 from kstlib.config.exceptions import KstlibError
 from kstlib.secure.permissions import DirectoryPermissions
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     "RELAXED_POLICY",
@@ -103,6 +106,12 @@ class PathGuardrails:
             raise PathSecurityError(f"Guardrail root must be a directory: {self._root}")
         self._harden_permissions(self._root)
         self._validate_permissions(self._root)
+        log.debug(
+            "PathGuardrails initialized at %s (allow_external=%s, enforce_permissions=%s)",
+            self._root,
+            policy.allow_external,
+            policy.enforce_permissions,
+        )
 
     @property
     def root(self) -> Path:
@@ -164,10 +173,14 @@ class PathGuardrails:
         if self._policy.allow_external:
             return
         if os.name == "nt" and self._root.drive and path.drive.lower() != self._root.drive.lower():
+            # Log the attempt before raising so SOC / SIEM has visibility
+            # (Trit/Michel decision Q4: no silent drop on security events).
+            log.warning("[SECURITY] Drive escape attempt: candidate=%s (root=%s)", path, self._root)
             raise PathSecurityError(f"Path is on a different drive: {path}")
         try:
             path.relative_to(self._root)
         except ValueError as exc:
+            log.warning("[SECURITY] Path traversal attempt: candidate=%s (root=%s)", path, self._root)
             raise PathSecurityError(f"Path escapes guardrail root: {path}") from exc
 
     def _validate_permissions(self, directory: Path) -> None:

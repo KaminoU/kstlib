@@ -171,6 +171,14 @@ development/index
 ```{toctree}
 :hidden:
 :maxdepth: 1
+:caption: Security
+
+security/index
+```
+
+```{toctree}
+:hidden:
+:maxdepth: 1
 :caption: Meta
 
 changelog

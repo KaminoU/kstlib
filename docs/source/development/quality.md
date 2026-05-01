@@ -114,3 +114,36 @@ is checked by pre-commit:
 4. Pre-commit verifies the marker exists before allowing commit
 
 This guarantees that every commit has passed the full quality gate. No shortcuts!
+
+## Sphinx / Furo gotchas
+
+The kstlib documentation uses [Furo](https://pradyunsg.me/furo/) for its
+HTML rendering. A handful of recurring traps are worth flagging so the
+next contributor does not rediscover them by surprise.
+
+### No manual `{contents}` directive
+
+Furo auto-generates a sidebar table of contents on the right of every
+page (the "ON THIS PAGE" panel). Adding a manual `{contents}` /
+`[TOC]` directive at the top of a Markdown page produces a red error
+admonition in the rendered HTML and a duplicated TOC. Just write the
+prose; Furo picks up the `##` / `###` headings on its own.
+
+### Card background is theme-managed
+
+`sphinx-design` cards (the `grid-item-card` directives on
+`features/index.md`, the dropdowns on `index.md`) take their colors
+from a mix of `--color-card-*` (Furo) and `--sd-color-card-*`
+(sphinx-design). Both must be overridden in `_static/custom.css` to
+align the cards on the rest of the kstlib palette - overriding only
+one leaves a stale gray panel on hover or in some directive flavors.
+See the "sphinx-design Cards" section of `_static/custom.css` for the
+current overrides.
+
+### Build the docs locally before pushing
+
+`tox -e docs` is the source of truth. The HTML output lands in
+`docs/build/html/`. Open `index.html` directly in a browser to verify
+both light and dark modes (Furo exposes the toggle in the top bar).
+Furo issues most styling regressions silently, so a clean log does not
+imply a clean visual result.

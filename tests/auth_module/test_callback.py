@@ -88,6 +88,31 @@ class TestCallbackHandler:
         # Verify debug logging was used - message may or may not appear depending on logger config
         # The key is that it doesn't raise and doesn't print to stdout
 
+    def test_log_message_does_not_leak_oauth_code(self, caplog: pytest.LogCaptureFixture) -> None:
+        """log_message must not forward the requestline (would leak OAuth code).
+
+        BaseHTTPRequestHandler calls log_message with the full requestline
+        (e.g. ``"GET /callback?code=4/0AdQ_xxx&state=abc HTTP/1.1"``).
+        We log only method + status, never the full path.
+        """
+        import logging
+
+        caplog.set_level(logging.DEBUG, logger="kstlib.auth.callback")
+
+        handler = CallbackHandler.__new__(CallbackHandler)
+        # Simulate exactly what BaseHTTPRequestHandler.log_request emits.
+        leaked_code = "4/0AdQ_supersecretAuthCode_abcdef"
+        handler.log_message(
+            '"%s" %s %s',
+            f"GET /callback?code={leaked_code}&state=xyz HTTP/1.1",
+            "200",
+            "-",
+        )
+
+        for record in caplog.records:
+            assert leaked_code not in record.getMessage()
+            assert "?code=" not in record.getMessage()
+
     def test_do_get_wrong_path_returns_404(self) -> None:
         """GET request to wrong path returns 404."""
         # Reset class state

@@ -160,8 +160,10 @@ def _try_sops_decrypt(path: pathlib.Path) -> str | None:
     # Lazy import to avoid circular dependencies
     import logging
 
+    from kstlib._shared.redaction import redact_sensitive
     from kstlib.config.exceptions import ConfigSopsError, ConfigSopsNotAvailableError
     from kstlib.config.sops import get_decryptor
+    from kstlib.logging import TRACE_LEVEL
 
     _logger = logging.getLogger(__name__)
     try:
@@ -171,7 +173,13 @@ def _try_sops_decrypt(path: pathlib.Path) -> str | None:
     except ConfigSopsNotAvailableError as exc:
         _logger.warning("SOPS not available, loading raw: %s", exc)
     except ConfigSopsError as exc:
-        _logger.warning("SOPS decryption failed: %s", exc)
+        # Option C : keep the WARNING short (filename only) so the default
+        # log stream stays free of stderr content. The full SOPS stderr is
+        # known to carry age/gpg key paths, fingerprints, and recipient ids;
+        # we redact it and only emit on TRACE so it surfaces only when an
+        # operator explicitly asks for the detail.
+        _logger.warning("SOPS decryption failed for %s (see TRACE for details)", path.name)
+        _logger.log(TRACE_LEVEL, "SOPS stderr: %s", redact_sensitive(str(exc)))
     return None
 
 
@@ -802,6 +810,10 @@ class ConfigLoader:
             >>> config = loader.load("myapp.yml")  # doctest: +SKIP
 
         """
+        import logging
+
+        _logger = logging.getLogger(__name__)
+
         # Start with package default config
         _config = _load_default_config(self.encoding)
 
@@ -814,6 +826,10 @@ class ConfigLoader:
             pathlib.Path.cwd() / filename,
         ]
 
+        # Track which layers actually contributed to the merged config so the
+        # final synthesis line can name them. ``path.name`` only (no directory
+        # path) so the INFO record never leaks user FS structure.
+        layers_used: list[str] = []
         for search_path in search_paths:
             if search_path.is_file():
                 conf = _load_with_includes(
@@ -823,6 +839,7 @@ class ConfigLoader:
                     sops_decrypt=self.sops_decrypt,
                 )
                 _config = deep_merge(_config, conf)
+                layers_used.append(search_path.name)
 
         if not _config:
             raise ConfigFileNotFoundError(
@@ -830,6 +847,16 @@ class ConfigLoader:
                 f"or package data (searched for '{filename}')."
             )
         box_conf = Box(_config, default_box=True, default_box_attr=None)
+
+        # Synthesis: single user-facing line that recaps the cascade outcome.
+        # Replaces the old "no log at all on cascade" gap. Layer count includes
+        # the package default that always seeds the merge.
+        _logger.info(
+            "Config loaded from %d source(s) (layers: %s)",
+            len(layers_used) + 1,
+            ["<package-default>", *layers_used],
+        )
+
         return self._merge_into_cache(box_conf, purge_cache)
 
     # Factory methods for one-liner convenience
@@ -1170,6 +1197,11 @@ def reload_config(filename: str = CONFIG_FILENAME) -> Box:
         'corporate'
 
     """
+    import logging
+
+    _logger = logging.getLogger(__name__)
+    # Explicit public refresh : INFO is legitimate (rare, user-triggered).
+    _logger.info("Reloading config from disk: %s", filename)
     return get_config(filename=filename, force_reload=True)
 
 

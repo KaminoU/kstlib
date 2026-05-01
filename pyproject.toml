@@ -134,6 +134,11 @@ docs = [
     "sphinx-design>=0.6,<0.7",
     # Security: transitive dep lower bounds (CVE)
     "Pygments>=2.20.0",  # CVE-2026-4539 ReDoS (via sphinx)
+    # myst-parser 4.0.1 (latest) requires markdown-it-py~=3.0; rich>=14.2
+    # tolerates 4.x and pip would otherwise pick the 4.0.0 latest, breaking
+    # the Sphinx build. Pin to <4 until myst-parser releases a version that
+    # accepts markdown-it-py 4.x.
+    "markdown-it-py>=3,<4",
 ]
 
 # Build & release
@@ -180,6 +185,9 @@ all = [
     "jaraco-context>=6.1.0",
     "virtualenv>=20.36.1",
     "Pygments>=2.20.0",  # CVE-2026-4539 ReDoS (via sphinx)
+    # myst-parser 4.0.1 requires markdown-it-py~=3.0; pin <4 until a newer
+    # myst-parser releases support for 4.x. See docs extra above.
+    "markdown-it-py>=3,<4",
 ]
 
 [tool.setuptools.dynamic]

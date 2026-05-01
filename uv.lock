@@ -850,6 +850,7 @@ all = [
     { name = "filelock" },
     { name = "furo" },
     { name = "jaraco-context" },
+    { name = "markdown-it-py" },
     { name = "moto" },
     { name = "mypy" },
     { name = "myst-parser" },
@@ -896,6 +897,7 @@ dev = [
 ]
 docs = [
     { name = "furo" },
+    { name = "markdown-it-py" },
     { name = "myst-parser" },
     { name = "pygments" },
     { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -942,6 +944,8 @@ requires-dist = [
     { name = "jaraco-context", marker = "extra == 'all'", specifier = ">=6.1.0" },
     { name = "jaraco-context", marker = "extra == 'dev'", specifier = ">=6.1.0" },
     { name = "jinja2", specifier = ">=3.1.5,<4" },
+    { name = "markdown-it-py", marker = "extra == 'all'", specifier = ">=3,<4" },
+    { name = "markdown-it-py", marker = "extra == 'docs'", specifier = ">=3,<4" },
     { name = "moto", extras = ["ses"], marker = "extra == 'all'", specifier = ">=5.0,<6" },
     { name = "moto", extras = ["ses"], marker = "extra == 'dev'", specifier = ">=5.0,<6" },
     { name = "mypy", marker = "extra == 'all'", specifier = ">=1.18,<2" },

@@ -14,6 +14,7 @@ import logging
 
 from kstlib.pipeline.models import StepConfig, StepResult, StepStatus
 from kstlib.pipeline.steps._base import _run_subprocess
+from kstlib.pipeline.steps._helpers import _sanitize_command
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +57,17 @@ class ShellStep:
 
         """
         command = config.command or ""
-        logger.debug("ShellStep '%s': command=%r", config.name, command)
+        # Best-effort redaction for log output; the unredacted command is
+        # still passed verbatim to subprocess for execution.
+        safe_command = _sanitize_command(command)
+        logger.debug("ShellStep '%s': command=%s", config.name, safe_command)
 
         if dry_run:
-            logger.info("[DRY RUN] ShellStep '%s': %s", config.name, command)
+            logger.info("[DRY RUN] ShellStep '%s': %s", config.name, safe_command)
             return StepResult(
                 name=config.name,
                 status=StepStatus.SKIPPED,
-                stdout=f"[dry-run] would execute: {command}",
+                stdout=f"[dry-run] would execute: {safe_command}",
             )
 
         return _run_subprocess(command, config, shell=True, log_tag="ShellStep")  # noqa: S604

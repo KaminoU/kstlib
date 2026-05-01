@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import secrets
@@ -11,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+log = logging.getLogger(__name__)
 
 DEFAULT_CHUNK_SIZE = 1024 * 1024
 
@@ -130,6 +133,16 @@ def secure_delete(
     overwrite_report = _overwrite_and_remove(path, passes, chunk_size, zero_last_pass)
     if resolved_method == SecureDeleteMethod.COMMAND and not overwrite_report.success:
         overwrite_report.method = SecureDeleteMethod.COMMAND
+    if overwrite_report.success:
+        # Log the wipe success at DEBUG : the path is operator-provided
+        # (file already targeted for destruction), counts only - never
+        # the file content. Useful for audit trails of secret-scrubbing.
+        log.debug(
+            "[SECURE] Wiped %s (method=%s, passes=%d)",
+            path.name,
+            overwrite_report.method.value,
+            overwrite_report.passes,
+        )
     return overwrite_report
 
 

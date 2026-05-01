@@ -41,7 +41,10 @@ class SecretRequest:
     name: str
     scope: str | None = None
     required: bool = True
-    default: Any | None = None
+    # Default fallback value : aligned with SecretRecord.value, hidden from
+    # the dataclass repr so a future "log.debug('Request: %s', request)"
+    # never accidentally leaks a fallback secret.
+    default: Any | None = field(default=None, repr=False)
     metadata: MutableMapping[str, Any] = field(default_factory=dict)
 
 

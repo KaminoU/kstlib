@@ -339,7 +339,7 @@ def test_sops_provider_handles_command_failure(
     message = str(excinfo.value)
     assert "arn:aws" not in message
     assert secrets_file.name in message
-    assert any("[REDACTED]" in record.message for record in caplog.records)
+    assert any("[REDACTED_ARN]" in record.message for record in caplog.records)
 
 
 def test_sops_provider_auto_falls_back_to_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -531,16 +531,19 @@ def test_sops_provider_returns_none_when_key_missing(monkeypatch: pytest.MonkeyP
     assert provider.resolve(request) is None
 
 
-def test_sops_provider_redacts_sensitive_output() -> None:
-    """Redact AWS ARNs, access keys, and file paths from error output."""
-    message = "arn:aws:kms:us-east-1:123456789012:key/abc AKIA1234567890ABCDEF /home/user/secret"
+def test_sops_provider_uses_shared_redact_sensitive() -> None:
+    """SOPS diagnostic output is redacted via shared helper redact_sensitive."""
+    from kstlib._shared.redaction import redact_sensitive
 
-    redacted = SOPSProvider._redact_sensitive_output(message)
+    message = "arn:aws:kms:us-east-1:123456789012:key/abc AKIA1234567890ABCDEF /home/user/secret"
+    redacted = redact_sensitive(message)
 
     assert "arn:aws" not in redacted
     assert "AKIA" not in redacted
     assert "user/secret" not in redacted
-    assert redacted.count("[REDACTED]") == 3
+    assert "[REDACTED_ARN]" in redacted
+    assert "[REDACTED_AWS_KEY]" in redacted
+    assert "[REDACTED_PATH]" in redacted
 
 
 def test_sops_provider_purge_cache_variants(tmp_path: Path) -> None:

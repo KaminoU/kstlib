@@ -44,6 +44,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from kstlib._shared.redaction import mask_webhook_url
 from kstlib.alerts.channels.base import AsyncAlertChannel
 from kstlib.alerts.exceptions import AlertConfigurationError, AlertDeliveryError
 from kstlib.alerts.models import AlertLevel, AlertResult
@@ -87,33 +88,6 @@ LEVEL_COLOR = {
     AlertLevel.WARNING: "#ff9800",  # Orange
     AlertLevel.CRITICAL: "#ff0000",  # Red
 }
-
-
-def _mask_webhook_url(url: str) -> str:
-    """Mask a webhook URL for safe logging.
-
-    Args:
-        url: The full webhook URL.
-
-    Returns:
-        Masked URL like 'https://hooks.slack.com/services/T***/B***/***'.
-
-    Examples:
-        >>> _mask_webhook_url("https://hooks.slack.com/services/T123/B456/xyz")
-        'https://hooks.slack.com/services/T***/B***/***'
-
-    """
-    if not url or "hooks.slack.com" not in url:
-        return "***"
-
-    # Extract base and mask the sensitive parts
-    parts = url.split("/services/")
-    if len(parts) == 2:
-        tokens = parts[1].split("/")
-        if len(tokens) >= 3:
-            return f"https://hooks.slack.com/services/{tokens[0][:1]}***/{tokens[1][:1]}***/***"
-
-    return "https://hooks.slack.com/services/***"
 
 
 def _truncate(text: str, max_length: int) -> str:
@@ -224,7 +198,7 @@ class SlackChannel(AsyncAlertChannel):
             ssl_ca_bundle=ssl_ca_bundle,
         )
 
-        log.debug("SlackChannel initialized: %s", _mask_webhook_url(webhook_url))
+        log.debug("SlackChannel initialized: %s", mask_webhook_url(webhook_url))
 
     @property
     def name(self) -> str:
@@ -269,11 +243,18 @@ class SlackChannel(AsyncAlertChannel):
 
                 if response.status_code != 200:
                     error_msg = response.text or f"HTTP {response.status_code}"
+                    # Option C : Slack response body can leak workspace
+                    # internals or hint at config issues. Short WARNING
+                    # with status only, redacted body at TRACE.
+                    from kstlib._shared.redaction import redact_sensitive
+                    from kstlib.logging import TRACE_LEVEL
+
                     log.warning(
-                        "Slack webhook failed: status=%d, error=%s",
+                        "Slack webhook failed: status=%d (see TRACE for body)",
                         response.status_code,
-                        error_msg,
                     )
+                    if log.isEnabledFor(TRACE_LEVEL):
+                        log.log(TRACE_LEVEL, "Slack response body: %s", redact_sensitive(error_msg))
                     raise AlertDeliveryError(
                         f"Slack webhook failed: {error_msg}",
                         channel=self.name,

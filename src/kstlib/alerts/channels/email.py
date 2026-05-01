@@ -184,7 +184,17 @@ class EmailChannel(AsyncAlertChannel):
             )
 
         except Exception as e:
-            log.warning("Email delivery failed: %s", e)
+            # Option C : SMTP / Resend / Gmail exception messages can
+            # carry server response detail (we already redact those at
+            # transport.py:221 but the exception caught here may have
+            # been built before the fix path runs). Keep the WARNING
+            # short, redacted detail at TRACE.
+            from kstlib._shared.redaction import redact_sensitive
+            from kstlib.logging import TRACE_LEVEL
+
+            log.warning("Email delivery failed (see TRACE for details)")
+            if log.isEnabledFor(TRACE_LEVEL):
+                log.log(TRACE_LEVEL, "Email delivery error detail: %s", redact_sensitive(str(e)))
             raise AlertDeliveryError(
                 f"Email delivery failed: {e}",
                 channel=self.name,

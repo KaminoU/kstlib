@@ -141,10 +141,17 @@ def get_logger(name: str | None = None) -> logging.Logger:
                         _preset_warning_emitted = True
                     requested = _DEFAULT_AUTO_INIT_PRESET
                 _root_logger = LogManager(name="kstlib", preset=requested, register=True)
-        except Exception:
+        except Exception as exc:
             # Silent by design: auto-init MUST NEVER raise. kstlib cannot
             # break the host application through the logging cascade.
-            pass
+            # The exception type is surfaced on the kstlib_logging_internal
+            # logger (hors hierarchie kstlib, default WARNING and silent
+            # unless explicitly activated) so an operator who turned that
+            # logger on can see the lazy-init failure.
+            logging.getLogger("kstlib_logging_internal").debug(
+                "[INIT] Lazy auto-init failed silently: %s",
+                type(exc).__name__,
+            )
 
     if name is None:
         # Return root logger (create if needed)

@@ -218,7 +218,18 @@ def handle_http_error_response(
     except Exception:
         error_msg = response.text or f"HTTP {response.status_code}"
 
-    logger.warning("%s API error: %s (code=%s)", service_name, error_msg, error_code)
+    # Option C : keep the WARNING free of the API response body. Vendors
+    # like Gmail, Resend, and Mailgun routinely echo the offending API key
+    # prefix, the recipient address, or other diagnostic that should not
+    # land in the default log stream. Emit a short WARNING with the
+    # service name + numeric code only, and stash the redacted body
+    # detail at TRACE for explicit opt-in.
+    from kstlib._shared.redaction import redact_sensitive
+    from kstlib.logging import TRACE_LEVEL
+
+    logger.warning("%s API error (code=%s, see TRACE for details)", service_name, error_code)
+    if logger.isEnabledFor(TRACE_LEVEL):
+        logger.log(TRACE_LEVEL, "%s API error body: %s", service_name, redact_sensitive(error_msg))
 
     if extract_code:
         raise MailTransportError(f"{service_name} API error ({error_code}): {error_msg}")

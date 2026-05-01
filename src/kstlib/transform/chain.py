@@ -55,6 +55,14 @@ _DEFAULT_XML_PRIM: PrimitiveConfig = PrimitiveConfig(name="xml")
 
 log = logging.getLogger(__name__)
 
+
+def _log_trace(msg: str, *args: object) -> None:
+    """Log at TRACE level (custom level 5, below DEBUG)."""
+    from kstlib.logging import TRACE_LEVEL
+
+    log.log(TRACE_LEVEL, msg, *args)
+
+
 #: Modules that are ALWAYS rejected by callable patches, regardless of
 #: the user-configured ``allowed_callable_modules`` whitelist.
 #: These modules provide unrestricted OS or interpreter access and must
@@ -570,7 +578,11 @@ class TransformChain:
         current = data
 
         for i, prim in enumerate(self._config.forward):
-            log.debug(
+            # Per-primitive trace (firehose-level detail). Sizes / timings
+            # are intentionally not measured here : data may be a non-sized
+            # object (Element tree) and computing len() defensively across
+            # types would add complexity for little diagnostic value.
+            _log_trace(
                 "Chain '%s' forward[%d]: %s",
                 self._config.name,
                 i,
@@ -615,7 +627,7 @@ class TransformChain:
         current = data
 
         for i, prim in enumerate(self._backward):
-            log.debug(
+            _log_trace(
                 "Chain '%s' backward[%d]: %s",
                 self._config.name,
                 i,
@@ -698,11 +710,18 @@ class TransformChain:
             TransformChainError: If any stage fails.
 
         """
+        import time
+
         log.debug("Chain '%s': starting transform", self._config.name)
+        start = time.monotonic()
         decoded = self.forward(data)
         patched = self.patch(decoded, metadata=metadata)
         result = self.backward(patched)
-        log.debug("Chain '%s': transform complete", self._config.name)
+        log.debug(
+            "Chain '%s': transform complete (took=%.3fs)",
+            self._config.name,
+            time.monotonic() - start,
+        )
         return result
 
     def _apply_patch_config(

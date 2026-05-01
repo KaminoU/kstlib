@@ -240,6 +240,14 @@ def _validate_ca_bundle_string(path_str: str) -> None:
 
     # Layer 2: Null byte injection
     if "\x00" in path_str:
+        # Surface the attempt before raising (Trit/Michel decision Q4 :
+        # no silent drop on security events). The path itself is logged
+        # with the offending null byte stripped so the WARNING string
+        # stays printable.
+        logger.warning(
+            "[SECURITY] Null byte in ssl_ca_bundle path (rejected): %r",
+            path_str.replace("\x00", "<NUL>"),
+        )
         msg = "ssl_ca_bundle path contains null byte (potential injection attack)"
         raise ValueError(msg)
 

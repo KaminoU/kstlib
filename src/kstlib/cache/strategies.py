@@ -34,6 +34,14 @@ from kstlib.utils.formatting import format_bytes
 
 logger = logging.getLogger(__name__)
 
+
+def _log_trace(msg: str, *args: object) -> None:
+    """Log at TRACE level (custom level 5, below DEBUG)."""
+    from kstlib.logging import TRACE_LEVEL
+
+    logger.log(TRACE_LEVEL, msg, *args)
+
+
 _CACHE_FORMAT_VERSION = "kstlib:file-cache:v1"
 _SUPPORTED_SERIALIZERS: set[str] = {"json", "pickle", "auto"}
 _PICKLE_SAFE_BUILTINS: set[str] = {
@@ -180,6 +188,9 @@ class TTLCacheStrategy(CacheStrategy):
         self._maybe_cleanup()
 
         if key not in self._cache:
+            # The key is the SHA256 hash from make_key; logging it is safe
+            # by construction (never the function args themselves).
+            _log_trace("[CACHE] TTL miss: key=%s", key)
             return None
 
         value, expiry = self._cache[key]
@@ -187,8 +198,10 @@ class TTLCacheStrategy(CacheStrategy):
         # Check expiration
         if time.time() > expiry:
             del self._cache[key]
+            _log_trace("[CACHE] TTL miss (expired): key=%s", key)
             return None
 
+        _log_trace("[CACHE] TTL hit: key=%s", key)
         return value
 
     def set(self, key: str, value: Any) -> None:
@@ -228,6 +241,11 @@ class TTLCacheStrategy(CacheStrategy):
         expired_keys = [key for key, (_, expiry) in self._cache.items() if now > expiry]
         for key in expired_keys:
             del self._cache[key]
+        if expired_keys:
+            # Count only - keys are SHA256 hashes per make_key, but logging
+            # the count is the diagnostic that actually helps an operator
+            # (e.g. "why is the cache miss-heavy ?").
+            logger.debug("[CACHE] TTL cleanup: removed %d expired entries", len(expired_keys))
 
 
 class LRUCacheStrategy(CacheStrategy):

@@ -29,17 +29,28 @@ def _truncate(text: str, limit: int = _DETAIL_MAX_CHARS) -> str:
     return text[: limit - 3] + "..."
 
 
-def _format_detail(result: NotifyResult) -> str:
+_REDACTED_DETAIL = "[REDACTED] (NotifyCollector(redact_user_data=False) to view)"
+
+
+def _format_detail(result: NotifyResult, *, redact: bool = True) -> str:
     """Build the Detail column string for a result.
 
     KO: ``"{ExcType}: {msg}"`` truncated.
     OK with return_value: ``repr(return_value)`` truncated.
     OK without return_value: empty string.
+
+    When ``redact`` is True (default), exception messages and return
+    values are replaced with a redaction placeholder. The exception type
+    name is still surfaced for KO rows so the failure mode stays visible.
     """
     if not result.success and result.exception is not None:
         exc_type = type(result.exception).__name__
+        if redact:
+            return f"{exc_type}: {_REDACTED_DETAIL}"
         return _truncate(f"{exc_type}: {result.exception}")
     if result.success and result.return_value is not None:
+        if redact:
+            return _REDACTED_DETAIL
         return _truncate(repr(result.return_value))
     return ""
 
@@ -70,13 +81,33 @@ class NotifyCollector:
 
     """
 
-    def __init__(self, *, maxsize: int = _DEFAULT_MAXSIZE) -> None:
+    def __init__(
+        self,
+        *,
+        maxsize: int = _DEFAULT_MAXSIZE,
+        redact_user_data: bool = True,
+    ) -> None:
+        """Initialize the NotifyCollector.
+
+        Args:
+            maxsize: Maximum number of results retained (FIFO eviction).
+            redact_user_data: When True (default), exception messages,
+                return values, and tracebacks from the decorated user
+                functions are replaced with a redaction placeholder
+                before they appear in the rendered summary. Set to
+                False to opt-in to the legacy verbatim behaviour --
+                only do so if the decorated functions never raise with
+                sensitive content in their messages and never return
+                objects whose ``repr()`` would expose secrets.
+
+        """
         if not isinstance(maxsize, int) or maxsize <= 0:
             msg = f"maxsize must be a positive integer, got: {maxsize!r}"
             raise ValueError(msg)
         self._maxsize = maxsize
         self._lock = threading.Lock()
         self._results: deque[NotifyResult] = deque(maxlen=maxsize)
+        self._redact_user_data = redact_user_data
 
     def add(self, result: NotifyResult) -> None:
         """Append a result to the collector (thread-safe, FIFO bounded).
@@ -164,7 +195,7 @@ class NotifyCollector:
                 f"{status_cell}"
                 f'<td style="{cells_style}">{r.started_at.isoformat()}</td>'
                 f'<td style="{cells_style};text-align:right">{r.duration_ms:.2f}</td>'
-                f'<td style="{cells_style}">{html.escape(_format_detail(r))}</td>'
+                f'<td style="{cells_style}">{html.escape(_format_detail(r, redact=self._redact_user_data))}</td>'
                 "</tr>"
             )
 
@@ -194,7 +225,11 @@ class NotifyCollector:
             f"</table>"
         )
 
-        if include_tracebacks:
+        if include_tracebacks and not self._redact_user_data:
+            # Tracebacks may carry user-code locals / exception payloads;
+            # they are suppressed when redact_user_data is True regardless
+            # of the include_tracebacks flag. The opt-out path requires the
+            # caller to set redact_user_data=False explicitly.
             tb_blocks: list[str] = [
                 (
                     f"<h4 style='font-family:Arial,sans-serif;margin:12px 0 4px 0'>"
@@ -232,7 +267,7 @@ class NotifyCollector:
         ]
         for r in snapshot:
             status = "OK" if r.success else "FAILED"
-            detail = _format_detail(r)
+            detail = _format_detail(r, redact=self._redact_user_data)
             base = f"[{status}] {r.function_name} (started={r.started_at.isoformat()}, duration={r.duration_ms:.2f} ms)"
             lines.append(f"{base} - {detail}" if detail else base)
         return "\n".join(lines)
@@ -259,7 +294,7 @@ class NotifyCollector:
                     status_cell,
                     r.started_at.isoformat(),
                     f"{r.duration_ms:.2f}",
-                    _format_detail(r),
+                    _format_detail(r, redact=self._redact_user_data),
                 ]
             )
         return table
@@ -298,6 +333,13 @@ class NotifyCollector:
             "started_at": started_at,
             "ended_at": ended_at,
             "total_duration_ms": total_duration_ms,
+            # Surface the redaction flag so templates can choose whether to
+            # render ``{{ result.exception }}`` etc. The raw NotifyResult
+            # objects under ``results`` are not modified : custom templates
+            # remain free to read user-provided fields directly. The
+            # built-in render_html / render_plain / to_monitor_table all
+            # honour this flag automatically.
+            "redact_user_data": self._redact_user_data,
         }
 
 

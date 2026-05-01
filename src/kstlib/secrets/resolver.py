@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +13,8 @@ from kstlib.secrets.providers import configure_provider, get_provider
 
 if TYPE_CHECKING:
     from kstlib.secrets.providers.base import SecretProvider
+
+logger = logging.getLogger(__name__)
 
 
 class SecretResolver:
@@ -62,6 +65,14 @@ class SecretResolver:
         for provider in self._providers:
             record = provider.resolve(request)
             if record is not None:
+                # Identifier + source only; never log request.default nor
+                # record.value (the latter is repr-suppressed anyway).
+                logger.debug(
+                    "Resolved secret '%s' from source=%s (resolver=%s)",
+                    request.name,
+                    record.source.value,
+                    self._name,
+                )
                 return record
         if request.default is not None:
             return self._default_record(request.default, is_async=False)
@@ -85,6 +96,12 @@ class SecretResolver:
         for provider in self._providers:
             record = await provider.resolve_async(request)
             if record is not None:
+                logger.debug(
+                    "Resolved secret '%s' from source=%s (resolver=%s, async)",
+                    request.name,
+                    record.source.value,
+                    self._name,
+                )
                 return record
         if request.default is not None:
             return self._default_record(request.default, is_async=True)

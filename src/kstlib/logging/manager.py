@@ -106,8 +106,25 @@ LOGGING_LEVEL = SimpleNamespace(
     CRITICAL=logging.CRITICAL,
 )
 
+# Levels accepted in kstlib.logging.modules entries (case-insensitive). Any
+# value outside this set is rejected with a WARNING and the entry is skipped.
+_VALID_LEVEL_NAMES: frozenset[str] = frozenset(
+    {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"},
+)
+
+# Module names accepted in kstlib.logging.modules entries must start with this
+# prefix to prevent users from configuring loggers outside the kstlib
+# hierarchy by accident (or maliciously).
+_KSTLIB_LOGGER_PREFIX = "kstlib."
+
+# Internal logger for LogManager bootstrap diagnostics. Uses native Python
+# logging with a name OUTSIDE the kstlib hierarchy so it is never captured by
+# LogManager itself when register=True (prevents recursion). Activate via:
+#   logging.getLogger("kstlib_logging_internal").setLevel(logging.DEBUG)
+_internal_log = logging.getLogger("kstlib_logging_internal")
+
 # Preset fallbacks used when configuration file does not define any
-FALLBACK_PRESETS = {
+FALLBACK_PRESETS: dict[str, dict[str, Any]] = {
     "dev": {
         "output": "console",
         "console": {"level": "DEBUG", "show_path": True},
@@ -122,8 +139,8 @@ FALLBACK_PRESETS = {
     },
     "debug": {
         "output": "both",
-        "console": {"level": "DEBUG", "show_path": True, "tracebacks_show_locals": True},
-        "file": {"level": "DEBUG"},
+        "console": {"level": "TRACE", "show_path": True, "tracebacks_show_locals": True},
+        "file": {"level": "TRACE"},
         "icons": {"show": True},
     },
 }
@@ -153,10 +170,15 @@ def list_available_presets() -> list[str]:
         config_presets = logger_section.get("presets") if logger_section else None
         if config_presets:
             names.update(config_presets.keys())
-    except Exception:
+    except Exception as exc:
         # Silent by design: fall back to built-in presets. Raising here
         # would break the host application through a helper function.
-        pass
+        # Exception type surfaces on the internal logger (default off) so
+        # operators activating it for diagnostics see the cause.
+        _internal_log.debug(
+            "[INIT] list_available_presets fell back to built-ins: %s",
+            type(exc).__name__,
+        )
     return sorted(names)
 
 
@@ -310,6 +332,10 @@ class LogManager(logging.Logger):
         # Load configuration with priority chain
         self._config = self._load_config(config, preset)
 
+        # Resolve per-module level overrides (kstlib.logging.modules cascade).
+        # Stored separately from _config so the YAML structure stays clean.
+        self._module_levels: dict[str, str] = self._resolve_module_levels(config, preset)
+
         # Setup console and theme
         self.width = shutil.get_terminal_size(fallback=(120, 30)).columns
         theme = self._create_theme()
@@ -321,6 +347,7 @@ class LogManager(logging.Logger):
         # Optional global bootstrap
         if register:
             self._register_as_root()
+            self._apply_module_levels()
 
     def _register_as_root(self) -> None:
         """Inject this instance as the ``"kstlib"`` root in Python logging.
@@ -368,6 +395,104 @@ class LogManager(logging.Logger):
             if logger_name.startswith(prefix):
                 child_logger = logging.getLogger(logger_name)
                 child_logger.setLevel(TRACE_LEVEL)
+
+    @staticmethod
+    def _resolve_module_levels(
+        config: Box | dict[str, Any] | None,
+        preset: str | None,
+    ) -> dict[str, str]:
+        """Resolve the effective per-module log-level mapping.
+
+        Cascade (lowest to highest priority):
+            1. ``kstlib.logging.modules`` from the global config file
+            2. ``logger.presets.<active>.modules`` from the global config file
+            3. ``modules`` key in the explicit ``config`` argument
+
+        Step 3 ECHOes a CLI override and, when present, replaces all earlier
+        layers (no merge). Steps 1 and 2 are merged key-by-key with step 2
+        winning on shared keys.
+
+        Args:
+            config: Explicit configuration dict/Box passed to the constructor.
+            preset: Active preset name (used to resolve step 2).
+
+        Returns:
+            A flat mapping of logger name (e.g. ``"kstlib.rapi.config"``) to
+            level name (e.g. ``"WARNING"``). Empty when no source is set.
+
+        """
+        if config is not None and "modules" in config:
+            explicit = config["modules"]
+            if explicit is None:
+                return {}
+            return {str(k): str(v) for k, v in dict(explicit).items()}
+
+        merged: dict[str, str] = {}
+        try:
+            global_config = get_config()
+        except (FileNotFoundError, KeyError):
+            return merged
+
+        kstlib_section = global_config.get("kstlib")  # type: ignore[no-untyped-call]
+        logging_section = kstlib_section.get("logging") if kstlib_section else None
+        global_modules = logging_section.get("modules") if logging_section else None
+        if global_modules:
+            merged.update({str(k): str(v) for k, v in dict(global_modules).items()})
+
+        if preset:
+            logger_section = global_config.get("logger")  # type: ignore[no-untyped-call]
+            presets = logger_section.get("presets") if logger_section else None
+            preset_section = presets.get(preset) if presets else None
+            preset_modules = preset_section.get("modules") if preset_section else None
+            if preset_modules:
+                merged.update({str(k): str(v) for k, v in dict(preset_modules).items()})
+
+        return merged
+
+    def _apply_module_levels(self) -> None:
+        """Apply per-module level overrides resolved by :meth:`_resolve_module_levels`.
+
+        Each entry is validated:
+
+        - The logger name must start with ``"kstlib."`` (otherwise the entry
+          is skipped with a ``WARNING [SECURITY]`` log so users notice when
+          they try to configure their own application loggers through the
+          kstlib YAML).
+        - The level must be one of the seven supported names (TRACE, DEBUG,
+          INFO, SUCCESS, WARNING, ERROR, CRITICAL).
+
+        Invalid entries never abort the bootstrap: they are reported and
+        skipped, so a typo in one entry does not break the whole logger.
+        """
+        if not self._module_levels:
+            return
+
+        for logger_name, level_name in self._module_levels.items():
+            if not logger_name.startswith(_KSTLIB_LOGGER_PREFIX):
+                _internal_log.warning(
+                    "[SECURITY] Invalid logger name %r in kstlib.logging.modules: must start with %r, skipped",
+                    logger_name,
+                    _KSTLIB_LOGGER_PREFIX,
+                )
+                continue
+
+            level_upper = level_name.upper()
+            if level_upper not in _VALID_LEVEL_NAMES:
+                _internal_log.warning(
+                    "Invalid level %r for logger %r in kstlib.logging.modules: expected one of %s, skipped",
+                    level_name,
+                    logger_name,
+                    sorted(_VALID_LEVEL_NAMES),
+                )
+                continue
+
+            level_value = getattr(LOGGING_LEVEL, level_upper)
+            logging.getLogger(logger_name).setLevel(level_value)
+            _internal_log.debug(
+                "[INIT] Applied module override: %s=%s",
+                logger_name,
+                level_upper,
+            )
 
     def _load_config(self, config: Box | dict[str, Any] | None, preset: str | None) -> Box:
         """Load configuration with priority chain.

@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from kstlib._shared.redaction import mask_webhook_url
 from kstlib.alerts.channels.slack import (
     LEVEL_COLOR,
     LEVEL_EMOJI,
     MAX_BODY_LENGTH,
     MAX_TITLE_LENGTH,
     SlackChannel,
-    _mask_webhook_url,
     _truncate,
 )
 from kstlib.alerts.exceptions import AlertConfigurationError, AlertDeliveryError
@@ -19,26 +19,26 @@ from kstlib.limits import HARD_MAX_CHANNEL_TIMEOUT, HARD_MIN_CHANNEL_TIMEOUT
 
 
 class TestMaskWebhookUrl:
-    """Tests for _mask_webhook_url helper."""
+    """Tests for shared mask_webhook_url helper used by SlackChannel."""
 
     def test_mask_valid_url(self) -> None:
         """Should mask valid webhook URL."""
         url = "https://hooks.slack.com/services/T123ABC/B456DEF/xyzSecret123"
-        masked = _mask_webhook_url(url)
+        masked = mask_webhook_url(url)
         assert masked == "https://hooks.slack.com/services/T***/B***/***"
 
     def test_mask_empty_url(self) -> None:
         """Should return *** for empty URL."""
-        assert _mask_webhook_url("") == "***"
+        assert mask_webhook_url("") == "***"
 
     def test_mask_invalid_url(self) -> None:
         """Should return *** for non-Slack URL."""
-        assert _mask_webhook_url("https://example.com") == "***"
+        assert mask_webhook_url("https://example.com") == "***"
 
     def test_mask_partial_url(self) -> None:
         """Should handle partial Slack URLs."""
         url = "https://hooks.slack.com/services/"
-        masked = _mask_webhook_url(url)
+        masked = mask_webhook_url(url)
         assert "***" in masked
 
 

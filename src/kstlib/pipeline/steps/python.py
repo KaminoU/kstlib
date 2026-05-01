@@ -11,6 +11,7 @@ import sys
 
 from kstlib.pipeline.models import StepConfig, StepResult, StepStatus
 from kstlib.pipeline.steps._base import _run_subprocess
+from kstlib.pipeline.steps._helpers import _sanitize_command
 
 logger = logging.getLogger(__name__)
 
@@ -52,15 +53,17 @@ class PythonStep:
         """
         module = config.module or ""
         cmd = [sys.executable, "-m", module, *config.args]
-        logger.debug("PythonStep '%s': cmd=%s", config.name, cmd)
+        # Best-effort redaction for log output; the unredacted argv is
+        # still passed verbatim to subprocess for execution.
+        safe_cmd_str = _sanitize_command(cmd)
+        logger.debug("PythonStep '%s': cmd=%s", config.name, safe_cmd_str)
 
         if dry_run:
-            cmd_str = " ".join(cmd)
-            logger.info("[DRY RUN] PythonStep '%s': %s", config.name, cmd_str)
+            logger.info("[DRY RUN] PythonStep '%s': %s", config.name, safe_cmd_str)
             return StepResult(
                 name=config.name,
                 status=StepStatus.SKIPPED,
-                stdout=f"[dry-run] would execute: {cmd_str}",
+                stdout=f"[dry-run] would execute: {safe_cmd_str}",
             )
 
         return _run_subprocess(cmd, config, shell=False, log_tag="PythonStep")

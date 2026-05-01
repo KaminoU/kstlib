@@ -366,17 +366,17 @@ class TestFallbackPresetsTracebacks:
 
     def test_prod_preset_hides_locals(self) -> None:
         """Prod preset should disable tracebacks_show_locals."""
-        prod_console: dict[str, object] = FALLBACK_PRESETS["prod"]["console"]  # type: ignore[assignment]
+        prod_console: dict[str, object] = FALLBACK_PRESETS["prod"]["console"]
         assert prod_console["tracebacks_show_locals"] is False
 
     def test_debug_preset_shows_locals(self) -> None:
         """Debug preset should enable tracebacks_show_locals."""
-        debug_console: dict[str, object] = FALLBACK_PRESETS["debug"]["console"]  # type: ignore[assignment]
+        debug_console: dict[str, object] = FALLBACK_PRESETS["debug"]["console"]
         assert debug_console["tracebacks_show_locals"] is True
 
     def test_dev_preset_inherits_secure_default(self) -> None:
         """Dev preset should not set tracebacks_show_locals (inherits False default)."""
-        dev_console: dict[str, object] = FALLBACK_PRESETS["dev"]["console"]  # type: ignore[assignment]
+        dev_console: dict[str, object] = FALLBACK_PRESETS["dev"]["console"]
         assert "tracebacks_show_locals" not in dev_console
 
     def test_prod_preset_rich_handler(self) -> None:

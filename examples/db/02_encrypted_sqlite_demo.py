@@ -36,6 +36,7 @@ Note on key management:
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import sys
 import tempfile
@@ -60,41 +61,39 @@ def create_encrypted_db(db_path: Path, passphrase: str) -> None:
     print(f"\n[1] Creating encrypted database: {db_path}")
 
     # Connect using sqlcipher3 (NOT standard sqlite3)
-    conn = sqlcipher3.connect(str(db_path))
+    with contextlib.closing(sqlcipher3.connect(str(db_path))) as conn:
+        # Set the encryption key (MUST be done before any other operation)
+        # Escape single quotes to prevent SQL injection
+        escaped_key = passphrase.replace("'", "''")
+        conn.execute(f"PRAGMA key = '{escaped_key}'")
 
-    # Set the encryption key (MUST be done before any other operation)
-    # Escape single quotes to prevent SQL injection
-    escaped_key = passphrase.replace("'", "''")
-    conn.execute(f"PRAGMA key = '{escaped_key}'")
+        # Verify encryption is working
+        conn.execute("SELECT count(*) FROM sqlite_master")
 
-    # Verify encryption is working
-    conn.execute("SELECT count(*) FROM sqlite_master")
+        # Create table and insert data
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS secrets (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                value TEXT NOT NULL
+            )
+        """)
 
-    # Create table and insert data
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS secrets (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            value TEXT NOT NULL
-        )
-    """)
+        # Insert some "secret" data
+        secrets = [
+            ("api_key", "sk-super-secret-12345"),
+            ("db_password", "hunter2"),
+            ("jwt_secret", "my-jwt-signing-key-very-long"),
+        ]
 
-    # Insert some "secret" data
-    secrets = [
-        ("api_key", "sk-super-secret-12345"),
-        ("db_password", "hunter2"),
-        ("jwt_secret", "my-jwt-signing-key-very-long"),
-    ]
+        conn.executemany("INSERT INTO secrets (name, value) VALUES (?, ?)", secrets)
+        conn.commit()
 
-    conn.executemany("INSERT INTO secrets (name, value) VALUES (?, ?)", secrets)
-    conn.commit()
+        # Verify data was inserted
+        cursor = conn.execute("SELECT count(*) FROM secrets")
+        count = cursor.fetchone()[0]
+        print(f"    Inserted {count} secret entries")
 
-    # Verify data was inserted
-    cursor = conn.execute("SELECT count(*) FROM secrets")
-    count = cursor.fetchone()[0]
-    print(f"    Inserted {count} secret entries")
-
-    conn.close()
     print("    Database created and closed")
 
 
@@ -110,10 +109,9 @@ def try_read_with_sqlite3(db_path: Path) -> bool:
     print("\n[2] Attempting to read with standard sqlite3...")
 
     try:
-        conn = sqlite3.connect(str(db_path))
-        # This should fail on an encrypted database
-        conn.execute("SELECT count(*) FROM sqlite_master")
-        conn.close()
+        with contextlib.closing(sqlite3.connect(str(db_path))) as conn:
+            # This should fail on an encrypted database
+            conn.execute("SELECT count(*) FROM sqlite_master")
         print("    WARNING: Database is NOT encrypted (sqlite3 could read it)")
         return True
     except sqlite3.DatabaseError as e:
@@ -135,21 +133,20 @@ def read_with_correct_passphrase(db_path: Path, passphrase: str) -> bool:
     print("\n[3] Reading with correct passphrase using sqlcipher3...")
 
     try:
-        conn = sqlcipher3.connect(str(db_path))
-        escaped_key = passphrase.replace("'", "''")
-        conn.execute(f"PRAGMA key = '{escaped_key}'")
+        with contextlib.closing(sqlcipher3.connect(str(db_path))) as conn:
+            escaped_key = passphrase.replace("'", "''")
+            conn.execute(f"PRAGMA key = '{escaped_key}'")
 
-        # Read the secrets
-        cursor = conn.execute("SELECT name, value FROM secrets")
-        rows = cursor.fetchall()
+            # Read the secrets
+            cursor = conn.execute("SELECT name, value FROM secrets")
+            rows = cursor.fetchall()
 
-        print("    Decrypted secrets:")
-        for name, value in rows:
-            # Mask the value for display
-            masked = value[:3] + "*" * (len(value) - 6) + value[-3:] if len(value) > 6 else "***"
-            print(f"      - {name}: {masked}")
+            print("    Decrypted secrets:")
+            for name, value in rows:
+                # Mask the value for display
+                masked = value[:3] + "*" * (len(value) - 6) + value[-3:] if len(value) > 6 else "***"
+                print(f"      - {name}: {masked}")
 
-        conn.close()
         return True
     except Exception as e:
         print(f"    ERROR: Failed to read with passphrase: {e}")
@@ -168,12 +165,11 @@ def read_with_wrong_passphrase(db_path: Path) -> bool:
     print("\n[4] Attempting to read with WRONG passphrase...")
 
     try:
-        conn = sqlcipher3.connect(str(db_path))
-        conn.execute("PRAGMA key = 'wrong-password-123'")
+        with contextlib.closing(sqlcipher3.connect(str(db_path))) as conn:
+            conn.execute("PRAGMA key = 'wrong-password-123'")
 
-        # This should fail
-        conn.execute("SELECT count(*) FROM sqlite_master")
-        conn.close()
+            # This should fail
+            conn.execute("SELECT count(*) FROM sqlite_master")
         print("    WARNING: Read succeeded with wrong passphrase (encryption broken?)")
         return True
     except Exception as e:

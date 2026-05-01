@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
+import pytest
+
 from kstlib.pipeline.models import StepConfig, StepStatus, StepType
 from kstlib.pipeline.steps.python import PythonStep
 
@@ -88,6 +92,25 @@ class TestPythonStepExecute:
         assert result.status == StepStatus.SKIPPED
         assert "dry-run" in result.stdout
         assert "ruff" in result.stdout
+
+    def test_argv_log_does_not_leak_token(self, caplog: pytest.LogCaptureFixture) -> None:
+        """PythonStep DEBUG log redacts --token value via _sanitize_command."""
+        step = PythonStep()
+        secret_marker = "ApiTokenFakeSeCret_xyz"
+        config = StepConfig(
+            name="leak-arg",
+            type=StepType.PYTHON,
+            module="platform",
+            args=("--token", secret_marker),
+        )
+
+        caplog.set_level(logging.DEBUG, logger="kstlib.pipeline.steps.python")
+        result = step.execute(config, dry_run=True)
+
+        assert result.status == StepStatus.SKIPPED
+        assert secret_marker not in result.stdout
+        for record in caplog.records:
+            assert secret_marker not in record.getMessage()
 
     def test_captures_stdout(self) -> None:
         """Capture stdout from module execution."""

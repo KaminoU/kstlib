@@ -67,12 +67,16 @@ def _run_subprocess(
         error = proc.stderr.strip() if proc.returncode != 0 else None
 
         if status == StepStatus.FAILED:
+            # Drop stderr from the log: subprocess stderr from arbitrary user
+            # commands (curl, psql, sshpass, etc.) routinely contains
+            # credentials we cannot generically sanitize. The full stderr is
+            # still preserved in StepResult.stderr / StepResult.error for the
+            # caller to inspect deliberately.
             logger.warning(
-                "%s '%s' failed (rc=%d): %s",
+                "%s '%s' failed (rc=%d). See StepResult.stderr for details (not logged for safety).",
                 log_tag,
                 config.name,
                 proc.returncode,
-                error or "(no stderr)",
             )
 
         return StepResult(

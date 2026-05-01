@@ -303,11 +303,20 @@ class AbstractAuthProvider(ABC):
                 if logger.isEnabledFor(TRACE_LEVEL):
                     logger.log(TRACE_LEVEL, "[AUTH] Token refreshed successfully for '%s'", self.name)
             except Exception as e:  # pylint: disable=broad-exception-caught
+                # Option C : keep WARNING free of the server's error_description
+                # which may carry user-enumeration hints ("User <email> not
+                # found"), token state ("Token expired for principal CN=...")
+                # or other diagnostic detail the OIDC server returns. Emit a
+                # short generic WARNING and stash the redacted detail in
+                # TRACE for explicit opt-in.
+                from kstlib._shared.redaction import redact_sensitive
+
                 logger.warning(
-                    "Token refresh failed for '%s': %s. Using cached token.",
+                    "Token refresh failed for '%s' (see TRACE for details). Using cached token.",
                     self.name,
-                    e,
                 )
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, "Token refresh error detail: %s", redact_sensitive(str(e)))
                 logger.debug("Token refresh traceback:", exc_info=True)
 
     def save_token(self, token: Token) -> None:

@@ -36,6 +36,18 @@ from kstlib.limits import (
 
 logger = logging.getLogger(__name__)
 
+
+def _log_trace(msg: str, *args: object) -> None:
+    """Log at TRACE level (custom level 5, below DEBUG).
+
+    Uses a lazy import to avoid the circular import chain
+    ``kstlib.logging.manager -> kstlib.config -> kstlib.config.sops``.
+    """
+    from kstlib.logging import TRACE_LEVEL
+
+    logger.log(TRACE_LEVEL, msg, *args)
+
+
 SOPS_FILE_PATTERNS: tuple[str, ...] = (
     ".sops.yml",
     ".sops.yaml",
@@ -205,7 +217,7 @@ class SopsDecryptor:
         cached = self._cache.get(resolved)
         if cached and cached[0] == mtime:
             self._cache.move_to_end(resolved)
-            logger.debug("SOPS cache hit for: %s", path.name)
+            _log_trace("SOPS cache hit for: %s", path.name)
             return cached[1]
 
         # Security: reject absolute/relative paths to prevent binary override via config
@@ -257,7 +269,7 @@ class SopsDecryptor:
         else:
             removed = self._cache.pop(path.resolve(), None)
             if removed:
-                logger.debug("SOPS cache entry removed: %s", path.name)
+                _log_trace("SOPS cache entry removed: %s", path.name)
 
     @property
     def cache_size(self) -> int:

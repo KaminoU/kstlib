@@ -390,11 +390,16 @@ class AlertManager:
 
         except Exception as e:
             self._stats.record_failed(channel_name)
-            log.warning(
-                "Channel %s failed: %s",
-                channel_name,
-                e,
-            )
+            # Option C : the chained exception ``e`` may have been built by
+            # a downstream channel (Slack/Email) from a response body or
+            # transport error message that we cannot vet here. Keep the
+            # WARNING free of that content; redacted detail at TRACE.
+            from kstlib._shared.redaction import redact_sensitive
+            from kstlib.logging import TRACE_LEVEL
+
+            log.warning("Channel %s failed (see TRACE for details)", channel_name)
+            if log.isEnabledFor(TRACE_LEVEL):
+                log.log(TRACE_LEVEL, "Channel %s error detail: %s", channel_name, redact_sensitive(str(e)))
             return AlertResult(
                 channel=channel_name,
                 success=False,

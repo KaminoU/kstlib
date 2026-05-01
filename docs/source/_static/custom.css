@@ -75,6 +75,12 @@
     --kstlib-config-snippet-summary: #4A90E2;
     --kstlib-config-snippet-marker: #A78BFA;
     --kstlib-config-snippet-border: rgba(74, 144, 226, 0.35);
+
+    /* Furo native admonition surface : align on the kstlib code-block
+     * surface so admonitions, code blocks, and cards share the same
+     * tone. Furo's own --color-admonition-background defaults to a
+     * lighter shade that floats above the rest of the page. */
+    --color-admonition-background: var(--lokaal-surface);
 }
 
 /* -------------------------------------------------- */
@@ -117,6 +123,9 @@ body[data-theme="light"] {
     --kstlib-config-snippet-summary: #0550ae;
     --kstlib-config-snippet-marker: #7c2bbf;
     --kstlib-config-snippet-border: rgba(11, 122, 108, 0.3);
+
+    /* Furo admonition surface override (light mode) */
+    --color-admonition-background: var(--lokaal-surface);
 }
 
 /* -------------------------------------------------- */
@@ -289,6 +298,17 @@ code.docutils.literal span.pre,
 /* -------------------------------------------------- */
 /* Admonitions - Lokaal colors                        */
 /* -------------------------------------------------- */
+
+/*
+ * Force the admonition body surface to the kstlib code-block tone.
+ * Furo applies its own --color-admonition-background on a more
+ * specific selector, so the variable override above is not always
+ * enough; the !important below guarantees the alignment regardless
+ * of admonition type or theme.
+ */
+.admonition {
+    background-color: var(--color-admonition-background) !important;
+}
 
 /* Note - Lavender (Info) */
 .admonition.note {
@@ -695,6 +715,69 @@ body[data-theme="light"] {
 .highlight .nl,
 .highlight pre .nl {
     color: var(--syntax-function) !important;
+}
+
+/* -------------------------------------------------- */
+/* sphinx-design Cards                                */
+/* -------------------------------------------------- */
+/*
+ * Align the sphinx-design grid cards (features/index, examples)
+ * on the same surface tone as code blocks (.highlight) so the
+ * eye does not jump between three different gray shades.
+ *
+ * sphinx-design defines its own --sd-color-card-* variables;
+ * Furo also exposes --color-card-* on the same elements. Override
+ * both so the styling holds regardless of the directive flavor
+ * (grid-item-card, card, dropdown). Border + text color are kept
+ * in sync with the rest of the kstlib palette.
+ */
+
+:root {
+    --sd-color-card-background: var(--lokaal-surface);
+    --sd-color-card-border: var(--lokaal-border);
+    --sd-color-card-text: var(--lokaal-text-primary);
+    --color-card-background: var(--lokaal-surface);
+    --color-card-marginals-background: var(--lokaal-surface);
+    --color-card-border: var(--lokaal-border);
+}
+
+body[data-theme="light"] {
+    --sd-color-card-background: var(--lokaal-surface);
+    --sd-color-card-border: var(--lokaal-border);
+    --sd-color-card-text: var(--lokaal-text-primary);
+    --color-card-background: var(--lokaal-surface);
+    --color-card-marginals-background: var(--lokaal-surface);
+    --color-card-border: var(--lokaal-border);
+}
+
+/*
+ * Note: Furo / sphinx-design ship CSS rules that win the cascade
+ * over the variable overrides above on certain selectors (notably
+ * the inner card body and the hover wrapper). The !important hits
+ * below force the surface tone where the variables alone are
+ * insufficient. They are scoped to the card classes only, so they
+ * do not bleed into the rest of the theme.
+ */
+.sd-card {
+    background-color: var(--lokaal-surface) !important;
+    border-color: var(--lokaal-border);
+}
+
+.sd-card .sd-card-body {
+    background-color: var(--lokaal-surface) !important;
+}
+
+.sd-card-hover {
+    background-color: var(--lokaal-surface) !important;
+}
+
+.sd-card .sd-card-title {
+    color: var(--lokaal-primary);
+}
+
+.sd-card-hover:hover {
+    border-color: var(--lokaal-primary);
+    box-shadow: 0 2px 8px var(--kstlib-api-shadow);
 }
 
 /* -------------------------------------------------- */

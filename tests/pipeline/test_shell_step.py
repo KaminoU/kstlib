@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import sys
+
+import pytest
 
 from kstlib.pipeline.models import StepConfig, StepStatus, StepType
 from kstlib.pipeline.steps.shell import ShellStep
@@ -134,3 +137,68 @@ class TestShellStepExecute:
         assert result.return_code == 2
         assert result.error is not None
         assert "error msg" in result.error
+
+    def test_command_log_does_not_leak_password_flag(self, caplog: pytest.LogCaptureFixture) -> None:
+        """ShellStep DEBUG log redacts --password=<value> via _sanitize_command."""
+        step = ShellStep()
+        secret_marker = "Pa55wDFakeSeCret!"
+        config = StepConfig(
+            name="leak-flag",
+            type=StepType.SHELL,
+            command=f"echo OK --password={secret_marker}",
+        )
+
+        caplog.set_level(logging.DEBUG, logger="kstlib.pipeline.steps.shell")
+        result = step.execute(config)
+
+        assert result.status == StepStatus.SUCCESS
+        for record in caplog.records:
+            assert secret_marker not in record.getMessage()
+
+    def test_dry_run_log_does_not_leak_authorization(self, caplog: pytest.LogCaptureFixture) -> None:
+        """ShellStep dry_run INFO log redacts Authorization header tokens."""
+        step = ShellStep()
+        secret_marker = "sk_live_FakeBearerToken_xyz"
+        config = StepConfig(
+            name="leak-dryrun",
+            type=StepType.SHELL,
+            command=f"curl -H 'Authorization: Bearer {secret_marker}' https://api.example.com",
+        )
+
+        caplog.set_level(logging.INFO, logger="kstlib.pipeline.steps.shell")
+        result = step.execute(config, dry_run=True)
+
+        assert result.status == StepStatus.SKIPPED
+        assert secret_marker not in result.stdout
+        for record in caplog.records:
+            assert secret_marker not in record.getMessage()
+
+    def test_failure_log_does_not_leak_stderr(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Subprocess stderr must NOT appear in the WARNING log on failure.
+
+        User shell commands may carry credentials in stderr (curl error
+        echoing the URL, sshpass auth failure, psql connection string).
+        We log a generic failure message and keep the full stderr in
+        StepResult.stderr / StepResult.error for deliberate inspection.
+        """
+        step = ShellStep()
+        secret_marker = "Pa55wDFakeSeCret!"
+        cmd = (
+            f'{sys.executable} -c "import sys; '
+            f"sys.stderr.write('auth failed for user: {secret_marker}\\n'); "
+            'sys.exit(7)"'
+        )
+        config = StepConfig(
+            name="leak-check",
+            type=StepType.SHELL,
+            command=cmd,
+        )
+
+        caplog.set_level(logging.WARNING, logger="kstlib.pipeline.steps._base")
+        result = step.execute(config)
+
+        assert result.status == StepStatus.FAILED
+        assert result.error is not None
+        assert secret_marker in result.error
+        for record in caplog.records:
+            assert secret_marker not in record.getMessage()

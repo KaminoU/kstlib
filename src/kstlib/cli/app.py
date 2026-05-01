@@ -103,6 +103,18 @@ def main(  # pylint: disable=unused-argument
             help="Increase verbosity (-v=INFO, -vv=DEBUG, -vvv=TRACE).",
         ),
     ] = 0,
+    log_module: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--log-module",
+            help=(
+                "Per-logger level override, repeatable, format: name=level. "
+                "Example: --log-module kstlib.rapi.config=WARNING. "
+                "When at least one --log-module is supplied, it REPLACES the "
+                "kstlib.logging.modules cascade resolved from kstlib.conf.yml."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Initialize the root Typer app and handle --version eagerly."""
     global _cli_logger
@@ -124,14 +136,37 @@ def main(  # pylint: disable=unused-argument
     # Determine output mode
     output = "both" if log_file else "console"
 
+    # Parse --log-module entries (name=level pairs, total override of YAML)
+    init_config: dict[str, object] = {
+        "console": {"level": level},
+        "file": {"level": level},
+        "output": output,
+    }
+    if log_module:
+        cli_modules: dict[str, str] = {}
+        for entry in log_module:
+            if "=" not in entry:
+                console.print(f"[red]Invalid --log-module value: {entry!r} (expected name=level)[/]")
+                raise typer.Exit(1)
+            name, _, lvl = entry.partition("=")
+            name = name.strip()
+            lvl = lvl.strip()
+            if not name or not lvl:
+                console.print(f"[red]Invalid --log-module value: {entry!r} (empty name or level)[/]")
+                raise typer.Exit(1)
+            cli_modules[name] = lvl
+        init_config["modules"] = cli_modules
+    elif log_level is not None or verbose > 0:
+        # CLI verbosity flags carry the user intent "show me everything",
+        # which conflicts with any YAML mute that would silently drop
+        # records below the requested level. Reset the cascade so the
+        # handler-level filter is the sole gate. --log-module, when
+        # present, already replaces the YAML cascade with its own
+        # specification and wins over this branch.
+        init_config["modules"] = {}
+
     # Always initialize logging so handlers are configured
-    _cli_logger = init_logging(
-        config={
-            "console": {"level": level},
-            "file": {"level": level},
-            "output": output,
-        },
-    )
+    _cli_logger = init_logging(config=init_config)
 
     if log_level is not None or verbose > 0:
         source = "--log-level" if log_level is not None else f"-{'v' * verbose}"

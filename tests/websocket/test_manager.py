@@ -262,6 +262,40 @@ class TestWebSocketManagerStateMachine:
         assert ws.state == ConnectionState.CONNECTED
 
 
+class TestWebSocketManagerUrlRedaction:
+    """Verify URL credentials/tokens never leak through the connect log."""
+
+    @pytest.mark.asyncio
+    async def test_finalize_connection_redacts_credentials(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_finalize_connection logs INFO with userinfo masked."""
+        import logging
+
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://user:supersecret@host.example.com:8443/ws?token=tk_xyz_abc")
+        ws._on_connect = None
+        ws._subscriptions = {}
+        # _start_background_tasks is the only sub-call inside _finalize_connection
+        # we need to neutralize. Mocking it avoids the AsyncMock-coroutine-never-awaited
+        # warning that would arise from stubbing the underlying async loop.
+        ws._start_background_tasks = MagicMock()
+
+        caplog.set_level(logging.INFO, logger="kstlib.websocket.manager")
+
+        await ws._finalize_connection()
+
+        info_messages = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO]
+        assert info_messages, "Expected at least one INFO record from _finalize_connection"
+        joined = " ".join(info_messages)
+        assert "supersecret" not in joined
+        assert "tk_xyz_abc" not in joined
+        assert "[REDACTED]@host.example.com" in joined
+        assert "token=[REDACTED]" in joined
+
+
 class TestWebSocketManagerSendReceive:
     """Tests for WebSocketManager send/receive operations."""
 

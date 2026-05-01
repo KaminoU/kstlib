@@ -160,7 +160,9 @@ class PipelineRunner:
         for step_config in self._config.steps:
             # Check condition
             if not self._should_execute(step_config, has_failure):
-                logger.info(
+                # Per-step skip is verbose on long pipelines (50+ steps with
+                # conditional execution); demote from INFO to DEBUG.
+                logger.debug(
                     "Step '%s' skipped (when=%s, has_failure=%s)",
                     step_config.name,
                     step_config.when.value,
@@ -200,12 +202,26 @@ class PipelineRunner:
                     )
 
         pipeline_result.duration = time.monotonic() - start
-        logger.info(
-            "Pipeline '%s' completed in %.3fs (success=%s)",
-            self._config.name,
-            pipeline_result.duration,
-            pipeline_result.success,
-        )
+        # Pipeline completion is the canonical "operation tool achieved a
+        # success" event : promote to SUCCESS when all steps passed (kstlib
+        # = lib + tool, SUCCESS is reserved for terminal user-facing wins).
+        # On failure, fall back to INFO so the line still appears at the
+        # default level and operators see the duration.
+        if pipeline_result.success:
+            from kstlib.logging import SUCCESS_LEVEL
+
+            logger.log(
+                SUCCESS_LEVEL,
+                "Pipeline '%s' completed in %.3fs",
+                self._config.name,
+                pipeline_result.duration,
+            )
+        else:
+            logger.info(
+                "Pipeline '%s' completed in %.3fs (success=False)",
+                self._config.name,
+                pipeline_result.duration,
+            )
         return pipeline_result
 
     def _should_execute(

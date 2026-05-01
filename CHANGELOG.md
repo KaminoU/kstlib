@@ -19,6 +19,159 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [2.5.0] - 2026-05-01
+
+### Added
+
+- **`kstlib._shared.redaction`** module consolidating sanitization helpers used
+  across kstlib : `redact_sensitive()` (regex-based, AWS ARN, AKIA keys, paths),
+  `mask_webhook_url()` (Slack/Discord/Teams tokens), `mask_url()` (URL with
+  inline credentials or sensitive query parameters). Replaces local helpers
+  previously scattered in `secrets/providers/sops.py` and
+  `alerts/channels/slack.py`. Available at `from kstlib._shared.redaction
+  import redact_sensitive, mask_webhook_url, mask_url`.
+- **`kstlib.logging.modules`** YAML configuration for per-logger level override.
+  Cascade : global config -> active preset -> CLI `--log-module` flag (replaces
+  total) -> CLI verbosity flags (`-v`/`-vv`/`-vvv` or `--log-level`) reset the
+  YAML cascade when no `--log-module` is supplied. Default sans entries means
+  no per-module filtering. Validation on YAML load : invalid logger names
+  (must start with `kstlib.`) and invalid levels are skipped with WARNING.
+- **CLI flag `--log-module name=level`** repeatable, format `name=level`. When
+  at least one is supplied, it REPLACES the YAML modules cascade.
+- **Default YAML mutes** for verbose modules at startup :
+  `kstlib.rapi.config: WARNING` (silences ~1300+ DEBUG/TRACE per Viya startup)
+  and `kstlib.config.loader: WARNING` (silences cascade verbose with multiple
+  includes). Override available via user `kstlib.conf.yml`, presets, or CLI
+  flags.
+- **`dev` vs `debug` presets differentiation** : `dev` keeps `output: console`
+  / level `DEBUG` (rapid iteration), `debug` switches to `output: both` (console
+  + persisted file for grep) / level `TRACE` (deep investigation).
+- **Sphinx documentation** : new section "User responsibility" (6 cases :
+  NotifyCollector, transform callable, StepResult, NotifyResult, AlertMessage,
+  WebSocket callbacks) + new "Logging introspection guide" (convention,
+  cascade, presets, recipes, HTTPTraceLogger reference).
+- **`MailBuilder.notify` `redact_user_data: bool = True`** : default-on opt-in
+  redaction of `exception` / `return_value` / `traceback_str` in
+  `NotifyCollector` summary HTML. User can opt-out with `redact_user_data=False`
+  for cases where exception messages are known safe.
+- **`NotifyCollector.render_html`** : new redaction toggle aligned with
+  `MailBuilder.notify`.
+- **`WARNING [SECURITY]` tag** systematically applied before raising on
+  security events across modules : path traversal in `secure/fs.py`, drive
+  escape, null byte injection in `db/cipher.py`, `db/aiosqlcipher.py`,
+  `pipeline/_base.py`, `auth/providers/oauth2.py` (state mismatch CSRF),
+  `ssl.py` (null byte CA bundle), `ops/validators.py`, `rapi/config.py`,
+  `rapi/client.py`, `utils/validators.py`. Total : 15+ occurrences.
+- **`kstlib_logging_internal`** internal logger (underscore-prefixed, outside
+  `kstlib.*` hierarchy) for logging the `LogManager` setup itself without
+  recursion. Used by `kstlib.logging.manager` to break the silent fail-paths.
+- **~80 logging seeds** across kstlib modules (rapi, config, auth, transform,
+  pipeline, secrets, mail, alerts, websocket, db, secure, ssl, cache, helpers,
+  limits, ui, utils, logging) following the convention 7 levels (TRACE/DEBUG/
+  INFO/SUCCESS/WARNING/ERROR/CRITICAL). INFO and SUCCESS used sparingly,
+  TRACE/DEBUG split between detail (per-item, firehose) and synthesis
+  (decisional branching).
+- **Smoke tests** : `tests/security/test_log_no_secret_leak.py` (validates 4
+  HIGH fix points), `tests/smoke/test_logging_noise_reduction.py` (asserts
+  `-vvv` produces < 200 useful lines on typical rapi call), `tests/smoke/test_logging_modules_kill_switch.py`
+  (validates YAML mute silences verbose modules).
+- **Furo theme consistency tweaks** : `.sd-card` and `.admonition` background
+  forced to `--lokaal-surface` for visual coherence with code blocks. 3 Furo
+  gotchas inscribed in `development/quality.md` (no `{contents}` directive
+  with Furo, card cascade override needs `!important`, build local
+  verification).
+
+### Changed
+
+- **`HTTPTraceLogger`** (in `kstlib.utils.http_trace`) generalized as the
+  official infrastructure for HTTP redaction across all httpx-based modules.
+  Existing adopters (`auth/providers/oauth2.py`, `mail/transports/gmail.py`,
+  `mail/transports/resend.py`) unchanged. New module additions are encouraged
+  to import and use it instead of building local redaction.
+- **Anti-pattern "stderr-in-WARNING" remediation** (~9 occurrences) : Option C
+  split-levels applied (short WARNING + redacted detail in TRACE) on
+  `auth/providers/base.py`, `auth/config.py`, `config/loader.py`,
+  `mail/transports/*`, `alerts/channels/slack.py`. Pipeline subprocess user
+  applies Option A (drop stderr from log, kept in `StepResult.stderr` for user
+  inspection).
+- **Anti-pattern "raise sans log on security events" remediation** : `[SECURITY]`
+  tag applied before each raise across the 15+ identified occurrences.
+- **`pipeline.runner` log levels reclassified** following convention 7 levels :
+  step skipped now `DEBUG` (was `INFO`), pipeline completed now `SUCCESS` (was
+  `INFO`), step result successful now `SUCCESS`. Reduces INFO bias on long
+  pipelines.
+- **`secrets/providers/sops.py`** drops local `_redact_sensitive_output()`
+  helper, imports `redact_sensitive` from `_shared/redaction.py`. Behavior
+  identical with finer granularity (`[REDACTED_ARN]`, `[REDACTED_AKIA]`,
+  `[REDACTED_PATH]` instead of generic `[REDACTED]`).
+- **`alerts/channels/slack.py`** drops local `_mask_webhook_url()`, imports
+  `mask_webhook_url` from `_shared/redaction.py`. Behavior identical.
+- **Sphinx Furo theme** : visual consistency tweaks on cards and admonitions.
+  No content change.
+
+### Fixed
+
+- **Security: `auth/callback.py:116`** : OAuth authorization code (`?code=...`
+  query parameter) was leaked in DEBUG via the `requestline` forwarded by
+  `BaseHTTPRequestHandler.log_request`. Fix : `log_message` now logs only HTTP
+  method + status, never the full requestline.
+- **Security: `websocket/manager.py:449`** : WebSocket connect URL was logged
+  in clear at INFO level. URLs with inline auth (`wss://user:pass@host`) or
+  sensitive query parameters (`?token=xxx`) leaked credentials. Fix : URL is
+  now redacted via `mask_url()` from `_shared/redaction.py` before logging.
+- **Security: `pipeline/steps/_base.py:70-76`** : subprocess stderr was
+  forwarded in WARNING on FAILED status. Stderr from arbitrary user shell
+  commands (`psql`, `curl`, `ssh`, `mysql -p`) could contain credentials. Fix :
+  stderr is dropped from log (kept in `StepResult.stderr` for user inspection).
+  Documented in Sphinx user-responsibility.
+- **Security: `pipeline/steps/shell.py:59,62`** + **`pipeline/steps/python.py:55,
+  59`** : shell command line was logged in DEBUG (and INFO on dry-run),
+  exposing `Authorization: Bearer xxx`, `--password=xxx`, `sshpass -p xxx`,
+  inline credentials in URLs. Fix : new helper `_sanitize_command()` (regex-
+  based, best-effort) redacts known sensitive patterns before logging. Users
+  should still prefer `env:` mapping over command-line credentials when
+  possible (documented in Sphinx).
+- **`examples/db/02_encrypted_sqlite_demo.py`** : 4 sqlite3/sqlcipher3 connect
+  call sites refactored to use `contextlib.closing` so the connection is
+  released even when an intermediate `execute()` raises. Production impact is
+  nil (this is an executable demo) but the file doubled as a copy-paste
+  template that taught the wrong shape.
+- **`tests/smoke/test_logging_noise_reduction.py`** : module docstring and
+  assert message no longer reference internal audit documents and sprint
+  labels; failure-mode hint is rewritten in self-contained terms (logger and
+  level the user controls).
+- **`tests/websocket/test_manager.py`** : drop unused `AsyncMock` stub causing
+  `RuntimeWarning: coroutine was never awaited` under Python 3.14.
+
+### Security
+
+> **Important** : this release fixes 4 HIGH severity logging leaks identified
+> by an internal audit covering 15 kstlib modules. Operators using
+> `kstlib >= 2.0.0` with logging enabled at `DEBUG` or below in production are
+> encouraged to upgrade to v2.5.0.
+
+- **OAuth callback authorization code leak** (HIGH) : pre-v2.5.0,
+  `auth/callback.py` forwarded the full HTTP requestline to `log.debug`,
+  exposing the OAuth authorization code (10-minute window typically).
+  Severity mitigated by PKCE in PKCE-enabled flows but still a policy
+  violation. Fixed in v2.5.0.
+- **WebSocket URL credentials leak** (HIGH) : pre-v2.5.0,
+  `websocket/manager.py` logged the full URL in INFO including userinfo and
+  query string. URLs like `wss://user:pass@host` or `wss://exchange.com/?token=...`
+  exposed credentials. Fixed in v2.5.0.
+- **Pipeline subprocess stderr leak** (HIGH) : pre-v2.5.0,
+  `pipeline/steps/_base.py` forwarded full subprocess stderr in WARNING on
+  FAILED. Stderr from user shell commands could contain credentials. Fixed
+  in v2.5.0.
+- **Pipeline shell command leak** (HIGH) : pre-v2.5.0, `pipeline/steps/shell.py`
+  and `pipeline/steps/python.py` logged the full command line including
+  Authorization headers, passwords, and inline credentials. Fixed in v2.5.0
+  via `_sanitize_command()`.
+- **Sanitization defenses inscribed as systematic conventions** in the
+  Sphinx "Logging introspection guide" (12 model patterns) and "User
+  responsibility" guide (6 cases). New module contributions must respect the
+  pre-commit checklist documented there.
+
 ## [2.4.0] - 2026-04-26
 
 ### Added
@@ -858,7 +1011,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/KaminoU/kstlib/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/KaminoU/kstlib/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/KaminoU/kstlib/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/KaminoU/kstlib/compare/v2.2.1...v2.3.0

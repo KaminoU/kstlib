@@ -185,3 +185,93 @@ def test_log_level_takes_precedence_over_verbose() -> None:
     """Test that --log-level takes precedence over -v flags."""
     result = runner.invoke(app, ["-vvv", "--log-level", "WARNING", "info"])
     assert result.exit_code == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# --log-module + verbosity cascade reset (Layer 4 of the modules cascade)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _capture_init_config(args: list[str]) -> dict[str, object]:
+    """Run the CLI with ``args`` and capture the dict passed to ``init_logging``.
+
+    Patching targets the Typer callback's own globals dict rather than
+    ``sys.modules["kstlib.cli.app"]`` because ``test_cli_module_guard_executes``
+    pops the module from ``sys.modules`` before re-running it under
+    ``__main__``. After that test the module dict referenced by the
+    callback's closure is detached from the import system, so a normal
+    ``monkeypatch.setattr`` on the path string can no longer find it.
+    """
+    registered = app.registered_callback
+    assert registered is not None, "Typer root callback unexpectedly missing"
+    callback = registered.callback
+    assert callback is not None, "Typer root callback unexpectedly missing"
+    callback_globals = callback.__globals__
+
+    captured: dict[str, object] = {}
+
+    def _stub(*, config: dict[str, object] | None = None, **_: object) -> object:
+        captured.update(config or {})
+
+        class _StubLogger:
+            def debug(self, *_a: object, **_k: object) -> None:
+                pass
+
+        return _StubLogger()
+
+    original = callback_globals["init_logging"]
+    callback_globals["init_logging"] = _stub
+    try:
+        result = runner.invoke(app, args)
+        assert result.exit_code == 0, result.stdout
+    finally:
+        callback_globals["init_logging"] = original
+    return captured
+
+
+def test_modules_default_no_flag_falls_through_to_yaml_cascade() -> None:
+    """No verbosity flag and no --log-module : init_config has no 'modules' key.
+
+    The absence of the key is the signal that the YAML cascade should
+    apply. Resolving the cascade is LogManager's job; the CLI must not
+    pre-fill ``modules`` when the user did not ask for any override.
+    """
+    cfg = _capture_init_config(["info"])
+    assert "modules" not in cfg
+
+
+def test_modules_verbose_resets_cascade_to_empty() -> None:
+    """``-vvv`` alone resets the YAML modules cascade to ``{}``.
+
+    The user intent ('show me everything') is incompatible with a hidden
+    YAML mute. Setting ``modules: {}`` on the explicit init_config is the
+    documented kill switch that bypasses the YAML.
+    """
+    cfg = _capture_init_config(["-vvv", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_modules_log_level_resets_cascade_to_empty() -> None:
+    """``--log-level TRACE`` alone resets the YAML modules cascade to ``{}``."""
+    cfg = _capture_init_config(["--log-level", "TRACE", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_modules_log_module_alone_replaces_cascade() -> None:
+    """A bare ``--log-module name=level`` replaces the cascade with its own map."""
+    cfg = _capture_init_config(["--log-module", "kstlib.rapi.config=DEBUG", "info"])
+    assert cfg["modules"] == {"kstlib.rapi.config": "DEBUG"}
+
+
+def test_modules_verbose_plus_log_module_log_module_wins() -> None:
+    """``-vvv --log-module x=WARNING`` keeps the user's --log-module spec.
+
+    The verbosity dial reset is suppressed because the user gave a more
+    precise specification with --log-module. Other modules will inherit
+    TRACE through the kstlib root, but the explicitly named module is
+    pinned to the user's choice.
+    """
+    cfg = _capture_init_config(
+        ["-vvv", "--log-module", "kstlib.rapi.config=WARNING", "info"],
+    )
+    assert cfg["modules"] == {"kstlib.rapi.config": "WARNING"}

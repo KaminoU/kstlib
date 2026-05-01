@@ -48,7 +48,9 @@ from typing_extensions import Self
 if TYPE_CHECKING:
     import types
 
+from kstlib._shared.redaction import mask_url
 from kstlib.limits import get_websocket_limits
+from kstlib.logging import TRACE_LEVEL
 from kstlib.websocket.exceptions import (
     WebSocketClosedError,
     WebSocketConnectionError,
@@ -446,7 +448,7 @@ class WebSocketManager:
         self._connect_time = time.monotonic()
         self._stats.record_connect()
 
-        log.info("WebSocket connected to %s", self._url)
+        log.info("WebSocket connected to %s", mask_url(self._url))
 
         # Start background tasks
         self._start_background_tasks()
@@ -549,10 +551,23 @@ class WebSocketManager:
         except ConnectionClosedError as e:
             code = e.rcvd.code if e.rcvd else 1006
             reason = e.rcvd.reason if e.rcvd else ""
-            log.warning("WebSocket closed with error: code=%d reason=%s", code, reason)
+            # Option C : the close-frame reason is server-controlled and
+            # may carry diagnostic detail (token state, route hints,
+            # backend identifiers). Code stays in WARNING; reason at TRACE.
+            from kstlib._shared.redaction import redact_sensitive
+
+            log.warning("WebSocket closed with error: code=%d (see TRACE for reason)", code)
+            if reason and log.isEnabledFor(TRACE_LEVEL):
+                log.log(TRACE_LEVEL, "WebSocket close reason: %s", redact_sensitive(reason))
             await self._handle_disconnect(DisconnectReason.SERVER_CLOSED, code=code)
         except ConnectionClosed as e:
-            log.warning("WebSocket connection closed: %s", e)
+            # Same redaction stance for the catch-all close path : ``e`` may
+            # serialize the close frame including its reason field.
+            from kstlib._shared.redaction import redact_sensitive
+
+            log.warning("WebSocket connection closed (see TRACE for details)")
+            if log.isEnabledFor(TRACE_LEVEL):
+                log.log(TRACE_LEVEL, "WebSocket close detail: %s", redact_sensitive(str(e)))
             await self._handle_disconnect(DisconnectReason.SERVER_CLOSED)
         except Exception:
             log.exception("Unexpected error in receive loop")

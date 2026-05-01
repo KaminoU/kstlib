@@ -362,3 +362,17 @@ Full autodoc: {doc}`../../api/logging`
 | `.atrace()`, `.adebug()`, `.ainfo()`, etc. | Async logging methods |
 | `.success()` | SUCCESS level (25) - between INFO and WARNING |
 | `TRACE_LEVEL` | Constant for TRACE level (5) |
+
+## See also
+
+- {doc}`introspection-guide` - 7-level convention, `kstlib.logging.modules`
+  cascade, presets, recipes, `HTTPTraceLogger`
+- {doc}`../../security/user-responsibility` - which fields users must
+  vet themselves before they reach a log line
+
+```{toctree}
+:hidden:
+:maxdepth: 1
+
+introspection-guide
+```

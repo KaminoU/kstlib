@@ -470,8 +470,15 @@ def _resolve_sops_secret(sops_uri: str) -> str | None:
         return str(result) if result else None
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        # Graceful fallback for secret resolution
-        logger.warning("Failed to resolve SOPS secret '%s': %s", sops_uri, e)
+        # Graceful fallback for secret resolution. Option C : the SOPS
+        # subprocess stderr piped via the exception carries age/gpg key
+        # paths, fingerprints, and recipient ids. Emit a short WARNING
+        # with the URI only; redacted detail goes to TRACE.
+        from kstlib._shared.redaction import redact_sensitive
+
+        logger.warning("Failed to resolve SOPS secret '%s' (see TRACE for details)", sops_uri)
+        if logger.isEnabledFor(TRACE_LEVEL):
+            logger.log(TRACE_LEVEL, "SOPS error detail: %s", redact_sensitive(str(e)))
         return None
 
 

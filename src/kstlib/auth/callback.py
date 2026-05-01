@@ -111,9 +111,23 @@ class CallbackHandler(BaseHTTPRequestHandler):
     callback_path: str = "/callback"
     expected_state: str | None = None
 
-    def log_message(self, fmt: str, *args: Any) -> None:  # pylint: disable=arguments-differ
-        """Suppress default HTTP logging."""
-        logger.debug("Callback server: %s", fmt % args)
+    def log_message(self, fmt: str, *args: Any) -> None:  # noqa: ARG002 # pylint: disable=arguments-differ
+        """Suppress default HTTP logging.
+
+        BaseHTTPRequestHandler forwards the full requestline (e.g.
+        ``"GET /callback?code=4/0AdQ_xxx&state=abc HTTP/1.1"``) which
+        contains the OAuth2 authorization code. Logging it as-is leaks
+        the code into the DEBUG stream. We log only the HTTP method and
+        the response status to keep diagnostic value without exposing
+        the authorization code or any query string.
+
+        ``fmt`` is part of the stdlib override signature but intentionally
+        unused: applying it would re-introduce the leak we are fixing.
+        """
+        if len(args) >= 2 and isinstance(args[0], str):
+            method = args[0].split(" ", 1)[0]
+            status = args[1]
+            logger.debug("Callback server: %s -> %s", method, status)
 
     def do_GET(self) -> None:
         """Handle GET request (OAuth2 callback)."""

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from kstlib.logging import TRACE_LEVEL
 from kstlib.rapi.exceptions import (
     EndpointAmbiguousError,
     EndpointCollisionError,
@@ -31,6 +32,12 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 log = logging.getLogger(__name__)
+
+
+def _log_trace(msg: str, *args: object) -> None:
+    """Log at TRACE level (custom level 5, below DEBUG)."""
+    log.log(TRACE_LEVEL, msg, *args)
+
 
 # Pattern for path parameters: {param} or {0}, {1}
 _PATH_PARAM_PATTERN = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*|\d+)\}")
@@ -440,7 +447,7 @@ def _parse_rapi_file(
     api_name = data.get("name")
     if not api_name:
         api_name = path.stem.replace(".rapi", "")
-        log.debug("API name not specified, derived from filename: %s", api_name)
+        _log_trace("API name not specified, derived from filename: %s", api_name)
 
     # Validate required fields
     base_url = data.get("base_url")
@@ -466,7 +473,7 @@ def _parse_rapi_file(
         }
     }
 
-    log.debug(
+    _log_trace(
         "Parsed %s: api=%s, %d endpoints, credentials=%s",
         path.name,
         api_name,
@@ -481,7 +488,7 @@ def _parse_rapi_file(
         # Merge included endpoints into this API
         api_config["api"][api_name]["endpoints"].update(included_endpoints)
         credentials_config.update(included_creds)
-        log.debug(
+        _log_trace(
             "Merged %d endpoints from includes into %s",
             len(included_endpoints),
             api_name,
@@ -529,7 +536,7 @@ def _resolve_rapi_includes(
                 log.warning("Include file not found: %s", file_path)
                 continue
 
-            log.debug("Including nested file: %s", file_path.name)
+            _log_trace("Including nested file: %s", file_path.name)
             api_config, creds = _parse_rapi_file(file_path, defaults=defaults)
 
             # Extract endpoints from the included file (ignore API name)
@@ -1099,7 +1106,7 @@ class RapiConfigManager:
             if not path.exists():
                 raise FileNotFoundError(f"RAPI config file not found: {path}")
 
-            log.debug("Loading RAPI config from: %s", path)
+            _log_trace("Loading RAPI config from: %s", path)
             api_config, credentials = _parse_rapi_file(path, defaults=defaults)
 
             # Merge API config with collision detection
@@ -1169,7 +1176,7 @@ class RapiConfigManager:
 
         log.info("Discovered %d RAPI config file(s) in %s", len(files), search_dir)
         for f in files:
-            log.debug("  - %s", f.name)
+            _log_trace("  - %s", f.name)
 
         return cls.from_files(files, base_dir=search_dir)
 
@@ -1413,7 +1420,7 @@ class RapiConfigManager:
                     self._endpoint_index[ep_name] = []
                 self._endpoint_index[ep_name].append(api_name)
 
-                log.debug("Loaded endpoint: %s.%s", api_name, ep_name)
+                _log_trace("Loaded endpoint: %s.%s", api_name, ep_name)
 
             # Create API config
             api_config = ApiConfig(
@@ -1553,7 +1560,7 @@ class RapiConfigManager:
             >>> api, endpoint = manager.resolve("get_ip")  # doctest: +SKIP
 
         """
-        log.debug("Resolving endpoint reference: %s", endpoint_ref)
+        _log_trace("Resolving endpoint reference: %s", endpoint_ref)
 
         if "." in endpoint_ref:
             # Full reference: api.endpoint
@@ -1585,7 +1592,7 @@ class RapiConfigManager:
             )
 
         endpoint_config = api_config.endpoints[endpoint_name]
-        log.debug("Resolved full reference: %s", endpoint_config.full_ref)
+        _log_trace("Resolved full reference: %s", endpoint_config.full_ref)
 
         return api_config, endpoint_config
 
@@ -1603,7 +1610,7 @@ class RapiConfigManager:
         api_config = self._apis[api_name]
         endpoint_config = api_config.endpoints[endpoint_name]
 
-        log.debug(
+        _log_trace(
             "Resolved short reference '%s' to '%s'",
             endpoint_name,
             endpoint_config.full_ref,
@@ -1817,6 +1824,9 @@ def load_rapi_config() -> RapiConfigManager:
     # Extract defaults for included files
     defaults = rapi_section.pop("defaults", None)
     if defaults:
+        # Sanitization invariant: only log the KEYS of rapi.defaults, never
+        # dict(defaults) directly. Values may carry resolved env-var content
+        # (e.g. base_url with credentials inline, headers with secrets).
         log.debug("Found rapi.defaults section with keys: %s", list(defaults.keys()))
         _validate_defaults_section(defaults)
 
@@ -1839,10 +1849,12 @@ def load_rapi_config() -> RapiConfigManager:
         manager._servers = servers
 
     # Merge included files if any
+    n_includes = 0
     if include_patterns:
         included_files = _resolve_include_patterns(include_patterns)
+        n_includes = len(included_files)
         if included_files:
-            log.info("Including %d external RAPI config file(s)", len(included_files))
+            log.info("Including %d external RAPI config file(s)", n_includes)
             included_manager = RapiConfigManager.from_files(
                 included_files,
                 safeguard_config=safeguard_config,
@@ -1856,6 +1868,18 @@ def load_rapi_config() -> RapiConfigManager:
     # are all in place. Strict error if servers: is configured but a name is
     # unknown; permissive warning if servers: section is absent.
     manager._validate_server_references()
+
+    # Final synthesis : single user-facing line that recaps the whole load
+    # so operators can see the effective endpoint count without scanning
+    # the per-endpoint TRACE stream. Replaces the old "scan 1300+ DEBUG
+    # to know how many endpoints loaded" workflow.
+    total_endpoints = sum(len(api.endpoints) for api in manager._apis.values())
+    log.info(
+        "Loaded %d endpoint(s) across %d API(s) from kstlib.conf.yml + %d include file(s)",
+        total_endpoints,
+        len(manager._apis),
+        n_includes,
+    )
 
     return manager
 

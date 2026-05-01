@@ -5,7 +5,6 @@ from __future__ import annotations
 # pylint: disable=duplicate-code
 import json
 import logging
-import re
 import shutil
 import time
 from collections import OrderedDict
@@ -16,18 +15,13 @@ from typing import Any
 
 import yaml
 
+from kstlib._shared.redaction import redact_sensitive
 from kstlib.limits import HARD_MAX_SOPS_CACHE_ENTRIES, SopsLimits, get_sops_limits
 from kstlib.secrets.exceptions import SecretDecryptionError
 from kstlib.secrets.models import SecretRecord, SecretRequest, SecretSource
 from kstlib.secrets.providers.base import SecretProvider
 
 logger = logging.getLogger(__name__)
-
-# Pre-compiled patterns for sensitive output redaction
-_REDACT_ARN_PATTERN = re.compile(r"arn:aws:[^\s]+", re.IGNORECASE)
-_REDACT_AKIA_PATTERN = re.compile(r"AKIA[0-9A-Z]{16}")
-_REDACT_PATH_PATTERN = re.compile(r"(?:/home/|/Users/)[^\s]+")
-_REDACT_PATTERNS = (_REDACT_ARN_PATTERN, _REDACT_AKIA_PATTERN, _REDACT_PATH_PATTERN)
 
 
 class SOPSProvider(SecretProvider):
@@ -132,7 +126,7 @@ class SOPSProvider(SecretProvider):
                 logger.debug(
                     "SOPS decryption failed for %s: %s",
                     path,
-                    self._redact_sensitive_output(diagnostic),
+                    redact_sensitive(diagnostic),
                 )
             raise SecretDecryptionError(
                 f"Failed to decrypt secrets file '{path.name}'. Check SOPS configuration and file permissions."
@@ -186,14 +180,6 @@ class SOPSProvider(SecretProvider):
             else:
                 return None
         return current
-
-    @staticmethod
-    def _redact_sensitive_output(message: str) -> str:
-        """Redact known sensitive substrings from diagnostic output."""
-        redacted = message
-        for pattern in _REDACT_PATTERNS:
-            redacted = pattern.sub("[REDACTED]", redacted)
-        return redacted
 
     def purge_cache(self, *, path: str | Path | None = None) -> None:
         """Clear decrypted document cache entries."""

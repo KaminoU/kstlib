@@ -165,8 +165,12 @@ class TestRenderHtml:
     """Tests for render_html."""
 
     def test_render_html_contains_function_names(self) -> None:
-        """render_html includes function names, statuses, and durations."""
-        collector = NotifyCollector()
+        """render_html includes function names, statuses, and durations.
+
+        Uses redact_user_data=False to assert the legacy verbatim detail.
+        See TestRedactUserData below for the default behaviour.
+        """
+        collector = NotifyCollector(redact_user_data=False)
         collector.add(_make_result(name="check_a", success=True, duration_ms=12.5))
         collector.add(_make_result(name="check_b", success=False, exception=ValueError("boom")))
         out = collector.render_html()
@@ -186,8 +190,12 @@ class TestRenderHtml:
         assert "&lt;script&gt;" in out
 
     def test_render_html_includes_tracebacks_block(self) -> None:
-        """render_html appends tracebacks block when failures carry one."""
-        collector = NotifyCollector()
+        """render_html appends tracebacks block when failures carry one.
+
+        Tracebacks expose user-code locals so they are suppressed by
+        default; opt-out via redact_user_data=False to view them.
+        """
+        collector = NotifyCollector(redact_user_data=False)
         collector.add(
             _make_result(
                 name="failing",
@@ -203,7 +211,7 @@ class TestRenderHtml:
 
     def test_render_html_no_tracebacks_when_disabled(self) -> None:
         """Tracebacks block is omitted when include_tracebacks=False."""
-        collector = NotifyCollector()
+        collector = NotifyCollector(redact_user_data=False)
         collector.add(
             _make_result(
                 name="failing",
@@ -219,7 +227,7 @@ class TestRenderHtml:
     def test_render_html_truncates_long_detail(self) -> None:
         """Long exception messages are truncated with ellipsis."""
         long_msg = "x" * 500
-        collector = NotifyCollector()
+        collector = NotifyCollector(redact_user_data=False)
         collector.add(_make_result(success=False, exception=ValueError(long_msg)))
         out = collector.render_html()
         assert "..." in out
@@ -230,8 +238,12 @@ class TestRenderPlain:
     """Tests for render_plain."""
 
     def test_render_plain_contains_summary_and_rows(self) -> None:
-        """render_plain produces a header summary and one line per result."""
-        collector = NotifyCollector()
+        """render_plain produces a header summary and one line per result.
+
+        Uses redact_user_data=False to keep verbatim exception detail
+        for assertion. See TestRedactUserData for the default behaviour.
+        """
+        collector = NotifyCollector(redact_user_data=False)
         collector.add(_make_result(name="ok_fn", success=True, duration_ms=5.0))
         collector.add(_make_result(name="ko_fn", success=False, exception=ValueError("x")))
         out = collector.render_plain()
@@ -323,3 +335,67 @@ class TestToContext:
         assert ctx["ended_at"] is None
         assert ctx["total_duration_ms"] == 0.0
         assert ctx["results"] == []
+
+    def test_to_context_surfaces_redact_user_data_flag(self) -> None:
+        """to_context() exposes the collector's redact_user_data setting."""
+        assert NotifyCollector().to_context()["redact_user_data"] is True
+        assert NotifyCollector(redact_user_data=False).to_context()["redact_user_data"] is False
+
+
+class TestRedactUserData:
+    """Default redaction of user-code exception messages, return values, tracebacks."""
+
+    _SECRET = "FakeUserCodeSecret_xyz123"
+
+    def test_render_html_redacts_exception_message_by_default(self) -> None:
+        """The Detail column hides the exception message; the type stays visible."""
+        collector = NotifyCollector()
+        collector.add(_make_result(success=False, exception=ValueError(self._SECRET)))
+        out = collector.render_html()
+        assert self._SECRET not in out
+        assert "ValueError" in out
+        assert "REDACTED" in out
+
+    def test_render_html_redacts_return_value_by_default(self) -> None:
+        """The Detail column hides the return_value repr."""
+        collector = NotifyCollector()
+        collector.add(_make_result(success=True, return_value=self._SECRET))
+        out = collector.render_html()
+        assert self._SECRET not in out
+        assert "REDACTED" in out
+
+    def test_render_html_suppresses_tracebacks_by_default(self) -> None:
+        """include_tracebacks=True is overridden when redact_user_data is True."""
+        collector = NotifyCollector()
+        collector.add(
+            _make_result(
+                success=False,
+                exception=RuntimeError("boom"),
+                traceback_str=f"Traceback...\n  raise ValueError('{self._SECRET}')",
+            )
+        )
+        out = collector.render_html(include_tracebacks=True)
+        assert self._SECRET not in out
+        assert "<details" not in out
+
+    def test_render_plain_redacts_by_default(self) -> None:
+        """render_plain uses _format_detail with redact=True."""
+        collector = NotifyCollector()
+        collector.add(_make_result(success=False, exception=ValueError(self._SECRET)))
+        out = collector.render_plain()
+        assert self._SECRET not in out
+        assert "ValueError" in out
+
+    def test_to_monitor_table_redacts_by_default(self) -> None:
+        """to_monitor_table uses _format_detail with redact=True."""
+        collector = NotifyCollector()
+        collector.add(_make_result(success=False, exception=ValueError(self._SECRET)))
+        rendered = collector.to_monitor_table().render()
+        assert self._SECRET not in rendered
+
+    def test_opt_out_restores_legacy_behaviour(self) -> None:
+        """redact_user_data=False keeps the exception message verbatim."""
+        collector = NotifyCollector(redact_user_data=False)
+        collector.add(_make_result(success=False, exception=ValueError(self._SECRET)))
+        out = collector.render_plain()
+        assert self._SECRET in out

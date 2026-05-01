@@ -29,6 +29,27 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+# Maximum SQL length surfaced in TRACE logs. Long queries are truncated
+# to avoid noise without losing the leading clause that tells you which
+# table / operation is involved. Parameters are NEVER logged regardless.
+_SQL_TRACE_TRUNCATE = 200
+
+
+def _log_trace(msg: str, *args: object) -> None:
+    """Log at TRACE level (custom level 5, below DEBUG)."""
+    from kstlib.logging import TRACE_LEVEL
+
+    log.log(TRACE_LEVEL, msg, *args)
+
+
+def _truncate_sql(sql: str, limit: int = _SQL_TRACE_TRUNCATE) -> str:
+    """Return ``sql`` truncated to ``limit`` characters, single-line."""
+    flat = " ".join(sql.split())
+    if len(flat) <= limit:
+        return flat
+    return flat[: limit - 3] + "..."
+
+
 @dataclass
 class AsyncDatabase:
     """Async database interface for SQLite/SQLCipher.
@@ -144,8 +165,9 @@ class AsyncDatabase:
             await self._pool.close()
             self._pool = None
         # Scrub resolved key from memory
+        was_encrypted = self._resolved_key is not None
         self._resolved_key = None
-        log.info("Database closed: %s", self.path)
+        log.info("Database closed: %s (encrypted=%s)", self.path, was_encrypted)
 
     async def __aenter__(self) -> Self:
         """Async context manager entry."""
@@ -229,6 +251,10 @@ class AsyncDatabase:
             >>> await db.execute("CREATE TABLE test (id INTEGER)")  # doctest: +SKIP
 
         """
+        # Sanitization invariant : log the truncated SQL only, NEVER the
+        # parameters tuple (would leak PII / credentials in WHERE/INSERT
+        # values). Truncation prevents giant DDL from drowning the trace.
+        _log_trace("[DB] Execute: %s (params=%s)", _truncate_sql(sql), "yes" if parameters else "no")
         pool = self._ensure_pool()
         async with pool.connection() as conn:
             if parameters:

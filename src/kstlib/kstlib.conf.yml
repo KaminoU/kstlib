@@ -22,6 +22,56 @@ kstlib:
                      # Unknown presets fall back to "prod" with a one-line
                      # stderr notice listing available names.
 
+    # Per-logger level override (optional, default = no filtering).
+    #
+    # When set, each entry calls logging.getLogger(name).setLevel(level)
+    # right after the kstlib root logger is registered. Useful to silence
+    # the noise of a specific sub-package (e.g. RAPI config loader emitting
+    # 1300+ DEBUG lines per startup) without dropping the level globally.
+    #
+    # Cascade (lowest to highest priority):
+    #   1. kstlib.logging.modules               (this section, global default)
+    #   2. logger.presets.<active>.modules      (preset-specific override)
+    #   3. CLI flag --log-module name=level     (repeatable, REPLACES YAML)
+    # Steps 1 and 2 are merged key-by-key; preset wins on shared keys.
+    #
+    # Convention: every kstlib logger follows kstlib.<sub-package>[.<module>],
+    # mirroring the layout of src/kstlib/. Examples:
+    #   kstlib.rapi, kstlib.rapi.client, kstlib.rapi.config
+    #   kstlib.transform, kstlib.transform.chain
+    #
+    # Available sub-packages:
+    #   kstlib.alerts, kstlib.auth, kstlib.cache, kstlib.cli, kstlib.config,
+    #   kstlib.db, kstlib.helpers, kstlib.logging, kstlib.mail, kstlib.metrics,
+    #   kstlib.monitoring, kstlib.ops, kstlib.pipeline, kstlib.rapi,
+    #   kstlib.resilience, kstlib.secrets, kstlib.secure, kstlib.ssl,
+    #   kstlib.transform, kstlib.ui, kstlib.utils, kstlib.websocket
+    #
+    # For the full module list, browse src/kstlib/ or the Sphinx
+    # "Logging introspection guide".
+    #
+    # Supported levels (see Sphinx "Logging introspection guide"):
+    #   TRACE, DEBUG, INFO, SUCCESS, WARNING, ERROR, CRITICAL
+    # Names are case-insensitive. Invalid entries are skipped with a
+    # WARNING (and WARNING [SECURITY] for names not starting with kstlib.).
+    #
+    # Defaults: kstlib.rapi.config and kstlib.config.loader are the
+    # most verbose loggers at startup (1300+ DEBUG/TRACE lines for
+    # rapi.config on a typical Viya install, large cascade trace for
+    # config.loader when many includes are present). Both muted to
+    # WARNING by default; raise them locally when you need to debug.
+    # Override surfaces (priority increasing):
+    #   - user kstlib.conf.yml: modules: {kstlib.rapi.config: DEBUG}
+    #     (deep merge with these defaults, override per-module)
+    #   - preset-specific: presets.<name>.modules: {...}
+    #   - CLI --log-module: per-module override
+    #   - CLI -v/-vv/-vvv or --log-level: TOTAL RESET of the YAML
+    #     mutes (intent "show me everything"); --log-module wins over
+    #     this reset for the modules it explicitly declares.
+    modules:
+      kstlib.rapi.config: WARNING
+      kstlib.config.loader: WARNING
+
 ###########################################################################################
 ## Datetime formatting (global settings for timestamp display)
 ###########################################################################################
@@ -156,12 +206,19 @@ logger:
       icons:
         show: false
 
+    # debug: deeper-than-dev preset for investigation sessions.
+    # Persists to file (output: both) so logs survive the terminal and can be
+    # grepped or shared after the fact, and emits at TRACE so HTTP traces and
+    # detailed diagnostics are captured. Use 'dev' for everyday iteration
+    # (console-only, DEBUG); use 'debug' when actively investigating an issue.
     debug:
-      output: console
+      output: both
       console:
-        level: DEBUG
+        level: TRACE
         show_path: true
         tracebacks_show_locals: true
+      file:
+        level: TRACE
       icons:
         show: true
 

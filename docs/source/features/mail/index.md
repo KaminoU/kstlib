@@ -729,6 +729,29 @@ mail.send_summary(collector, format="html")
 
 `NotifyCollector` is thread-safe (`threading.Lock`) and bounded (`collections.deque(maxlen=maxsize)`, FIFO eviction).
 
+```{admonition} Default redaction of user-code data (v2.5.0)
+:class: warning
+
+Since v2.5.0 the collector defaults to ``redact_user_data=True``. The
+Detail column rendered by ``render_html`` / ``render_plain`` /
+``to_monitor_table`` shows the exception **type** but masks the
+exception **message**, return values, and tracebacks with the
+placeholder ``[REDACTED] (NotifyCollector(redact_user_data=False) to
+view)``. The traceback block in
+``render_html(include_tracebacks=True)`` is suppressed entirely while
+this flag is on.
+
+Pass ``NotifyCollector(redact_user_data=False)`` to opt into the
+legacy verbatim behaviour. Only do so when you control the decorated
+functions and have ensured they never raise with sensitive content,
+never return objects whose ``repr()`` exposes secrets, and never
+embed user data in their tracebacks. See
+{doc}`../../security/user-responsibility` for the broader contract.
+
+The flag is also surfaced as ``ctx["redact_user_data"]`` by
+``to_context()`` so custom Jinja templates can branch on it.
+```
+
 Available helpers:
 
 | Method / property | Returns | Use case |
