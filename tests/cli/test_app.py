@@ -240,21 +240,23 @@ def test_modules_default_no_flag_falls_through_to_yaml_cascade() -> None:
     assert "modules" not in cfg
 
 
-def test_modules_verbose_resets_cascade_to_empty() -> None:
-    """``-vvv`` alone resets the YAML modules cascade to ``{}``.
+def test_modules_verbose_preserves_yaml_cascade() -> None:
+    """``-vvv`` alone does NOT inject ``modules`` ; YAML cascade stays in effect.
 
-    The user intent ('show me everything') is incompatible with a hidden
-    YAML mute. Setting ``modules: {}`` on the explicit init_config is the
-    documented kill switch that bypasses the YAML.
+    Verbosity flags only raise the root handler level. The per-module
+    YAML mutes (e.g. ``kstlib.rapi.config: WARNING`` from the embedded
+    config) must persist so noisy modules cannot drown the output the
+    user actually wants. To bypass a specific mute, the user supplies
+    ``--log-module name=<level>``.
     """
     cfg = _capture_init_config(["-vvv", "info"])
-    assert cfg["modules"] == {}
+    assert "modules" not in cfg
 
 
-def test_modules_log_level_resets_cascade_to_empty() -> None:
-    """``--log-level TRACE`` alone resets the YAML modules cascade to ``{}``."""
+def test_modules_log_level_preserves_yaml_cascade() -> None:
+    """``--log-level TRACE`` alone does NOT inject ``modules`` ; YAML cascade stays."""
     cfg = _capture_init_config(["--log-level", "TRACE", "info"])
-    assert cfg["modules"] == {}
+    assert "modules" not in cfg
 
 
 def test_modules_log_module_alone_replaces_cascade() -> None:
@@ -263,15 +265,194 @@ def test_modules_log_module_alone_replaces_cascade() -> None:
     assert cfg["modules"] == {"kstlib.rapi.config": "DEBUG"}
 
 
-def test_modules_verbose_plus_log_module_log_module_wins() -> None:
-    """``-vvv --log-module x=WARNING`` keeps the user's --log-module spec.
+def test_modules_verbose_plus_log_module_uses_log_module_only() -> None:
+    """``-vvv --log-module x=WARNING`` carries the --log-module spec verbatim.
 
-    The verbosity dial reset is suppressed because the user gave a more
-    precise specification with --log-module. Other modules will inherit
-    TRACE through the kstlib root, but the explicitly named module is
-    pinned to the user's choice.
+    The verbosity dial drives the handler level, ``--log-module`` drives
+    the per-module level. Both layers are independent : the explicit
+    --log-module dict replaces the YAML modules cascade, and the
+    handler runs at TRACE. Loggers not named in --log-module fall back
+    to whatever level the kstlib root applies (TRACE under -vvv).
     """
     cfg = _capture_init_config(
         ["-vvv", "--log-module", "kstlib.rapi.config=WARNING", "info"],
     )
     assert cfg["modules"] == {"kstlib.rapi.config": "WARNING"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# --log-module factorized syntaxes (3 modes + auto-prepend + matrix of bad
+# inputs). Tests target the parser through the public CLI surface to mirror
+# what users actually see.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_log_module_classic_with_full_prefix() -> None:
+    """Classic syntax with the kstlib. prefix already present."""
+    cfg = _capture_init_config(["--log-module", "kstlib.rapi.config=TRACE", "info"])
+    assert cfg["modules"] == {"kstlib.rapi.config": "TRACE"}
+
+
+def test_log_module_classic_prefix_omitted_auto_prepended() -> None:
+    """Classic syntax without prefix : kstlib. is auto-prepended."""
+    cfg = _capture_init_config(["--log-module", "rapi.config=TRACE", "info"])
+    assert cfg["modules"] == {"kstlib.rapi.config": "TRACE"}
+
+
+def test_log_module_inverse_simple() -> None:
+    """Inverse syntax : LEVEL=name1,name2,... groups modules under one level."""
+    cfg = _capture_init_config(["--log-module", "DEBUG=foo.bar,baz.qux", "info"])
+    assert cfg["modules"] == {
+        "kstlib.foo.bar": "DEBUG",
+        "kstlib.baz.qux": "DEBUG",
+    }
+
+
+def test_log_module_inverse_mixed_prefix_optional_per_module() -> None:
+    """Inverse syntax tolerates the prefix on some modules and not others."""
+    cfg = _capture_init_config(
+        ["--log-module", "DEBUG=kstlib.rapi.config,transform.chain", "info"],
+    )
+    assert cfg["modules"] == {
+        "kstlib.rapi.config": "DEBUG",
+        "kstlib.transform.chain": "DEBUG",
+    }
+
+
+def test_log_module_repeated_last_wins_for_same_module() -> None:
+    """Two --log-module on the same module keep only the last value."""
+    cfg = _capture_init_config(
+        [
+            "--log-module",
+            "rapi.config=DEBUG",
+            "--log-module",
+            "rapi.config=WARNING",
+            "info",
+        ],
+    )
+    assert cfg["modules"] == {"kstlib.rapi.config": "WARNING"}
+
+
+def test_log_module_level_case_insensitive() -> None:
+    """Lowercase / mixed-case levels match the canonical uppercase names."""
+    cfg = _capture_init_config(["--log-module", "rapi.config=debug", "info"])
+    assert cfg["modules"] == {"kstlib.rapi.config": "DEBUG"}
+
+
+def test_log_module_inverse_level_case_insensitive() -> None:
+    """Inverse-mode level token is also case-insensitive."""
+    cfg = _capture_init_config(["--log-module", "Trace=rapi.config", "info"])
+    assert cfg["modules"] == {"kstlib.rapi.config": "TRACE"}
+
+
+def test_log_module_inverse_whitespace_in_list() -> None:
+    """Whitespace around commas and inside the module list is trimmed."""
+    cfg = _capture_init_config(["--log-module", "DEBUG= rapi.config , transform.chain ", "info"])
+    assert cfg["modules"] == {
+        "kstlib.rapi.config": "DEBUG",
+        "kstlib.transform.chain": "DEBUG",
+    }
+
+
+def test_log_module_pathological_DEBUG_equals_DEBUG_inverse_mode() -> None:
+    """``DEBUG=DEBUG`` is inverse mode : level=DEBUG, module list=[DEBUG].
+
+    Mode is decided on the LEFT side. ``DEBUG`` on the left is a known
+    level, so the right side is parsed as a module list. ``DEBUG`` then
+    becomes a logger name, prepended to ``kstlib.DEBUG``. Python lazy-
+    creates that logger and the level is applied without error.
+    """
+    cfg = _capture_init_config(["--log-module", "DEBUG=DEBUG", "info"])
+    assert cfg["modules"] == {"kstlib.DEBUG": "DEBUG"}
+
+
+def test_log_module_no_equals_skipped() -> None:
+    """``--log-module foo`` (no =) skips the entry without aborting."""
+    cfg = _capture_init_config(["--log-module", "foo", "info"])
+    assert "modules" in cfg
+    assert cfg["modules"] == {}
+
+
+def test_log_module_empty_left_skipped() -> None:
+    """``--log-module =TRACE`` skips with no logger name."""
+    cfg = _capture_init_config(["--log-module", "=TRACE", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_log_module_empty_right_classic_skipped() -> None:
+    """``--log-module foo=`` (empty level) skips."""
+    cfg = _capture_init_config(["--log-module", "foo=", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_log_module_empty_right_inverse_skipped() -> None:
+    """``--log-module DEBUG=`` (no module list) skips."""
+    cfg = _capture_init_config(["--log-module", "DEBUG=", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_log_module_invalid_level_classic_skipped() -> None:
+    """``--log-module foo=BLABLA`` skips with unknown level."""
+    cfg = _capture_init_config(["--log-module", "foo=BLABLA", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_log_module_inverse_only_commas_skipped() -> None:
+    """``--log-module DEBUG=,,,`` skips with empty effective module list."""
+    cfg = _capture_init_config(["--log-module", "DEBUG=,,,", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_log_module_inverse_mixed_valid_and_invalid_keeps_valid() -> None:
+    """Inverse mode : invalid module entries skipped, valid ones kept."""
+    cfg = _capture_init_config(
+        ["--log-module", "DEBUG=rapi.config,foo bar,transform.chain", "info"],
+    )
+    # 'foo bar' contains a space -> invalid logger name (post-prepend
+    # 'kstlib.foo bar' fails the regex). The two valid entries land.
+    assert cfg["modules"] == {
+        "kstlib.rapi.config": "DEBUG",
+        "kstlib.transform.chain": "DEBUG",
+    }
+
+
+def test_log_module_invalid_chars_in_name_classic_skipped() -> None:
+    """A module name with a forbidden character is dropped (classic mode)."""
+    cfg = _capture_init_config(["--log-module", "foo!bar=DEBUG", "info"])
+    assert cfg["modules"] == {}
+
+
+def test_log_module_double_dot_in_name_skipped() -> None:
+    """Double dots inside the name are rejected by the validation regex."""
+    cfg = _capture_init_config(["--log-module", ".foo=DEBUG", "info"])
+    # '.foo' starts with kstlib. is False -> prepend -> 'kstlib..foo' -> regex fail.
+    assert cfg["modules"] == {}
+
+
+def test_log_module_multiple_options_aggregate() -> None:
+    """Multiple --log-module flags accumulate into the modules dict."""
+    cfg = _capture_init_config(
+        [
+            "--log-module",
+            "rapi.config=DEBUG",
+            "--log-module",
+            "TRACE=transform.chain,auth.providers",
+            "info",
+        ],
+    )
+    assert cfg["modules"] == {
+        "kstlib.rapi.config": "DEBUG",
+        "kstlib.transform.chain": "TRACE",
+        "kstlib.auth.providers": "TRACE",
+    }
+
+
+def test_log_module_invalid_does_not_block_program() -> None:
+    """A purely invalid --log-module still lets the command finish.
+
+    The CLI must never abort on user input it cannot parse ; the
+    business command (``info`` here) runs normally with whatever valid
+    entries (none, in this case) the parser produced.
+    """
+    cfg = _capture_init_config(["--log-module", "totally-broken-input", "info"])
+    assert cfg["modules"] == {}

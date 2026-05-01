@@ -32,7 +32,8 @@ kstlib:
     # Cascade (lowest to highest priority):
     #   1. kstlib.logging.modules               (this section, global default)
     #   2. logger.presets.<active>.modules      (preset-specific override)
-    #   3. CLI flag --log-module name=level     (repeatable, REPLACES YAML)
+    #   3. CLI flag --log-module                (repeatable, REPLACES YAML;
+    #                                            three syntaxes, see below)
     # Steps 1 and 2 are merged key-by-key; preset wins on shared keys.
     #
     # Convention: every kstlib logger follows kstlib.<sub-package>[.<module>],
@@ -60,14 +61,22 @@ kstlib:
     # rapi.config on a typical Viya install, large cascade trace for
     # config.loader when many includes are present). Both muted to
     # WARNING by default; raise them locally when you need to debug.
+    #
+    # Module mutes are PERSISTENT by design: -v/-vv/-vvv and --log-level
+    # only adjust the root handler level. They do NOT reset these
+    # mutes, so noisy modules stay quiet even under -vvv.
+    #
     # Override surfaces (priority increasing):
     #   - user kstlib.conf.yml: modules: {kstlib.rapi.config: DEBUG}
     #     (deep merge with these defaults, override per-module)
     #   - preset-specific: presets.<name>.modules: {...}
-    #   - CLI --log-module: per-module override
-    #   - CLI -v/-vv/-vvv or --log-level: TOTAL RESET of the YAML
-    #     mutes (intent "show me everything"); --log-module wins over
-    #     this reset for the modules it explicitly declares.
+    #   - CLI --log-module: per-invocation override, three syntaxes
+    #     (1) classic, fully-qualified
+    #         --log-module kstlib.rapi.config=TRACE
+    #     (2) classic, prefix omitted (kstlib. auto-prepended)
+    #         --log-module rapi.config=TRACE
+    #     (3) inverse, level groups module list
+    #         --log-module DEBUG=foo.bar,baz.qux
     modules:
       kstlib.rapi.config: WARNING
       kstlib.config.loader: WARNING

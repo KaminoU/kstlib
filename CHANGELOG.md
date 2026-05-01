@@ -19,6 +19,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [2.6.0] - 2026-05-01
+
+### Added
+
+- **`--log-module` factorized syntax** : the CLI flag now supports
+  three syntaxes for module-level logging configuration :
+  - `--log-module kstlib.rapi.config=TRACE` (existing, fully-qualified)
+  - `--log-module rapi.config=TRACE` (NEW : `kstlib.` auto-prepended)
+  - `--log-module DEBUG=foo.bar,baz.qux` (NEW : reverse mode, level
+    groups module list)
+
+  Mode is decided on the LEFT side : a known level token (case-
+  insensitive, in `TRACE`, `DEBUG`, `INFO`, `SUCCESS`, `WARNING`,
+  `ERROR`, `CRITICAL`) triggers reverse mode, anything else is
+  treated as a module name. Levels are case-insensitive on both sides.
+  Whitespace around commas and inside the module list is trimmed.
+  Empty entries skipped silently. Repeated `--log-module` flags
+  accumulate ; later entries on the same logger overwrite earlier
+  ones.
+
+  Logger name validation uses the regex
+  `^kstlib\.[a-zA-Z_]\w*(\.[a-zA-Z_]\w*)*$` after the optional
+  auto-prepend, rejecting double dots, leading dots, embedded
+  whitespace, and non-identifier characters. Invalid entries emit a
+  `WARNING` (or `WARNING [SECURITY]` for malformed logger names) on
+  the `kstlib_logging_internal` logger and the offending occurrence
+  is skipped without aborting the command. Activate the observer
+  via `logging.getLogger("kstlib_logging_internal").setLevel(logging.WARNING)`.
+
+### Changed
+
+- **Sphinx logging introspection guide** : cascade priority schema
+  reverted to the clean three-layer model (YAML defaults,
+  preset.modules, CLI `--log-module`), new section "Module mutes
+  are persistent by design" documenting the v2.6.0 behaviour, new
+  "CLI module overrides" section listing the three syntaxes, and
+  updated behavior matrix illustrating the persistent-mute interplay
+  between handler level and per-logger level.
+
+### Fixed
+
+- **Logging modules cascade** : YAML default mutes
+  (`kstlib.rapi.config: WARNING`, `kstlib.config.loader: WARNING`)
+  are now preserved when CLI verbosity flags (`-v`/`-vv`/`-vvv` or
+  `--log-level`) are used. Previously in v2.5.0, these mutes were
+  reset by verbosity flags (the so-called "Option A" design),
+  defeating the purpose of having defaults for verbose modules. The
+  embedded mutes are now persistent by design ; verbosity flags only
+  adjust the root handler level. To explicitly bypass a mute under
+  verbosity, use `--log-module name=<level>` (or any of the new
+  factorized syntaxes).
+
+  Friction reproducer that motivated the change :
+
+  ```bash
+  # In v2.5.0 : noisy 'rapi.config' was un-muted by -vvv, drowning
+  # the output the user wanted to see.
+  kstlib -vvv rapi list
+
+  # In v2.6.0 : 'rapi.config' stays at WARNING under -vvv ; the rest
+  # of the kstlib hierarchy runs at TRACE as requested.
+  kstlib -vvv rapi list
+
+  # Explicit bypass when the user does want rapi.config at TRACE.
+  kstlib -vvv --log-module rapi.config=TRACE rapi list
+  ```
+
+- **`--log-module` parser robustness** : pathological inputs (no `=`,
+  empty side, unknown level, malformed logger name, only commas in
+  reverse mode, embedded whitespace or punctuation in a module name)
+  no longer abort the command with an exception. The CLI now warns
+  on `kstlib_logging_internal` and skips the offending entry,
+  applying the remaining valid entries normally.
+
 ## [2.5.0] - 2026-05-01
 
 ### Added
@@ -1011,7 +1085,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/KaminoU/kstlib/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/KaminoU/kstlib/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/KaminoU/kstlib/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/KaminoU/kstlib/compare/v2.3.0...v2.3.1

@@ -10,6 +10,7 @@ Available commands:
 # Reason: Rich.print is imported to override builtin print for enhanced output
 
 import logging
+import re
 from typing import Annotated
 
 import typer
@@ -41,6 +42,100 @@ VERBOSE_LEVELS = {
     2: "DEBUG",  # -vv
     3: "TRACE",  # -vvv
 }
+
+# --- --log-module factorized parser -----------------------------------------
+
+# Levels accepted on the --log-module flag (case-insensitive). Mirrors
+# kstlib.logging.manager._VALID_LEVEL_NAMES (kept in sync manually to avoid
+# importing a private symbol across sub-packages).
+_LOG_MODULE_VALID_LEVELS: frozenset[str] = frozenset(
+    {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"},
+)
+
+# Logger name shape after the optional kstlib. auto-prepend. Forbids empty
+# components, double dots, leading dot, and any character outside [A-Za-z0-9_].
+_VALID_LOGGER_NAME = re.compile(r"^kstlib\.[a-zA-Z_]\w*(\.[a-zA-Z_]\w*)*$")
+
+# Warnings from the parser go to the same internal logger LogManager uses for
+# its own bootstrap diagnostics. Activate with:
+#   logging.getLogger("kstlib_logging_internal").setLevel(logging.WARNING)
+_log_module_parser_log = logging.getLogger("kstlib_logging_internal")
+
+
+def _record_module_pair(raw_name: str, level: str, sink: dict[str, str]) -> None:
+    """Auto-prepend ``kstlib.`` if missing, validate, and record.
+
+    Pathological names (after prepend) are rejected with a
+    ``WARNING [SECURITY]`` and dropped. Later entries overwrite earlier
+    ones for the same fully-qualified logger.
+    """
+    name = raw_name if raw_name.startswith("kstlib.") else f"kstlib.{raw_name}"
+    if not _VALID_LOGGER_NAME.match(name):
+        _log_module_parser_log.warning(
+            "[SECURITY] Invalid logger name %r from --log-module: must match "
+            "kstlib.<component>[.<component>...] (alphanumeric + underscore), "
+            "skipped",
+            raw_name,
+        )
+        return
+    sink[name] = level
+
+
+def _parse_log_module_entries(entries: list[str]) -> dict[str, str]:
+    """Parse ``--log-module`` raw entries into a ``{logger_name: level}`` mapping.
+
+    Supported syntaxes (per entry, repeatable on the CLI):
+
+    - ``kstlib.rapi.config=TRACE`` : classic, fully-qualified
+    - ``rapi.config=TRACE``        : classic, ``kstlib.`` auto-prepended
+    - ``DEBUG=foo.bar,baz.qux``    : inverse, level groups a module list
+
+    Mode is decided on the LEFT side : a known level token (case-insensitive)
+    triggers inverse mode ; anything else is treated as a module name.
+
+    Pathological cases (no ``=``, empty side, unknown level, malformed
+    logger name, empty inverse list) emit a ``WARNING`` on the
+    ``kstlib_logging_internal`` logger and the offending occurrence is
+    skipped. The parser never raises ; the program continues normally with
+    whatever valid entries remain.
+    """
+    resolved: dict[str, str] = {}
+    for entry in entries:
+        left, sep, right = entry.partition("=")
+        left = left.strip()
+        right = right.strip()
+        if not sep or not left or not right:
+            _log_module_parser_log.warning(
+                "Invalid --log-module format %r: expected name=level or level=name1,name2,..., skipped",
+                entry,
+            )
+            continue
+
+        if left.upper() in _LOG_MODULE_VALID_LEVELS:
+            # Inverse mode : LEVEL=name1,name2,...
+            level = left.upper()
+            modules = [m.strip() for m in right.split(",") if m.strip()]
+            if not modules:
+                _log_module_parser_log.warning(
+                    "Invalid --log-module format %r: expected name=level or level=name1,name2,..., skipped",
+                    entry,
+                )
+                continue
+            for raw_name in modules:
+                _record_module_pair(raw_name, level, resolved)
+        else:
+            # Classic mode : name=LEVEL
+            level_upper = right.upper()
+            if level_upper not in _LOG_MODULE_VALID_LEVELS:
+                _log_module_parser_log.warning(
+                    "Invalid level %r for logger %r from --log-module: expected one of %s, skipped",
+                    right,
+                    left,
+                    sorted(_LOG_MODULE_VALID_LEVELS),
+                )
+                continue
+            _record_module_pair(left, level_upper, resolved)
+    return resolved
 
 
 def _version_callback(value: bool) -> None:
@@ -108,10 +203,14 @@ def main(  # pylint: disable=unused-argument
         typer.Option(
             "--log-module",
             help=(
-                "Per-logger level override, repeatable, format: name=level. "
-                "Example: --log-module kstlib.rapi.config=WARNING. "
-                "When at least one --log-module is supplied, it REPLACES the "
-                "kstlib.logging.modules cascade resolved from kstlib.conf.yml."
+                "Per-logger level override, repeatable. Three syntaxes : "
+                "(1) kstlib.rapi.config=TRACE (fully-qualified), "
+                "(2) rapi.config=TRACE (kstlib. auto-prepended), "
+                "(3) DEBUG=foo.bar,baz.qux (level groups module list). "
+                "Levels case-insensitive. When at least one --log-module is "
+                "supplied, it REPLACES the kstlib.logging.modules cascade. "
+                "Invalid entries warn on the kstlib_logging_internal logger "
+                "and are skipped without aborting the command."
             ),
         ),
     ] = None,
@@ -143,27 +242,15 @@ def main(  # pylint: disable=unused-argument
         "output": output,
     }
     if log_module:
-        cli_modules: dict[str, str] = {}
-        for entry in log_module:
-            if "=" not in entry:
-                console.print(f"[red]Invalid --log-module value: {entry!r} (expected name=level)[/]")
-                raise typer.Exit(1)
-            name, _, lvl = entry.partition("=")
-            name = name.strip()
-            lvl = lvl.strip()
-            if not name or not lvl:
-                console.print(f"[red]Invalid --log-module value: {entry!r} (empty name or level)[/]")
-                raise typer.Exit(1)
-            cli_modules[name] = lvl
-        init_config["modules"] = cli_modules
-    elif log_level is not None or verbose > 0:
-        # CLI verbosity flags carry the user intent "show me everything",
-        # which conflicts with any YAML mute that would silently drop
-        # records below the requested level. Reset the cascade so the
-        # handler-level filter is the sole gate. --log-module, when
-        # present, already replaces the YAML cascade with its own
-        # specification and wins over this branch.
-        init_config["modules"] = {}
+        # Pathological entries warn on kstlib_logging_internal and are
+        # dropped silently from the perspective of the business command.
+        # Only fully-qualified, validated pairs reach the manager.
+        init_config["modules"] = _parse_log_module_entries(list(log_module))
+    # Verbosity flags (-v/-vv/-vvv or --log-level) only adjust the root
+    # handler level; they do NOT reset the YAML modules cascade. Default
+    # mutes for verbose modules (kstlib.rapi.config, kstlib.config.loader)
+    # stay in effect under -vvv so noisy modules cannot drown the output
+    # the user actually wants. Bypass a specific mute via --log-module.
 
     # Always initialize logging so handlers are configured
     _cli_logger = init_logging(config=init_config)

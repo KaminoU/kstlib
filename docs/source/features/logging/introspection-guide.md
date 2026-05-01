@@ -55,42 +55,78 @@ through the `modules` map.
 ### Cascade priority
 
 ```text
-   kstlib.conf.yml                                                  CLI
+                  kstlib.conf.yml                       CLI
 
-  +------------------+   +------------------------+   +-----------+   +----------------+
-  | kstlib.logging.  |   | logger.presets         |   | --log-    |   | -v/-vv/-vvv    |
-  | modules          |-> | .<active>.modules      |-> | module    |-> | --log-level    |
-  | (global default) |   | (preset override)      |   | (replace) |   | (RESET if no   |
-  |                  |   |                        |   |           |   |  --log-module) |
-  +------------------+   +------------------------+   +-----------+   +----------------+
-       layer 1                 layer 2                   layer 3              layer 4
-       merge by key            wins on conflict          total override       reset to {}
+   +------------------+   +------------------------+   +-----------+
+   | kstlib.logging.  |   | logger.presets         |   | --log-    |
+   | modules          |-> | .<active>.modules      |-> | module    |
+   | (global default) |   | (preset override)      |   | (replace) |
+   +------------------+   +------------------------+   +-----------+
+        layer 1                  layer 2                  layer 3
+        merge by key             wins on conflict         total override
 ```
 
 - **Layer 1** is the global default applied for every preset.
 - **Layer 2** is keyed on the active preset and *overrides* layer 1
   for shared module names.
-- **Layer 3** is the CLI flag `--log-module name=level`, repeatable.
-  When at least one `--log-module` is supplied it **replaces** the
-  YAML-resolved map entirely (no merge).
-- **Layer 4** is the CLI verbosity dial (`-v`/`-vv`/`-vvv` or
-  `--log-level`). Carrying the user intent *"show me everything"*, it
-  **resets** the YAML cascade to `{}` so a hidden mute cannot silently
-  drop records below the requested level. Layer 4 only fires when no
-  `--log-module` is present; if both are supplied, `--log-module` wins
-  for the modules it declares (the user's specification is more
-  precise than the global verbosity dial).
+- **Layer 3** is the CLI flag `--log-module`, repeatable. When at least
+  one `--log-module` is supplied it **replaces** the YAML-resolved map
+  entirely (no merge). See [CLI module overrides](#cli-module-overrides)
+  for the three accepted syntaxes.
+
+#### Module mutes are persistent by design
+
+Verbosity flags (`-v` / `-vv` / `-vvv` or `--log-level`) only adjust the
+**root handler level**. They do **not** reset the YAML modules cascade.
+That is intentional : the embedded defaults mute precisely the loggers
+that would otherwise drown the output the user is trying to read (cf
+[Default-muted verbose modules](#default-muted-verbose-modules) below).
+
+To bypass a specific mute under verbosity, use `--log-module` :
+
+```bash
+# Default: kstlib.rapi.config and kstlib.config.loader stay at WARNING
+kstlib -vvv rapi list
+
+# Raise rapi.config to TRACE for this command only
+kstlib -vvv --log-module rapi.config=TRACE rapi list
+
+# Raise multiple modules at once via inverse syntax
+kstlib -vvv --log-module TRACE=rapi.config,config.loader rapi list
+```
+
+### CLI module overrides
+
+The `--log-module` flag is repeatable and accepts three syntaxes :
+
+| Syntax | Example | Notes |
+|---|---|---|
+| Classic, fully-qualified | `--log-module kstlib.rapi.config=TRACE` | Backward-compatible, exact match. |
+| Classic, prefix omitted | `--log-module rapi.config=TRACE` | `kstlib.` is auto-prepended. |
+| Inverse, level groups list | `--log-module DEBUG=foo.bar,baz.qux` | Level on the LEFT, comma-separated module list on the RIGHT. |
+
+Mode is decided on the LEFT side : a known level token (case-insensitive)
+triggers inverse mode, anything else is treated as a module name. Levels
+recognized : `TRACE`, `DEBUG`, `INFO`, `SUCCESS`, `WARNING`, `ERROR`,
+`CRITICAL`.
+
+Repeated `--log-module` flags accumulate. When the same logger appears
+twice, the last value wins.
 
 ### Validation
 
-- Logger names must start with `kstlib.`. Names outside that
-  hierarchy emit a `WARNING [SECURITY]` and are skipped (you cannot
-  configure your own application loggers through kstlib YAML).
-- Levels must be one of `TRACE`, `DEBUG`, `INFO`, `SUCCESS`,
-  `WARNING`, `ERROR`, `CRITICAL` (case-insensitive). Unknown levels
-  emit a WARNING and are skipped.
-- Validation never aborts the bootstrap: a typo in one entry leaves
-  the rest of the configuration applied.
+- Logger names must match `kstlib.<component>[.<component>...]` after the
+  optional auto-prepend, where each component is alphanumeric plus
+  underscore. Malformed names (double dots, leading dot, embedded space
+  or punctuation) emit a `WARNING [SECURITY]` and are skipped. You
+  cannot configure loggers outside the `kstlib.` hierarchy.
+- Levels must be one of `TRACE`, `DEBUG`, `INFO`, `SUCCESS`, `WARNING`,
+  `ERROR`, `CRITICAL` (case-insensitive). Unknown levels emit a
+  `WARNING` and are skipped.
+- Validation never aborts the bootstrap or the CLI command : a typo in
+  one entry leaves the rest of the configuration applied. Warnings are
+  emitted on the `kstlib_logging_internal` logger, which you can
+  observe via `logging.getLogger("kstlib_logging_internal").setLevel(logging.WARNING)`.
 
 ## Built-in presets
 
@@ -167,37 +203,42 @@ surfaces, ordered by scope:
 3. **Per-invocation (CLI `--log-module`)** : the `--log-module` flag
    **replaces** the YAML `modules` map for the duration of the
    command. Use it to probe a single subsystem without touching any
-   config file:
+   config file. All three syntaxes are accepted :
 
    ```bash
+   # Fully-qualified
    kstlib --log-module kstlib.rapi.config=DEBUG rapi list
+
+   # Prefix omitted (kstlib. auto-prepended)
+   kstlib --log-module rapi.config=DEBUG rapi list
+
+   # Inverse: one level, multiple modules
+   kstlib --log-module DEBUG=rapi.config,config.loader rapi list
    ```
 
-4. **Per-invocation (CLI verbosity dial)** : `-v`/`-vv`/`-vvv` or
-   `--log-level` reset the YAML mutes entirely so the requested level
-   is honored across every kstlib logger. If you want the verbosity
-   bump but still keep one module silent, pass `--log-module` for that
-   module and the reset is suppressed:
+   Verbosity flags do **not** reset these mutes. To widen what you see
+   under `-vvv`, name the modules explicitly :
 
    ```bash
-   kstlib -vvv rapi list                                # everything TRACE, mutes reset
-   kstlib --log-level TRACE rapi list                   # same
-   kstlib -vvv --log-module kstlib.rapi.config=WARNING rapi list
-                                                        # everything TRACE, except rapi.config
+   # Default: rapi.config and config.loader stay at WARNING
+   kstlib -vvv rapi list
+
+   # Bypass both mutes for this command only
+   kstlib -vvv --log-module TRACE=rapi.config,config.loader rapi list
    ```
 
 To bring everything back to the embedded defaults, omit the `modules`
-key from your user config, don't pass any `--log-module` flag, and
-don't crank the verbosity dial.
+key from your user config and don't pass any `--log-module` flag.
 
 ### Behavior matrix
 
 | Command | Handler level | `kstlib.rapi.config` logger level | Net effect |
 |---|---|---|---|
-| `kstlib rapi list` | WARNING | WARNING (YAML default) | Quiet |
-| `kstlib -vvv rapi list` | TRACE | NOTSET (reset) | All TRACE |
-| `kstlib --log-module kstlib.rapi.config=DEBUG rapi list` | WARNING | DEBUG | DEBUG records of `rapi.config` only (handler still at WARNING -> nothing visible until `-v`) |
-| `kstlib -vvv --log-module kstlib.rapi.config=WARNING rapi list` | TRACE | WARNING (explicit) | All TRACE except `rapi.config` (kept WARNING) |
+| `kstlib rapi list` | WARNING | WARNING (YAML default) | Quiet, only WARNINGs surface. |
+| `kstlib -vvv rapi list` | TRACE | WARNING (YAML default, **persistent**) | TRACE everywhere except the muted modules ; `rapi.config` stays quiet. |
+| `kstlib -vvv --log-module rapi.config=TRACE rapi list` | TRACE | TRACE (explicit override) | Full TRACE on `rapi.config` plus the rest of the kstlib hierarchy. |
+| `kstlib --log-module rapi.config=DEBUG rapi list` | WARNING | DEBUG | Logger lets DEBUG through, but the handler is still at WARNING : nothing visible until you also pass a verbosity flag. |
+| `kstlib -vvv --log-module rapi.config=WARNING rapi list` | TRACE | WARNING (explicit) | TRACE everywhere except `rapi.config` (kept at WARNING by the explicit override). |
 
 ### Investigate a pipeline run
 

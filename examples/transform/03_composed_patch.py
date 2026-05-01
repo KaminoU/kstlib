@@ -143,9 +143,9 @@ def main() -> None:
     # Three synthetic objects with different names. Same input data,
     # different metadata -> different patches applied.
     objects = [
-        ("R220_foo",   {"content_type": "report", "name": "R220_foo"}),
+        ("R220_foo", {"content_type": "report", "name": "R220_foo"}),
         ("ORION_bar", {"content_type": "report", "name": "ORION_bar"}),
-        ("OTHER_baz",  {"content_type": "report", "name": "OTHER_baz"}),
+        ("OTHER_baz", {"content_type": "report", "name": "OTHER_baz"}),
     ]
 
     print("=== Applying patch_production to 3 objects ===")
