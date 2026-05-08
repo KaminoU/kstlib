@@ -26,8 +26,15 @@ Examples:
 
 from kstlib.mail.builder import MailBuilder, NotifyResult
 from kstlib.mail.collector import NotifyCollector
-from kstlib.mail.exceptions import MailConfigurationError, MailError, MailTransportError, MailValidationError
+from kstlib.mail.exceptions import (
+    MailConfigurationError,
+    MailError,
+    MailThrottledError,
+    MailTransportError,
+    MailValidationError,
+)
 from kstlib.mail.filesystem import MailFilesystemGuards
+from kstlib.mail.throttle import MailThrottle
 from kstlib.mail.transport import AsyncMailTransport, AsyncTransportWrapper, MailTransport
 
 __all__ = [
@@ -37,6 +44,8 @@ __all__ = [
     "MailConfigurationError",
     "MailError",
     "MailFilesystemGuards",
+    "MailThrottle",
+    "MailThrottledError",
     "MailTransport",
     "MailTransportError",
     "MailValidationError",

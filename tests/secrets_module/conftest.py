@@ -248,6 +248,7 @@ def age_keypair(tmp_path: Path) -> Generator[dict[str, Any], None, None]:
 
     Yields:
         dict with keys_file (Path) and public_key (str).
+
     """
     keys_file = tmp_path / "age-keys.txt"
 
@@ -282,6 +283,7 @@ def age_sops_config(tmp_path: Path, age_keypair: dict[str, Any]) -> Path:
 
     Returns:
         Path to the .sops.yaml file.
+
     """
     sops_config = tmp_path / ".sops.yaml"
     sops_config.write_text(f"""\
@@ -302,6 +304,7 @@ def gpg_keypair(tmp_path: Path) -> Generator[dict[str, Any], None, None]:
 
     Yields:
         dict with gnupghome (Path), fingerprint (str), and email (str).
+
     """
     import platform
 
@@ -374,6 +377,7 @@ def gpg_sops_config(tmp_path: Path, gpg_keypair: dict[str, Any]) -> Path:
 
     Returns:
         Path to the .sops.yaml file.
+
     """
     sops_config = tmp_path / ".sops.yaml"
     sops_config.write_text(f"""\
@@ -408,6 +412,7 @@ def kms_sops_config(
 
     Returns:
         Path to the .sops.yaml file.
+
     """
     sops_config = tmp_path / ".sops.yaml"
     # SOPS requires full ARN, not just alias
@@ -427,6 +432,7 @@ def sample_secrets_yaml(tmp_path: Path) -> Path:
 
     Returns:
         Path to the secrets file.
+
     """
     secrets_file = tmp_path / "secrets.yaml"
     secrets_file.write_text("""\
@@ -446,6 +452,7 @@ def sample_secrets_json(tmp_path: Path) -> Path:
 
     Returns:
         Path to the secrets file.
+
     """
     secrets_file = tmp_path / "secrets.json"
     secrets_file.write_text("""\

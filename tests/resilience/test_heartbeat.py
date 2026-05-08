@@ -621,3 +621,93 @@ class TestHeartbeatNoStateFile:
         await hb.astop()
 
         assert beat_count >= 1
+
+
+# ============================================================================
+# Sync _run_loop coverage (lines 315, 319-324, 332-337)
+# ============================================================================
+
+
+class _FakeDeadTarget:
+    """Test target that always reports dead."""
+
+    @property
+    def is_dead(self) -> bool:
+        """Always dead."""
+        return True
+
+
+class TestHeartbeatSyncRunLoop:
+    """Coverage for the sync _run_loop branches (shutdown break + coroutine close paths)."""
+
+    @staticmethod
+    def _patch_stop_event_to_run_n_iterations(hb: Heartbeat, n: int) -> None:
+        """Patch the heartbeat stop_event.wait() to release n times then signal exit."""
+        iterations = [0]
+
+        def controlled_wait(timeout: float | None = None) -> bool:  # noqa: ARG001
+            iterations[0] += 1
+            return iterations[0] > n  # False for first n calls, then True to break
+
+        hb._stop_event.wait = controlled_wait  # type: ignore[method-assign]  # noqa: SLF001  # reason: deterministic loop control without sleep flakiness
+
+    def test_run_loop_breaks_when_shutdown_requested_mid_iteration(self) -> None:
+        """_run_loop checks _shutdown_requested after wait() and breaks before invoking beat()."""
+        beat_calls = [0]
+
+        def counting_on_beat() -> None:
+            beat_calls[0] += 1
+
+        hb = Heartbeat(state_file=None, interval=0.01, on_beat=counting_on_beat)
+        hb._shutdown_requested = True  # noqa: SLF001  # reason: triggering the shutdown-break branch deterministically
+
+        # Force one iteration: wait() returns False once, then True to exit (but break should fire first).
+        self._patch_stop_event_to_run_n_iterations(hb, n=1)
+        hb._run_loop()  # noqa: SLF001  # reason: directly invoking the sync loop body for branch coverage
+
+        # Break happened before beat(): callback never invoked.
+        assert beat_calls[0] == 0
+
+    def test_run_loop_closes_on_beat_coroutine_when_callback_returns_one(self) -> None:
+        """_run_loop closes the coroutine returned by on_beat (sync thread cannot await)."""
+        produced: list[object] = []
+
+        async def _coro_payload() -> None:
+            return None
+
+        def on_beat() -> object:
+            coro = _coro_payload()
+            produced.append(coro)
+            return coro
+
+        hb = Heartbeat(state_file=None, interval=0.01, on_beat=on_beat)
+        self._patch_stop_event_to_run_n_iterations(hb, n=1)
+        hb._run_loop()  # noqa: SLF001  # reason: directly invoking the sync loop body to exercise the coroutine-close branch
+
+        # on_beat invoked once and the coroutine has been closed (cr_frame is None).
+        assert len(produced) == 1
+        assert produced[0].cr_frame is None  # type: ignore[attr-defined]
+
+    def test_run_loop_closes_on_target_dead_coroutine_when_callback_returns_one(self) -> None:
+        """_run_loop closes the coroutine returned by on_target_dead when target.is_dead is True."""
+        produced: list[object] = []
+
+        async def _coro_payload() -> None:
+            return None
+
+        def on_target_dead() -> object:
+            coro = _coro_payload()
+            produced.append(coro)
+            return coro
+
+        hb = Heartbeat(
+            state_file=None,
+            interval=0.01,
+            target=_FakeDeadTarget(),
+            on_target_dead=on_target_dead,
+        )
+        self._patch_stop_event_to_run_n_iterations(hb, n=1)
+        hb._run_loop()  # noqa: SLF001  # reason: directly invoking the sync loop body to exercise the target-dead coroutine-close branch
+
+        assert len(produced) == 1
+        assert produced[0].cr_frame is None  # type: ignore[attr-defined]

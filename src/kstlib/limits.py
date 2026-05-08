@@ -16,6 +16,8 @@ Example:
 
 from __future__ import annotations
 
+from typing import Literal as _Literal
+
 # =============================================================================
 # Pre-import constants (hard limits + defaults)
 #
@@ -125,6 +127,11 @@ HARD_MAX_THROTTLE_RATE = 1000
 #: Alert throttle period bounds (seconds) - protects against too short or impossibly long periods.
 HARD_MIN_THROTTLE_PER = 1.0
 HARD_MAX_THROTTLE_PER = 86400.0  # 1 day
+
+#: Mail throttle registry size cap. Beyond this number of distinct preset
+#: names, get_or_create_throttle refuses new entries to bound memory under
+#: multi-tenant misuse (e.g. dynamic UUID-suffixed preset names).
+HARD_MAX_THROTTLE_REGISTRY_SIZE = 100
 
 #: Alert channel timeout bounds (seconds) - protects against too short or hanging requests.
 HARD_MIN_CHANNEL_TIMEOUT = 1.0
@@ -245,6 +252,13 @@ DEFAULT_THROTTLE_PER = 60.0  # seconds
 DEFAULT_THROTTLE_BURST = 5  # initial capacity
 DEFAULT_CHANNEL_TIMEOUT = 30.0  # seconds
 DEFAULT_CHANNEL_RETRIES = 2
+
+#: Mail throttle defaults (anti-spam kill switch).
+#: Hard limits are shared with alerts (HARD_MIN/MAX_THROTTLE_RATE / _PER).
+#: Mode 'drop' is intentionally not supported (security event must never be silent).
+DEFAULT_MAIL_THROTTLE_RATE = 20  # mails per period
+DEFAULT_MAIL_THROTTLE_PER = 60.0  # seconds
+DEFAULT_MAIL_THROTTLE_ON_EXCEED: _Literal["raise", "warn"] = "raise"
 
 DEFAULT_WS_PING_INTERVAL = 20.0  # seconds
 DEFAULT_WS_PING_TIMEOUT = 10.0  # seconds

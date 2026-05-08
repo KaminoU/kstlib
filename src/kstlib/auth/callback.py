@@ -327,7 +327,7 @@ class CallbackServer:  # pylint: disable=too-many-instance-attributes
         if self._server is None:
             return
         while not self._stop_flag and self._server:
-            try:
+            try:  # reason: per-iteration tolerance for HTTP request handler loop
                 self._server.handle_request()
             except Exception:  # pylint: disable=broad-exception-caught
                 if not self._stop_flag:

@@ -61,6 +61,7 @@ def _extract_json(stdout: str) -> Any:
 
     Returns:
         Parsed JSON data.
+
     """
     # Find the first '[' or '{' which starts the JSON payload
     for i, ch in enumerate(stdout):
@@ -77,6 +78,7 @@ def _make_config_box(sessions: dict[str, Any] | Any) -> MagicMock:
 
     Returns:
         MagicMock that behaves like Box.get().
+
     """
     config: dict[str, Any] = {"ops": {"sessions": sessions}}
     mock_box = MagicMock()
@@ -394,6 +396,7 @@ class TestOpsListDeepDefense:
 
         Returns:
             CliRunner result.
+
         """
         config_box = _make_config_box(sessions_value)
         with (

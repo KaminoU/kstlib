@@ -424,6 +424,39 @@ mail:
   # Leave null to force callers to pass transport= or preset= explicitly.
   default: null
 
+  # Anti-spam throttle (kill switch). Enforced before the transport on
+  # every MailBuilder.send(), including indirect calls via @mail.notify.
+  #
+  # Cascade (highest priority first):
+  #   1. mail.presets.<name>.throttle.<key>  (preset-level override)
+  #   2. mail.throttle.<key>                 (this section, mail-wide default)
+  #   3. Code defaults                       (rate=20, per=60.0, on_exceed=raise)
+  #
+  # Each key cascades independently: a preset can override only ``rate``
+  # while keeping the mail-wide ``per`` and ``on_exceed``.
+  #
+  # Modes:
+  #   - raise (default): emits WARNING [SECURITY] then raises
+  #     MailThrottledError. The caller decides how to back off.
+  #   - warn: emits WARNING [SECURITY] then drops the mail silently
+  #     (returns the built message without sending).
+  #   - drop (silent) is INTENTIONALLY REJECTED at init: a security
+  #     event must never be silent (kstlib logging convention).
+  #
+  # Singleton: a single MailThrottle is shared across all builders that
+  # use the same preset, including snapshots taken by the @notify
+  # decorator. This prevents bypass via creating many builder instances.
+  #
+  # Hard limits enforced in code (see kstlib.limits):
+  #   - rate: 1 to 1000 mails per period
+  #   - per: 1.0 to 86400.0 seconds (1 day)
+  #   - on_exceed: "raise" or "warn"
+  throttle:
+    enabled: true
+    rate: 20
+    per: 60.0
+    on_exceed: raise
+
   # SSL/TLS configuration for mail transports.
   #
   # Values here override the root ``ssl:`` section (bottom of this file)
@@ -461,6 +494,11 @@ mail:
   #   defaults:
   #     sender: "Service Notifications <notify@corp.local>"
   #     reply_to: "Service Notifications <notify@corp.local>"
+  #   # Optional throttle override (highest priority, see mail.throttle above):
+  #   throttle:
+  #     rate: 5            # corporate is more restrictive than mail-wide default
+  #     per: 60.0
+  #     on_exceed: warn    # operational critical, prefer drop+log over raise
   #
   # transactional:
   #   transport: resend

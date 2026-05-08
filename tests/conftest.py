@@ -73,6 +73,7 @@ def cfg_loader() -> Any:
 
     Returns:
         Module object containing private config loader internals.
+
     """
     return _cfg_loader
 

@@ -202,6 +202,7 @@ def _scan_tmux_sockets(name: str) -> tuple[str | None, str | None]:
         Tuple of (backend, socket_name). Both are ``None`` if no match is
         found. When a socket holds the session, ``("tmux", <sock>)`` is
         returned.
+
     """
     for sock in discover_tmux_sockets():
         try:

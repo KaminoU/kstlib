@@ -249,7 +249,7 @@ class FileDelivery(DeliveryBackend):
 
         if to_delete > 0:
             for old_file in html_files[:to_delete]:
-                try:
+                try:  # reason: per-file best-effort cleanup on rotation
                     old_file.unlink()
                     deleted += 1
                 except OSError:

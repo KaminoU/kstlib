@@ -10,7 +10,8 @@ Import everything from `kstlib.mail.exceptions` to keep guards close to the rest
 MailError
 ├── MailValidationError      # Invalid recipients, attachments
 ├── MailTransportError       # SMTP/transport delivery failure
-└── MailConfigurationError   # Missing headers, secrets, templates
+├── MailConfigurationError   # Missing headers, secrets, templates
+└── MailThrottledError       # Throttle bucket empty, on_exceed='raise'
 ```
 
 ```{note}
@@ -26,6 +27,9 @@ inline, and template paths, but you still need to provision directories and perm
 - `MailTransportError` surfaces when the active backend (filesystem spool, SMTP, future providers) rejects or
 	times out a delivery attempt.
 - `MailConfigurationError` is raised when required headers, secrets, or templates are missing at build time.
+- `MailThrottledError` is raised when `MailThrottle` blocks a send because the token-bucket is empty and the
+	configured `on_exceed` mode is `"raise"`. Carries throttle parameters in its message to help the caller
+	pick a backoff strategy.
 
 ## Usage patterns
 

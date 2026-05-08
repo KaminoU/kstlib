@@ -704,6 +704,7 @@ class SpinnerWithLogZone:
         file: IO[str] | None = None,
         interval: float = 0.08,
     ) -> None:
+        """Initialize the spinner with a fixed-height log zone and the usual Spinner options."""
         self._message = message
         self._log_zone_height = log_zone_height
         self._style = Spinner._resolve_style(style)

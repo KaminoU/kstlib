@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import httpx
@@ -11,6 +12,7 @@ import pytest
 from kstlib.auth.errors import AuthError, TokenExpiredError
 from kstlib.auth.models import Token
 from kstlib.auth.session import AuthSession
+from kstlib.logging import TRACE_LEVEL
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -487,3 +489,99 @@ class TestAsyncHttpMethods:
             # Should return original 401 when refresh fails
             assert response.status_code == HTTPStatus.UNAUTHORIZED
             mock_provider.refresh.assert_called_once()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SSL config cascade coverage (provider config + kwarg fallback)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAuthSessionSslConfig:
+    """SSL context cascade: kwargs > provider config > global fallback."""
+
+    def test_ssl_uses_provider_config_bool(self) -> None:
+        """When provider.config.ssl_verify is a real bool, AuthSession uses it."""
+        provider = MagicMock()
+        # provider.config.ssl_verify is a real bool (not a MagicMock auto-attribute)
+        provider.config = MagicMock()
+        provider.config.ssl_verify = False
+        provider.config.ssl_ca_bundle = None
+        session = AuthSession(provider)
+        # ssl_verify=False resolves to plain False ssl context value
+        assert session._ssl_context is False
+
+    def test_ssl_uses_provider_config_ca_bundle(self, tmp_path: Path) -> None:
+        """When provider.config.ssl_ca_bundle is a real str path, AuthSession uses it."""
+        # Use a real existing path that passes the kstlib.ssl PEM validation
+        # (minimum 50 bytes + must contain '-----BEGIN'). Stub content only.
+        ca_file = tmp_path / "ca.pem"
+        ca_file.write_text(
+            "-----BEGIN CERTIFICATE-----\n"
+            "MIIBkTCB+wIJAJxA0000000000000000000000000000000000000000\n"
+            "-----END CERTIFICATE-----\n",
+        )
+        provider = MagicMock()
+        provider.config = MagicMock()
+        provider.config.ssl_verify = None  # not a bool, falls through
+        provider.config.ssl_ca_bundle = str(ca_file)
+        session = AuthSession(provider)
+        # The resolved ssl_context for a CA path is the path string itself.
+        assert session._ssl_context == str(ca_file)
+
+    def test_ssl_kwarg_explicit_overrides_provider(self) -> None:
+        """When ssl_verify kwarg is explicit, AuthSession bypasses provider config and uses kwarg."""
+        provider = MagicMock()
+        provider.config = MagicMock()
+        provider.config.ssl_verify = True
+        # ssl_verify=False kwarg is explicit, takes the else branch (line 99)
+        session = AuthSession(provider, ssl_verify=False)
+        assert session._ssl_context is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Trace logging coverage for sync and async _request
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAuthSessionTraceLogging:
+    """TRACE log coverage for the sync and async request paths."""
+
+    def test_sync_request_trace_logs(
+        self,
+        mock_provider: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_request at TRACE emits '[SESSION] METHOD URL' and 'Response: <code>' records."""
+        session = AuthSession(mock_provider)
+        with caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.session"), session as s:
+            mock_response = MagicMock(spec=httpx.Response)
+            mock_response.status_code = HTTPStatus.OK
+            mock_response.reason_phrase = "OK"
+            s._sync_client.request = MagicMock(return_value=mock_response)  # type: ignore[union-attr]
+            s.get("https://api.example.com/users")
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("[SESSION] GET https://api.example.com/users" in m for m in messages), messages
+        assert any("[SESSION] Response: 200 OK" in m for m in messages), messages
+
+    @pytest.mark.asyncio
+    async def test_async_request_trace_logs(
+        self,
+        mock_provider: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_arequest at TRACE emits '[SESSION] METHOD URL (async)' and 'Response: <code>' records."""
+        session = AuthSession(mock_provider)
+        with caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.session"):
+            async with session as s:
+                mock_response = MagicMock(spec=httpx.Response)
+                mock_response.status_code = HTTPStatus.OK
+                mock_response.reason_phrase = "OK"
+
+                async def fake_request(*args: object, **kwargs: object) -> httpx.Response:
+                    return mock_response
+
+                s._async_client.request = fake_request  # type: ignore[union-attr]
+                await s.aget("https://api.example.com/users")
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("[SESSION] GET https://api.example.com/users (async)" in m for m in messages), messages
+        assert any("[SESSION] Response: 200 OK" in m for m in messages), messages

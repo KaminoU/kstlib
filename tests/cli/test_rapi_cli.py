@@ -26,6 +26,12 @@ from kstlib.rapi import (
 call_module = importlib.import_module("kstlib.cli.commands.rapi.call")
 list_module = importlib.import_module("kstlib.cli.commands.rapi.list")
 show_module = importlib.import_module("kstlib.cli.commands.rapi.show")
+# Package-level helper used by call/list/show to load config (with friendly
+# exit on failure). Tests patch this entry point rather than the underlying
+# load_rapi_config because list.py and call.py do a lazy
+# `from kstlib.cli.commands.rapi import _load_config_or_exit` inside the
+# command body and do not import load_rapi_config in their own namespace.
+rapi_pkg = importlib.import_module("kstlib.cli.commands.rapi")
 
 # Mark all tests in this module as CLI tests (excluded from main tox runs)
 # Run with: tox -e cli OR pytest -m cli
@@ -142,7 +148,7 @@ class TestRapiList:
 
     def test_list_all_endpoints(self) -> None:
         """List all configured endpoints."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list"])
@@ -155,7 +161,7 @@ class TestRapiList:
 
     def test_list_filter_by_api(self) -> None:
         """List endpoints filtered by API name."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list", "httpbin"])
@@ -166,7 +172,7 @@ class TestRapiList:
 
     def test_list_unknown_api(self) -> None:
         """Filter by unknown API fails."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list", "unknown"])
@@ -176,7 +182,7 @@ class TestRapiList:
 
     def test_list_verbose(self) -> None:
         """Verbose output shows method, query, body, and description columns."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list", "--verbose"])
@@ -191,7 +197,7 @@ class TestRapiList:
 
     def test_list_empty_config(self) -> None:
         """Empty config shows message."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = RapiConfigManager({})
 
             result = runner.invoke(app, ["rapi", "list"])
@@ -201,7 +207,7 @@ class TestRapiList:
 
     def test_list_filter_single_term(self) -> None:
         """Filter by single keyword matches endpoints."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list", "--filter", "github"])
@@ -213,7 +219,7 @@ class TestRapiList:
 
     def test_list_filter_multiple_terms(self) -> None:
         """Filter with multiple terms uses AND logic."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list", "--filter", "httpbin GET"])
@@ -225,7 +231,7 @@ class TestRapiList:
 
     def test_list_filter_no_match(self) -> None:
         """Filter with no matches shows message."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list", "--filter", "nonexistent"])
@@ -235,7 +241,7 @@ class TestRapiList:
 
     def test_list_filter_combined_with_api(self) -> None:
         """Filter can be combined with API argument."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list", "httpbin", "--filter", "ip"])
@@ -246,7 +252,7 @@ class TestRapiList:
 
     def test_list_verbose_full_description(self) -> None:
         """Verbose mode shows full description without truncation."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_descriptions()
 
             result = runner.invoke(app, ["rapi", "list", "--verbose"])
@@ -260,7 +266,7 @@ class TestRapiList:
 
     def test_list_verbose_short_desc_truncates(self) -> None:
         """Verbose mode with --short-desc truncates long descriptions."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_descriptions()
 
             result = runner.invoke(app, ["rapi", "list", "--verbose", "--short-desc"])
@@ -273,7 +279,7 @@ class TestRapiList:
 
     def test_list_short_desc_without_verbose_ignored(self) -> None:
         """--short-desc without verbose is ignored (no description column)."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_descriptions()
 
             result = runner.invoke(app, ["rapi", "list", "--short-desc"])
@@ -289,7 +295,7 @@ class TestRapiCall:
     def test_call_simple_get(self) -> None:
         """Simple GET request."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -309,7 +315,7 @@ class TestRapiCall:
     def test_call_with_path_param(self) -> None:
         """Call with positional path parameter."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -331,7 +337,7 @@ class TestRapiCall:
     def test_call_with_query_params(self) -> None:
         """Call with keyword query parameters."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -351,7 +357,7 @@ class TestRapiCall:
     def test_call_with_body(self) -> None:
         """POST call with JSON body."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -371,7 +377,7 @@ class TestRapiCall:
     def test_call_with_headers(self) -> None:
         """Call with custom headers."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -390,7 +396,7 @@ class TestRapiCall:
 
     def test_call_invalid_body_json(self) -> None:
         """Invalid JSON body fails."""
-        with patch.object(call_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "call", "httpbin.post_data", "--body", "not-json"])
@@ -400,7 +406,7 @@ class TestRapiCall:
 
     def test_call_invalid_header_format(self) -> None:
         """Invalid header format fails."""
-        with patch.object(call_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip", "-H", "bad-format"])
@@ -411,7 +417,7 @@ class TestRapiCall:
     def test_call_endpoint_not_found(self) -> None:
         """Unknown endpoint fails with error."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -427,7 +433,7 @@ class TestRapiCall:
     def test_call_endpoint_ambiguous(self) -> None:
         """Ambiguous endpoint fails with error."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_manager = MagicMock()
@@ -444,7 +450,7 @@ class TestRapiCall:
     def test_call_request_error(self) -> None:
         """Request error shows status and retryable flag."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -460,7 +466,7 @@ class TestRapiCall:
     def test_call_output_text(self) -> None:
         """Output as raw text."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -478,7 +484,7 @@ class TestRapiCall:
     def test_call_output_full(self) -> None:
         """Output full response with metadata."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -499,7 +505,7 @@ class TestRapiCall:
     def test_call_non_ok_response_exits_1(self) -> None:
         """Non-OK response exits with code 1."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -517,7 +523,7 @@ class TestRapiCall:
     def test_call_output_to_file(self, tmp_path: Any) -> None:
         """Output written to file with -o option."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -540,7 +546,7 @@ class TestRapiCall:
     def test_call_output_to_file_quiet(self, tmp_path: Any) -> None:
         """Output to file with quiet mode suppresses confirmation."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -561,7 +567,7 @@ class TestRapiCall:
     def test_call_output_to_file_full_format(self, tmp_path: Any) -> None:
         """Output full format to file."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -585,7 +591,7 @@ class TestRapiCall:
     def test_call_with_body_from_file(self, tmp_path: Any) -> None:
         """POST call with JSON body loaded from file."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -607,7 +613,7 @@ class TestRapiCall:
 
     def test_call_body_file_not_found(self) -> None:
         """Body file not found fails with error."""
-        with patch.object(call_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "call", "httpbin.post_data", "--body", "@nonexistent.json"])
@@ -617,7 +623,7 @@ class TestRapiCall:
 
     def test_call_invalid_format(self) -> None:
         """Invalid format option fails."""
-        with patch.object(call_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip", "--format", "invalid"])
@@ -628,7 +634,7 @@ class TestRapiCall:
     def test_call_credential_error(self) -> None:
         """Credential error shows credential name."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -644,7 +650,7 @@ class TestRapiCall:
     def test_call_response_too_large(self) -> None:
         """Response too large shows sizes."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -664,7 +670,7 @@ class TestRapiCall:
     def test_call_with_server_flag(self) -> None:
         """--server flag is forwarded to client.call()."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -684,7 +690,7 @@ class TestRapiCall:
     def test_call_with_server_short_flag(self) -> None:
         """-s short flag works the same as --server."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -704,7 +710,7 @@ class TestRapiCall:
     def test_call_without_server_flag_passes_none(self) -> None:
         """No --server flag forwards server=None to client.call()."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -724,7 +730,7 @@ class TestRapiCall:
     def test_call_server_not_found(self) -> None:
         """Unknown server name exits 1 with helpful message listing available."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -747,7 +753,7 @@ class TestRapiCall:
     def test_call_server_not_found_no_servers_configured(self) -> None:
         """Unknown server with no servers configured shows '(none configured)'."""
         with (
-            patch.object(call_module, "load_rapi_config") as mock_load,
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
             patch.object(call_module, "RapiClient") as mock_client_cls,
         ):
             mock_load.return_value = _mock_config_manager()
@@ -767,7 +773,7 @@ class TestRapiListQueryIndicator:
 
     def test_list_shows_query_param_indicator(self) -> None:
         """List shows (N) indicator for endpoints with default query params."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_query()
 
             result = runner.invoke(app, ["rapi", "list"])
@@ -782,7 +788,7 @@ class TestRapiListQueryIndicator:
 
     def test_list_no_indicator_without_query(self) -> None:
         """List does not show indicator for endpoints without query params."""
-        with patch.object(list_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "list"])
@@ -797,7 +803,7 @@ class TestRapiShow:
 
     def test_show_endpoint_full_ref(self) -> None:
         """Show endpoint with full reference."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_query()
 
             result = runner.invoke(app, ["rapi", "show", "binance.ticker"])
@@ -810,7 +816,7 @@ class TestRapiShow:
 
     def test_show_endpoint_short_ref(self) -> None:
         """Show endpoint with short reference (if unique)."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_query()
 
             result = runner.invoke(app, ["rapi", "show", "ticker"])
@@ -820,7 +826,7 @@ class TestRapiShow:
 
     def test_show_endpoint_not_found(self) -> None:
         """Show unknown endpoint fails with error."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "show", "unknown.endpoint"])
@@ -830,7 +836,7 @@ class TestRapiShow:
 
     def test_show_endpoint_with_path_params(self) -> None:
         """Show endpoint with path parameters."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager()
 
             result = runner.invoke(app, ["rapi", "show", "httpbin.delay"])
@@ -841,7 +847,7 @@ class TestRapiShow:
 
     def test_show_endpoint_with_query_params(self) -> None:
         """Show endpoint displays default query parameters."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_query()
 
             result = runner.invoke(app, ["rapi", "show", "binance.ticker"])
@@ -853,7 +859,7 @@ class TestRapiShow:
 
     def test_show_endpoint_with_body_template(self) -> None:
         """Show endpoint displays body template."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_query()
 
             result = runner.invoke(app, ["rapi", "show", "binance.order"])
@@ -864,7 +870,7 @@ class TestRapiShow:
 
     def test_show_endpoint_with_auth(self) -> None:
         """Show endpoint displays authentication info."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_query()
 
             result = runner.invoke(app, ["rapi", "show", "binance.ticker"])
@@ -900,7 +906,7 @@ class TestRapiShow:
 
     def test_show_endpoint_examples_section(self) -> None:
         """Show endpoint includes usage examples."""
-        with patch.object(show_module, "load_rapi_config") as mock_load:
+        with patch.object(rapi_pkg, "_load_config_or_exit") as mock_load:
             mock_load.return_value = _mock_config_manager_with_query()
 
             result = runner.invoke(app, ["rapi", "show", "binance.ticker"])

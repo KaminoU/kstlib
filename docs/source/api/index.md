@@ -28,6 +28,13 @@ Complete API documentation for all `kstlib` modules. Each page documents public 
 `@cached`, `CacheStrategy`, memory/file backends.
 :::
 
+:::{grid-item-card} cli
+:link: cli
+:link-type: doc
+
+`app` (Typer root), subcommand groups, verbose flags.
+:::
+
 :::{grid-item-card} config
 :link: config
 :link-type: doc
@@ -176,6 +183,7 @@ For narrative guides with practical examples, see {doc}`../features/index`.
 alerts
 auth
 cache
+cli
 config
 db
 helpers

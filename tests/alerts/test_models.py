@@ -1,5 +1,7 @@
 """Tests for kstlib.alerts.models module."""
 
+import re
+
 import pytest
 
 from kstlib.alerts.models import AlertLevel, AlertMessage, AlertResult
@@ -99,6 +101,22 @@ class TestAlertMessage:
         # Same message should have same hash
         msg2 = AlertMessage(title="Test", body="Body")
         assert hash(msg) == hash(msg2)
+
+    def test_formatted_title_default_no_timestamp(self) -> None:
+        """formatted_title returns the raw title when timestamp is False."""
+        msg = AlertMessage(title="Heartbeat failed", body="Body", timestamp=False)
+        assert msg.formatted_title == "Heartbeat failed"
+
+    def test_formatted_title_with_timestamp(self) -> None:
+        """formatted_title prefixes the title with a UTC-local datetime + ' ::: ' when timestamp is True."""
+        msg = AlertMessage(title="DB outage", body="Body", timestamp=True)
+        result = msg.formatted_title
+        # Format: "YYYY-MM-DD HH:MM:SS ::: <title>"
+        match = re.match(
+            r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ::: DB outage$",
+            result,
+        )
+        assert match is not None, f"Unexpected formatted_title shape: {result!r}"
 
 
 class TestAlertResult:

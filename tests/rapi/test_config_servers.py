@@ -450,8 +450,6 @@ class TestMaxServersLimit:
 
         servers_raw = {f"server{i}": {"base_url": f"https://s{i}.com"} for i in range(_MAX_SERVERS + 1)}
         with pytest.raises(ValueError, match="Too many server profiles"):
-            from kstlib.rapi.config import _validate_server_name, _validate_server_profile
-
             if len(servers_raw) > _MAX_SERVERS:
                 raise ValueError(f"Too many server profiles: {len(servers_raw)} > {_MAX_SERVERS}")
 

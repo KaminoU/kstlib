@@ -798,7 +798,7 @@ class WebSocketManager:
 
         log.debug("Re-subscribing to %d channels", len(self._subscriptions))
         for channel in self._subscriptions:
-            try:
+            try:  # reason: per-channel resubscribe tolerance after reconnect
                 await self._send_subscribe(channel)
             except Exception as e:
                 log.warning("Failed to re-subscribe to %s: %s", channel, e)

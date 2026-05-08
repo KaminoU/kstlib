@@ -28,6 +28,13 @@ OAuth2, OIDC, PKCE, token storage with SOPS encryption.
 `@cached` decorator with memory/file strategies, TTL support.
 :::
 
+:::{grid-item-card} cli
+:link: cli/index
+:link-type: doc
+
+Typer-based command-line interface with verbose flags and subcommand groups.
+:::
+
 :::{grid-item-card} config
 :link: config/index
 :link-type: doc
@@ -40,6 +47,13 @@ Config-driven with presets, includes, YAML/TOML/JSON support.
 :link-type: doc
 
 Async SQLite/SQLCipher with connection pooling.
+:::
+
+:::{grid-item-card} helpers
+:link: helpers/index
+:link-type: doc
+
+`TimeTrigger` for modulo-aligned scheduling (every 4h, every 15m, ...).
 :::
 
 :::{grid-item-card} logging
@@ -105,6 +119,13 @@ CircuitBreaker, Heartbeat, Watchdog, RateLimiter.
 SOPS, AWS KMS, keyring, environment variable resolution.
 :::
 
+:::{grid-item-card} secure
+:link: secure/index
+:link-type: doc
+
+`PathGuardrails`, root pinning, POSIX permission enforcement.
+:::
+
 :::{grid-item-card} transform
 :link: transform/index
 :link-type: doc
@@ -148,8 +169,10 @@ For complete API documentation, see {doc}`../api/index`.
 alerts/index
 auth/index
 cache/index
+cli/index
 config/index
 db/index
+helpers/index
 logging/index
 mail/index
 metrics/index
@@ -159,6 +182,7 @@ pipeline/index
 rapi/index
 resilience/index
 secrets/index
+secure/index
 transform/index
 ui/index
 utils/index

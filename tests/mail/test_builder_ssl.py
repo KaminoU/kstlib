@@ -74,13 +74,13 @@ def valid_ca_bundle(tmp_path: Path, _session_ca_pem: bytes) -> str:
 
 
 def _mock_mail_section(monkeypatch: pytest.MonkeyPatch, mail_section: dict[str, Any] | None) -> None:
-    """Stub ``_load_mail_config`` to return the provided mail section."""
+    """Stub ``_load_mail_section`` to return the provided mail section."""
     box_section = Box(mail_section, default_box=True, default_box_attr=None) if mail_section is not None else None
 
     def fake_loader() -> Any:
         return box_section
 
-    monkeypatch.setattr(builder_mod, "_load_mail_config", fake_loader)
+    monkeypatch.setattr(builder_mod, "_load_mail_section", fake_loader)
 
 
 def _mock_root_ssl(monkeypatch: pytest.MonkeyPatch, verify: bool, ca_bundle: str | None) -> None:

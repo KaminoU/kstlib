@@ -240,7 +240,7 @@ class MonitoringService:
 
         # Run sync collectors
         for name, collector in sync_collectors.items():
-            try:
+            try:  # reason: per-collector isolation; one failure should not abort dashboard
                 data[name] = collector()
             except Exception as e:
                 self._handle_collector_error(name, e, errors, async_tasks)
@@ -248,7 +248,7 @@ class MonitoringService:
 
         # Await async collectors
         for name, task in async_tasks.items():
-            try:
+            try:  # reason: per-task isolation; one failure should not abort dashboard
                 data[name] = await task
             except asyncio.CancelledError:
                 raise

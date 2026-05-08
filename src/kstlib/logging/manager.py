@@ -74,7 +74,8 @@ FORBIDDEN_PATH_COMPONENTS: frozenset[str] = frozenset({"..", "~"})
 ALLOWED_LOG_EXTENSIONS: frozenset[str] = frozenset({".log", ".txt", ".json", ""})
 
 
-# TODO: Add aiofiles for true async file I/O
+# Native async file I/O via aiofiles is a potential future enhancement;
+# current implementation uses thread-pool wrappers (see methods below).
 # try:
 #     import aiofiles
 #     import aiofiles.os
@@ -882,7 +883,8 @@ class LogManager(logging.Logger):
         """Return whether native async logs are available."""
         return HAS_ASYNC
 
-    # Async logging methods (TODO: implement with aiofiles)
+    # Async logging methods (thread-pool wrappers; native aiofiles via
+    # optional dep is a potential future optimization).
 
     async def atrace(self, msg: str, **context: Any) -> None:
         """Async trace wrapper executed via thread pool."""

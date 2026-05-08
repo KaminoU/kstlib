@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
 
 from kstlib._shared.redaction import (
     DEFAULT_URL_SENSITIVE_QUERY_KEYS,

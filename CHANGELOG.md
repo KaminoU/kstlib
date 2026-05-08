@@ -19,6 +19,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [2.7.0] - 2026-05-09
+
+### Added
+
+- **Mail throttle (anti-spam kill switch)** : `kstlib.mail.MailThrottle`
+  enforces a token-bucket rate limit on every `MailBuilder.send()`,
+  including indirect calls via the `@mail.notify` decorator. Stops
+  runaway batch loops, recursive sends, exception-handler floods, and
+  concurrent thread/asyncio races at their first overrun. Built on top
+  of the existing `kstlib.resilience.RateLimiter` (Token Bucket,
+  thread-safe and asyncio-safe).
+
+  Configuration cascade, highest priority first :
+
+  1. Per-builder kwarg `MailBuilder(throttle=False)` (disable),
+     `MailBuilder(throttle={"rate": 100, "per": 3600.0})` (custom).
+  2. `mail.presets.<name>.throttle.<key>` (preset-level YAML override).
+  3. `mail.throttle.<key>` (mail-wide YAML default).
+  4. Code defaults : `enabled=true`, `rate=20`, `per=60.0`,
+     `on_exceed=raise`.
+
+  Each key cascades independently. Two policies are supported on bucket
+  empty : `raise` (emits `WARNING [SECURITY]` and raises
+  `MailThrottledError`) and `warn` (emits `WARNING [SECURITY]` and
+  drops the send silently). Mode `drop` is intentionally rejected at
+  init : a security event must never be silent (kstlib logging
+  convention).
+
+  A singleton `MailThrottle` is shared across all builders that use the
+  same preset, including `_snapshot()` copies taken by `@mail.notify`,
+  preventing bypass via creating many builder instances. The registry
+  persists across `kstlib.config.clear_config()` calls : the throttle
+  is operational, not a preference.
+
+  Hard limits enforced at init (`rate` in `[1, 1000]`, `per` in
+  `[1.0, 86400.0]`) reuse the existing alerts hard-limit constants.
+  YAML keys outside `{enabled, rate, per, on_exceed}` are rejected
+  (anti-typo). Invalid types and out-of-bounds values raise
+  `MailConfigurationError` at builder init, not at send time.
+
+- **`MailThrottledError` exception** : raised by `MailBuilder.send()`
+  in mode `raise` when the throttle bucket is empty. Inherits from
+  `MailError`. Carries the throttle parameters in the message to help
+  the caller decide on a backoff strategy.
+
+- **`mail.throttle` YAML section** : new section in
+  `src/kstlib/kstlib.conf.yml` with documented defaults and an inline
+  example showing per-preset override.
+
+- **Logging instrumentation for mail throttle** : every
+  `MailBuilder.__init__` emits a `DEBUG` log on the `kstlib.mail.throttle`
+  logger reporting the resolved `rate`, `per`, `on_exceed`, source level
+  (`preset` / `mail` / `default`) and preset name. Every blocked send
+  emits exactly one `WARNING [SECURITY]` log line (no batching). The
+  log never includes the message body, sender, recipients, or
+  attachments : only a sanitized subject (truncated to 80 chars,
+  null-byte filtered) is included.
+
+- **Sphinx documentation** : new section "Throttle (anti-spam
+  protection)" in `docs/source/features/mail/index.md` (label
+  `mail-throttle`) covering the four real-world spam scenarios, the
+  cascade resolution, the two on_exceed modes, the singleton-per-preset
+  contract, the hard limits, and recommendations for production usage.
+  Cross-link added from the `@mail.notify()` decorator section.
+
+### Changed
+
+- **Mail sends are now throttled by default at 20 mails per 60 seconds,
+  raising `MailThrottledError` on overrun.** This is a behavior change
+  versus 2.6.0 where mail sends were unbounded.
+
+  To restore the previous unbounded behavior on a single builder, pass
+  `MailBuilder(throttle=False)`. To restore globally, set
+  `mail.throttle.enabled: false` in `kstlib.conf.yml`. Both are
+  recommended only for tests, scripts that send a single mail and exit,
+  or specific business cases where the upstream system already enforces
+  a rate limit.
+
+  See `docs/source/features/mail/index.md` section "Throttle" for
+  cascade tuning and operational recommendations.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+- **Anti-spam kill switch on mail sends** : closes a real robustness
+  gap where a buggy `for` loop, `@mail.notify` on a hot function,
+  unbounded recursion, or exception handler that mailed could blacklist
+  an SMTP relay's source IP, exhaust an external provider quota, or
+  saturate a destination inbox. The throttle bounds the blast radius
+  to `rate` mails per `per` seconds and emits `WARNING [SECURITY]`
+  logs on every blocked send so the event is observable in operational
+  dashboards.
+
 ## [2.6.0] - 2026-05-01
 
 ### Added
@@ -1085,7 +1183,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.6.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/KaminoU/kstlib/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/KaminoU/kstlib/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/KaminoU/kstlib/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/KaminoU/kstlib/compare/v2.3.1...v2.4.0

@@ -11,6 +11,7 @@ from kstlib.ops.exceptions import (
     ContainerRuntimeNotFoundError,
     SessionAmbiguousError,
     SessionNotFoundError,
+    SessionStopError,
     TmuxNotFoundError,
 )
 from kstlib.ops.manager import SessionConfigError, SessionManager, auto_detect_backend
@@ -468,6 +469,31 @@ class TestSessionAmbiguousError:
         error = SessionAmbiguousError("mybot", ["tmux", "container"])
         assert error.name == "mybot"
         assert error.backends == ["tmux", "container"]
+
+
+# ============================================================================
+# SessionStopError tests
+# ============================================================================
+
+
+class TestSessionStopError:
+    """Tests for SessionStopError exception."""
+
+    def test_error_message_format(self) -> None:
+        """Error message should include backend, session name, and reason."""
+        error = SessionStopError("mybot", "tmux", "process refused signal")
+        message = str(error)
+        assert "mybot" in message
+        assert "tmux" in message
+        assert "process refused signal" in message
+        assert "Failed to stop" in message
+
+    def test_attributes(self) -> None:
+        """Error attributes should expose name, backend, and reason."""
+        error = SessionStopError("worker-42", "container", "kill returned 1")
+        assert error.name == "worker-42"
+        assert error.backend == "container"
+        assert error.reason == "kill returned 1"
 
 
 # ============================================================================

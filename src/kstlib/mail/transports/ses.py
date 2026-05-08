@@ -103,6 +103,7 @@ class SesTransport(AsyncMailTransport):
         aws_secret_access_key: str | None = None,
         timeout: float = 30.0,
     ) -> None:
+        """Initialize the SES transport with AWS region, optional credentials, and a send timeout."""
         if not region:
             raise MailConfigurationError("AWS region is required")
 

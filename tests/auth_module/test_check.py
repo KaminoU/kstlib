@@ -124,6 +124,7 @@ def _make_signed_jwt(
 
     Returns:
         Signed JWT string.
+
     """
     from authlib.jose import jwt
 

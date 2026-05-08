@@ -43,6 +43,7 @@ def _run_subprocess(
 
     Returns:
         StepResult with stdout/stderr/return_code/status/duration populated.
+
     """
     env = {**os.environ, **config.env} if config.env else None
     workdir = os.path.expandvars(config.working_dir) if config.working_dir else None

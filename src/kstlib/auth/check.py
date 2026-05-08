@@ -171,6 +171,7 @@ class TokenChecker:
         expected_issuer: str | None = None,
         expected_audience: str | None = None,
     ) -> None:
+        """Initialize the token checker with an HTTP client and optional expected claims."""
         self._http = http_client
         self._expected_issuer = expected_issuer
         self._expected_audience = expected_audience

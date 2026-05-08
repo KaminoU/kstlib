@@ -163,7 +163,7 @@ def _collect_sessions(backend: str | None) -> list[SessionStatus]:
 
         # Discover sessions on custom tmux sockets
         for socket_name in discover_tmux_sockets():
-            try:
+            try:  # reason: per-socket discovery; missing tmux socket is non-fatal
                 tmux = TmuxRunner(socket_name=socket_name)
                 sessions.extend(tmux.list_sessions())
             except BackendNotFoundError:

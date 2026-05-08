@@ -453,7 +453,7 @@ class OAuth2Provider(AbstractAuthProvider):
 
         success = False
         for token_type_hint, token_value in tokens_to_revoke:
-            try:
+            try:  # reason: per-token revocation; partial success allowed (RFC 7009)
                 data: dict[str, Any] = {
                     "token": token_value,
                     "token_type_hint": token_type_hint,

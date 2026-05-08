@@ -11,6 +11,7 @@ class AuthError(KstlibError):
     """Base exception for all authentication errors."""
 
     def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        """Initialize the auth error with a message and optional structured details."""
         super().__init__(message)
         self.message = message
         self.details = details or {}
@@ -24,6 +25,7 @@ class ProviderNotFoundError(AuthError):
     """Raised when a named provider is not configured."""
 
     def __init__(self, provider_name: str) -> None:
+        """Initialize with the name of the missing provider."""
         super().__init__(f"Provider '{provider_name}' not found in configuration")
         self.provider_name = provider_name
 
@@ -32,6 +34,7 @@ class DiscoveryError(AuthError):
     """Raised when OIDC discovery fails."""
 
     def __init__(self, issuer: str, reason: str) -> None:
+        """Initialize with the failing issuer URL and the reason for the failure."""
         super().__init__(f"Discovery failed for '{issuer}': {reason}")
         self.issuer = issuer
         self.reason = reason
@@ -49,6 +52,7 @@ class TokenRefreshError(TokenError):
     """Raised when token refresh fails."""
 
     def __init__(self, reason: str, *, retryable: bool = False) -> None:
+        """Initialize with the reason for the refresh failure and a retryable flag."""
         super().__init__(f"Token refresh failed: {reason}")
         self.reason = reason
         self.retryable = retryable
@@ -58,6 +62,7 @@ class TokenExchangeError(TokenError):
     """Raised when authorization code exchange fails."""
 
     def __init__(self, reason: str, *, error_code: str | None = None) -> None:
+        """Initialize with the reason for the exchange failure and an optional OAuth error code."""
         super().__init__(f"Token exchange failed: {reason}")
         self.reason = reason
         self.error_code = error_code
@@ -67,6 +72,7 @@ class TokenValidationError(TokenError):
     """Raised when JWT validation fails (signature, claims, expiry)."""
 
     def __init__(self, reason: str, *, claim: str | None = None) -> None:
+        """Initialize with the reason for the validation failure and the offending claim name."""
         super().__init__(f"Token validation failed: {reason}")
         self.reason = reason
         self.claim = claim
@@ -86,6 +92,7 @@ class AuthorizationError(AuthError):
         error_code: str | None = None,
         error_description: str | None = None,
     ) -> None:
+        """Initialize with the reason for the failure plus optional OAuth error code and description."""
         super().__init__(f"Authorization failed: {reason}")
         self.reason = reason
         self.error_code = error_code
@@ -96,6 +103,7 @@ class CallbackServerError(AuthError):
     """Raised when the local callback server fails to start or receive callback."""
 
     def __init__(self, reason: str, *, port: int | None = None) -> None:
+        """Initialize with the reason for the callback server failure and the port that was in use."""
         super().__init__(f"Callback server error: {reason}")
         self.reason = reason
         self.port = port
@@ -105,6 +113,7 @@ class PreflightError(AuthError):
     """Raised when preflight validation fails."""
 
     def __init__(self, step: str, reason: str) -> None:
+        """Initialize with the failing preflight step name and the reason for the failure."""
         super().__init__(f"Preflight failed at '{step}': {reason}")
         self.step = step
         self.reason = reason

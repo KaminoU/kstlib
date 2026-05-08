@@ -34,7 +34,7 @@ class _StubTransport(MailTransport):
 
 
 def _mock_mail_config(monkeypatch: pytest.MonkeyPatch, mail_section: dict[str, Any] | None) -> None:
-    """Replace _load_mail_config with a stub returning the given section.
+    """Replace _load_mail_section with a stub returning the given section.
 
     Uses default_box_attr=None so that missing-key lookups return None,
     matching the shape of the real kstlib.config.get_config() output.
@@ -46,17 +46,17 @@ def _mock_mail_config(monkeypatch: pytest.MonkeyPatch, mail_section: dict[str, A
     def fake_loader() -> Any:
         return box_section
 
-    monkeypatch.setattr(builder_mod, "_load_mail_config", fake_loader)
+    monkeypatch.setattr(builder_mod, "_load_mail_section", fake_loader)
 
 
 def _must_not_load_config(monkeypatch: pytest.MonkeyPatch) -> Callable[[], None]:
-    """Wire _load_mail_config to a spy that fails the test if invoked."""
+    """Wire _load_mail_section to a spy that fails the test if invoked."""
     import kstlib.mail.builder as builder_mod
 
     def spy() -> Any:
-        pytest.fail("_load_mail_config should not be called when transport= is explicit")
+        pytest.fail("_load_mail_section should not be called when transport= is explicit")
 
-    monkeypatch.setattr(builder_mod, "_load_mail_config", spy)
+    monkeypatch.setattr(builder_mod, "_load_mail_section", spy)
     return spy
 
 
@@ -293,7 +293,7 @@ class TestDirectPresetBuilder:
 class TestConfigLoaderErrors:
     """Defensive branches around config loading."""
 
-    def test_load_mail_config_wraps_loader_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_load_mail_section_wraps_loader_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """get_config() raising bubbles up as MailConfigurationError."""
         import kstlib.config as config_mod
 
@@ -302,20 +302,20 @@ class TestConfigLoaderErrors:
 
         monkeypatch.setattr(config_mod, "get_config", explode)
 
-        from kstlib.mail.builder import _load_mail_config
+        from kstlib.mail._helpers import _load_mail_section
 
         with pytest.raises(MailConfigurationError, match="Failed to load"):
-            _load_mail_config()
+            _load_mail_section()
 
-    def test_load_mail_config_returns_none_for_non_mapping(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_load_mail_section_returns_none_for_non_mapping(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When get_config returns an object without .get, loader yields None."""
         import kstlib.config as config_mod
 
         monkeypatch.setattr(config_mod, "get_config", lambda *a, **kw: object())
 
-        from kstlib.mail.builder import _load_mail_config
+        from kstlib.mail._helpers import _load_mail_section
 
-        assert _load_mail_config() is None
+        assert _load_mail_section() is None
 
     def test_default_transport_swallows_loader_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """MailBuilder() with broken config lands with transport=None, not an exception."""
@@ -324,7 +324,7 @@ class TestConfigLoaderErrors:
         def explode() -> Any:
             raise MailConfigurationError("simulated loader failure")
 
-        monkeypatch.setattr(builder_mod, "_load_mail_config", explode)
+        monkeypatch.setattr(builder_mod, "_load_mail_section", explode)
 
         mail = MailBuilder()
         assert mail._transport is None  # noqa: SLF001

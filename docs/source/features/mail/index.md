@@ -460,6 +460,131 @@ readability, PEM header + size check). An invalid path raises
 A non-bool `ssl_verify` (for instance `"yes"` parsed as a YAML string)
 raises `TypeError` at build time. There is no silent coercion.
 
+(mail-throttle)=
+
+### Throttle (anti-spam protection)
+
+Mail sends are rate-limited by default. The throttle is a kill switch
+designed to bound damage from buggy or runaway code: a `for` loop with
+no break, a `@mail.notify` on a hot function, a recursion that mails on
+every iteration, an exception handler that mails on every catch.
+
+When the bucket is empty, the throttle either raises
+`MailThrottledError` (mode `raise`, default) or logs a security warning
+and silently drops the send (mode `warn`). A silent drop without a log
+(`drop` mode) is intentionally rejected: a security event must never be
+silent.
+
+#### Why
+
+Without a throttle, four realistic scenarios can flood an SMTP relay or
+exhaust an external provider (Gmail, Resend, SES) quota in seconds:
+
+1. `@mail.notify` on a function called inside a 1000-row loop.
+2. Mutual recursion that mails on a metric breach, with no guard.
+3. A global exception handler that mails on every error.
+4. Concurrent threads or tasks that all mail simultaneously.
+
+Each of these has been observed in production at other organizations.
+The throttle stops them at their first overrun.
+
+#### Configuration cascade
+
+Resolution order, highest priority first:
+
+1. Per-builder kwarg `MailBuilder(throttle=...)`:
+   - `False` disables the throttle on that builder.
+   - `dict` builds a per-instance custom throttle.
+2. `mail.presets.<name>.throttle.<key>` (preset-level YAML override).
+3. `mail.throttle.<key>` (mail-wide YAML default).
+4. Code defaults: `enabled=true`, `rate=20`, `per=60.0`,
+   `on_exceed=raise`.
+
+Each key (`enabled`, `rate`, `per`, `on_exceed`) cascades independently,
+so a preset can override only `rate` while keeping the mail-wide `per`
+and `on_exceed`.
+
+#### YAML example
+
+```yaml
+mail:
+  throttle:
+    enabled: true
+    rate: 20            # 20 mails per period
+    per: 60.0           # period duration in seconds
+    on_exceed: raise    # "raise" or "warn"
+
+  presets:
+    corporate:
+      transport: smtp
+      host: smtp.example.com
+      throttle:
+        rate: 5         # corporate is more restrictive
+        per: 60.0
+        on_exceed: warn # operational critical: log + drop, do not raise
+```
+
+#### Modes
+
+| Mode | Behavior on overrun | Exception |
+|------|--------------------|-----------|
+| `raise` (default) | Emits `WARNING [SECURITY]` and raises `MailThrottledError`. | `MailThrottledError` |
+| `warn` | Emits `WARNING [SECURITY]` and returns the built message without sending. | None |
+
+**Mode `drop` is rejected at init.** A silent drop violates the kstlib
+logging convention "security event must never be silent". If a user
+passes `on_exceed: drop` (kwarg or YAML), `MailConfigurationError` is
+raised with a hint listing the valid modes.
+
+#### Singleton per preset
+
+A single `MailThrottle` is shared across all builders that use the same
+preset, including snapshots taken by the `@mail.notify` decorator. This
+prevents bypass via creating many builder instances.
+
+For an explicit transport (`MailBuilder(transport=my_transport)`), the
+throttle is per-instance: there is no preset key to share state on, so
+each builder gets its own bucket. Document this in any code that uses
+explicit transports inside a hot loop.
+
+The singleton registry persists across `kstlib.config.clear_config()`
+calls. The throttle is operational, not a preference: reloading
+configuration must not give back tokens to the bucket.
+
+#### Hard limits
+
+- `rate`: integer in `[1, 1000]` (mails per period).
+- `per`: number in `[1.0, 86400.0]` seconds (1 second to 1 day).
+- `on_exceed`: `"raise"` or `"warn"`.
+
+Any value outside these bounds raises `MailConfigurationError` at the
+builder init, not at send time.
+
+#### Logging instrumentation
+
+- A single `DEBUG` log is emitted at every `MailBuilder.__init__`,
+  reporting the resolved `rate`, `per`, `on_exceed`, source level
+  (`preset`, `mail`, or `default`), and preset name. Useful to confirm
+  the cascade picks the level you expect.
+- Each blocked send (mode `raise` or `warn`) emits exactly one
+  `WARNING [SECURITY]` log line. No batching, no spam, no silent drop.
+- The log never includes the message body, sender, recipients, or
+  attachments. Only a sanitized subject (truncated to 80 chars,
+  null-byte filtered) is included for debugging.
+
+#### Recommendation
+
+Do not disable the throttle in production. The default
+`enabled=true, rate=20, per=60.0, on_exceed=raise` is conservative and
+catches almost every real-world spam scenario without false positives
+on legitimate batched workloads.
+
+If you have a legitimate use case that exceeds 20 mails per minute
+(transactional bulk sends, newsletter), raise `rate` and lengthen `per`
+accordingly. Disable only in tests, single-shot scripts that exit after
+one send, or specific integrations where the upstream system already
+enforces a rate limit.
+
 ## Common Patterns
 
 ### Alert notification
@@ -535,6 +660,16 @@ builder = MailBuilder(filesystem=guards)
 ## @mail.notify() Decorator
 
 Automatically send email notifications when a function completes. Perfect for ETL pipelines, scheduled jobs, or any operation that needs monitoring.
+
+```{important}
+The decorator shares the throttle bucket of the underlying builder, so
+applying `@mail.notify` to a function called inside a 1000-row loop
+will not flood the SMTP relay. Each blocked send emits a
+`WARNING [SECURITY]` log, and (in `raise` mode) raises
+`MailThrottledError` from the decorated function. See
+[](mail-throttle) for tuning and recommendations.
+```
+
 
 ### Basic Usage
 

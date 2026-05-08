@@ -13,10 +13,12 @@ Pair this reference with {doc}`../features/mail/index` for the feature guide.
 - `MailBuilder` validates addresses, merges HTML/plain bodies, and exposes a fluent API for attachments.
 - `MailFilesystemGuards` wraps `PathGuardrails` so templates, attachments, and inline assets stay within allowed
 	roots.
+- `MailThrottle` enforces a token-bucket rate limit before any transport call, acting as a kill switch against
+	accidental mail spam (runaway loops, recursion, hot-path notifications).
 - `MailTransport` defines the delivery contract; concrete backends include `SMTPTransport`, `SesTransport`,
 	`ResendTransport`, and `GmailTransport`.
-- Exceptions distinguish validation (`MailValidationError`), configuration (`MailConfigurationError`), and
-	delivery failures (`MailTransportError`).
+- Exceptions distinguish validation (`MailValidationError`), configuration (`MailConfigurationError`),
+	delivery failures (`MailTransportError`), and throttling rejections (`MailThrottledError`).
 
 ## Builder workflow
 
@@ -122,6 +124,29 @@ mistakes (directory traversal, missing roots) before interacting with the transp
 
 ```{eval-rst}
 .. autoclass:: kstlib.mail.MailFilesystemGuards
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+---
+
+## Throttling
+
+Mail throttling is a token-bucket rate limit applied before any transport call. It is config-driven via
+`mail.throttle.*` (rate, period, mode, key) and resolved through the cascade `kwargs > preset > mail.throttle >
+defaults`. The throttle is intended as a defensive kill switch: it stops runaway loops, recursive notification
+paths, and hot-path `@mail.notify` decorators from saturating the SMTP backend or external provider quotas.
+
+When the bucket empties, the active mode decides what happens: `"raise"` raises `MailThrottledError`, `"warn"`
+emits a `WARNING [SECURITY]` log and lets the call through. Silent drop is intentionally rejected at init: a
+security event must never be silent.
+
+### MailThrottle
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.MailThrottle
    :members:
    :undoc-members:
    :show-inheritance:
@@ -264,6 +289,14 @@ mistakes (directory traversal, missing roots) before interacting with the transp
 
 ```{eval-rst}
 .. autoclass:: kstlib.mail.MailTransportError
+   :show-inheritance:
+   :noindex:
+```
+
+### MailThrottledError
+
+```{eval-rst}
+.. autoclass:: kstlib.mail.MailThrottledError
    :show-inheritance:
    :noindex:
 ```

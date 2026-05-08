@@ -234,3 +234,21 @@ def test_lazy_import_error_raises_for_other_attrs(monkeypatch: pytest.MonkeyPatc
     # Should raise ImportError for LogManager
     with pytest.raises(ImportError, match="Simulated import error"):
         _ = kstlib.__getattr__("LogManager")
+
+
+def test_version_accessible_at_package_level() -> None:
+    """``__version__`` must be reachable as ``kstlib.__version__``.
+
+    Standard third-party tooling (CI banners, ``--version`` helpers,
+    dependency snapshots) reads ``pkg.__version__`` directly. This test
+    locks the invariant against accidental removal.
+
+    ``kstlib.meta`` is not exposed as a package attribute by the lazy
+    PEP 562 loader, so the comparison goes through an explicit import
+    binding rather than ``kstlib.meta.__version__``.
+    """
+    import kstlib
+    from kstlib.meta import __version__ as meta_version
+
+    assert hasattr(kstlib, "__version__")
+    assert kstlib.__version__ == meta_version

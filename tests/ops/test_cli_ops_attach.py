@@ -37,6 +37,7 @@ def _make_mock_manager(*, exists: bool = True, is_running: bool = True) -> Magic
 
     Returns:
         Configured MagicMock acting as a SessionManager.
+
     """
     mock = MagicMock()
     mock.exists.return_value = exists

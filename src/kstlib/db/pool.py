@@ -281,7 +281,7 @@ class ConnectionPool:
         async with self._lock:
             # Close all connections
             for conn in self._connections:
-                try:
+                try:  # reason: per-connection best-effort close on pool teardown
                     await conn.execute("PRAGMA optimize")
                     await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     await conn.close()
@@ -292,7 +292,7 @@ class ConnectionPool:
 
             # Empty the queue
             while not self._pool.empty():
-                try:
+                try:  # reason: race-safe queue drain (QueueEmpty IS the loop terminator)
                     self._pool.get_nowait()
                 except asyncio.QueueEmpty:
                     break

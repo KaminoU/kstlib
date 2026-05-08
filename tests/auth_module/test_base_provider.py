@@ -14,6 +14,7 @@ from kstlib.auth.providers.base import (
     load_provider_from_config,
 )
 from kstlib.auth.token import MemoryTokenStorage
+from kstlib.logging import TRACE_LEVEL
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AuthProviderConfig tests
@@ -92,6 +93,29 @@ class TestAuthProviderConfig:
         assert config.pkce is True
         assert config.discovery_ttl == 3600
         assert config.extra == {}
+
+    def test_invalid_redirect_uri_scheme(self) -> None:
+        """redirect_uri with non-http/https scheme raises ValueError."""
+        with pytest.raises(ValueError, match=r"redirect_uri must use http or https scheme.*ftp"):
+            AuthProviderConfig(
+                client_id="my-app",
+                issuer="https://auth.example.com",
+                redirect_uri="ftp://localhost:8400/callback",
+            )
+
+    def test_redirect_uri_non_localhost_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        """redirect_uri with non-localhost host emits a [SECURITY] warning."""
+        with caplog.at_level("WARNING", logger="kstlib.auth.providers.base"):
+            AuthProviderConfig(
+                client_id="my-app",
+                issuer="https://auth.example.com",
+                redirect_uri="https://example.com/callback",
+            )
+        security_warnings = [
+            record for record in caplog.records if record.levelname == "WARNING" and "[SECURITY]" in record.getMessage()
+        ]
+        assert security_warnings, "Expected at least one [SECURITY] warning record"
+        assert "example.com" in security_warnings[0].getMessage()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -397,3 +421,96 @@ class TestLoadProviderFromConfig:
         )
 
         assert auth_config.client_id == "test-client"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Trace logging coverage tests (kstlib.auth.providers.base)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAbstractAuthProviderTraceLogging:
+    """TRACE log coverage for get_token and _try_refresh_token branches."""
+
+    @pytest.fixture
+    def provider(self) -> ConcreteAuthProvider:
+        """Concrete provider with empty MemoryTokenStorage."""
+        config = AuthProviderConfig(
+            client_id="test-client",
+            issuer="https://auth.example.com",
+        )
+        return ConcreteAuthProvider("test-provider", config, MemoryTokenStorage())
+
+    def test_get_token_trace_logs_load_and_no_token(
+        self,
+        provider: ConcreteAuthProvider,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """get_token at TRACE emits 'Loading token' and 'No token found' when storage is empty."""
+        with caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.providers.base"):
+            result = provider.get_token(auto_refresh=False)
+        assert result is None
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("Loading token from storage" in m and "test-provider" in m for m in messages), messages
+        assert any("No token found" in m and "test-provider" in m for m in messages), messages
+
+    def test_try_refresh_token_re_check_skip_when_already_fresh(
+        self,
+        provider: ConcreteAuthProvider,
+    ) -> None:
+        """_try_refresh_token returns early if the lock-protected re-check shows the token no longer needs refresh."""
+        # Seed a token that should_refresh=True initially.
+        expired_token = Token(
+            access_token="cached",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            refresh_token="r",
+        )
+        provider._current_token = expired_token  # noqa: SLF001  # reason: testing internal lock-protected re-check branch
+        # Patch the should_refresh check on the cached token to flip mid-flow:
+        # outer get_token sees True -> takes lock -> re-check sees False -> returns early.
+        with patch.object(Token, "should_refresh", new_callable=lambda: property(lambda self: False)):
+            provider._try_refresh_token()  # noqa: SLF001  # reason: directly exercising the lock-protected internal
+        # Assert the cached token was NOT refreshed (still the seeded one).
+        assert provider._current_token is expired_token  # noqa: SLF001
+
+    def test_try_refresh_token_trace_logs_success(
+        self,
+        provider: ConcreteAuthProvider,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_try_refresh_token at TRACE emits 'needs refresh' and 'refreshed successfully' on success path."""
+        expired = Token(
+            access_token="old",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            refresh_token="r",
+        )
+        provider._current_token = expired  # noqa: SLF001  # reason: seeding token state for refresh-flow trace coverage
+        with caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.providers.base"):
+            provider._try_refresh_token()  # noqa: SLF001
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("needs refresh" in m for m in messages), messages
+        assert any("refreshed successfully" in m for m in messages), messages
+
+    def test_try_refresh_token_trace_logs_error_detail(
+        self,
+        provider: ConcreteAuthProvider,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_try_refresh_token emits a TRACE redacted error detail when refresh raises."""
+        expired = Token(
+            access_token="old",
+            token_type="Bearer",
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            refresh_token="r",
+        )
+        provider._current_token = expired  # noqa: SLF001  # reason: seeding token state for refresh-error trace coverage
+        with (
+            caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.providers.base"),
+            patch.object(provider, "refresh", side_effect=RuntimeError("boom token=secret123")),
+        ):
+            provider._try_refresh_token()  # noqa: SLF001
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("Token refresh error detail" in m for m in messages), messages
+        # Token was kept (cached fallback), not replaced.
+        assert provider._current_token is expired  # noqa: SLF001

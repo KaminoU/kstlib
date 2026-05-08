@@ -9,9 +9,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kstlib.ops.exceptions import (
+    SessionAttachError,
     SessionExistsError,
     SessionNotFoundError,
     SessionStartError,
+    SessionStopError,
     TmuxNotFoundError,
 )
 from kstlib.ops.models import BackendType, SessionConfig, SessionState
@@ -742,3 +744,120 @@ class TestDiscoverTmuxSockets:
         assert "orion" in result
         assert "astro" in result
         assert "default" not in result
+
+
+# ============================================================================
+# Edge cases coverage (lines 92, 229, 265-266, 293, 297, 333, 372)
+# ============================================================================
+
+
+class TestTmuxRunnerEdgeCases:
+    """Edge-case coverage for TmuxRunner branches not exercised by happy paths."""
+
+    def test_invalid_socket_name_with_slash_raises(self) -> None:
+        """TmuxRunner rejects a socket name containing a path separator."""
+        with pytest.raises(ValueError, match=r"Invalid socket name.*bad/name"):
+            TmuxRunner(socket_name="bad/name")
+
+    def test_invalid_socket_name_empty_string_raises(self) -> None:
+        """TmuxRunner rejects an empty socket name (falsy branch)."""
+        with pytest.raises(ValueError, match=r"Invalid socket name"):
+            TmuxRunner(socket_name="")
+
+    def test_stop_session_returncode_nonzero_session_still_alive_raises(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """stop() raises SessionStopError when kill-session fails AND the session is still listed."""
+        # Call sequence in stop(name="mybot", graceful=True default):
+        #   1. exists()        -> has-session, returncode 0 (exists)
+        #   2. _run(send-keys) -> graceful interrupt
+        #   3. _run(kill-session) -> returncode 1, stderr "kill refused"
+        #   4. exists()        -> has-session, returncode 0 (still alive)
+        # Then raise SessionStopError with "kill refused" in the message.
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="kill refused\n"),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ]
+        with pytest.raises(SessionStopError, match=r"kill refused"):
+            runner.stop("mybot")
+
+    def test_attach_oserror_raises_session_attach_error(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """attach() wraps an OSError from os.execvp into a SessionAttachError."""
+        # exists() check passes (returncode 0)
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        with (
+            patch("kstlib.ops.tmux.os.execvp", side_effect=OSError("execvp failed: ENOEXEC")),
+            pytest.raises(SessionAttachError, match=r"execvp failed"),
+        ):
+            runner.attach("mybot")
+
+    def test_status_returncode_nonzero_no_server_marker_absent_raises_not_found(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """status() raises SessionNotFoundError when list-sessions fails with stderr that does not contain 'no server running'."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="error: socket file not found\n",  # not "no server running"
+        )
+        with pytest.raises(SessionNotFoundError):
+            runner.status("mybot")
+
+    def test_status_skips_empty_lines_in_output(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """status() skips empty lines when iterating list-sessions output and finds the matching session."""
+        # Output has an empty line between two valid session lines.
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="other:1:1700000000:42\n\nmybot:2:1700000001:43\n",
+            stderr="",
+        )
+        result = runner.status("mybot")
+        assert result.name == "mybot"
+        assert result.window_count == 2
+        assert result.pid == 43
+
+    def test_logs_returncode_nonzero_returns_empty_string(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """logs() returns an empty string when capture-pane fails (instead of raising)."""
+        # exists() True, then capture-pane fails with returncode 1.
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="capture failed\n"),
+        ]
+        assert runner.logs("mybot") == ""
+
+    def test_list_sessions_skips_empty_lines(
+        self,
+        runner: TmuxRunner,
+        mock_run: MagicMock,
+    ) -> None:
+        """list_sessions() skips empty lines and returns only the valid session entries."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="alpha:1:1700000000:1001\n\nbeta:2:1700000010:1002\n",
+            stderr="",
+        )
+        sessions = runner.list_sessions()
+        names = [s.name for s in sessions]
+        assert names == ["alpha", "beta"]
+        assert all(s.state == SessionState.RUNNING for s in sessions)

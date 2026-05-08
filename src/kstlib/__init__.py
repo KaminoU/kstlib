@@ -39,6 +39,11 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
+# Eager-loaded version string (PEP 396 / standard ergonomy).
+# Imported eagerly so `kstlib.__version__` works without triggering the
+# lazy-loader. The cost is negligible (one trivial module load).
+from kstlib.meta import __version__
+
 # Public API exports (sorted alphabetically)
 __all__ = [
     "ConfigCircularIncludeError",
@@ -52,6 +57,7 @@ __all__ = [
     "MonitoringError",
     "PanelManager",
     "PanelRenderingError",
+    "__version__",
     "alerts",
     "app",
     "auth",

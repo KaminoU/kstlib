@@ -20,8 +20,10 @@ from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar, overload
 from kstlib._shared.jinja import render_jinja
 from kstlib.limits import MailLimits, get_mail_limits
 from kstlib.logging import get_logger
+from kstlib.mail._helpers import _load_mail_section
 from kstlib.mail.exceptions import MailConfigurationError, MailTransportError, MailValidationError
 from kstlib.mail.filesystem import MailFilesystemGuards
+from kstlib.mail.throttle import MailThrottle, get_or_create_throttle
 from kstlib.ssl import get_ssl_config, validate_ca_bundle_path
 from kstlib.utils import (
     EmailAddress,
@@ -181,6 +183,7 @@ class MailBuilder:
         encoding: str = _DEFAULT_ENCODING,
         filesystem: MailFilesystemGuards | None = None,
         limits: MailLimits | None = None,
+        throttle: bool | dict[str, Any] | None = None,
     ) -> None:
         """Initialise the builder with optional transport, preset, charset, and guardrails.
 
@@ -198,11 +201,20 @@ class MailBuilder:
             filesystem: Filesystem guardrails for attachments, inline
                 resources, and templates.
             limits: Message and attachment limits.
+            throttle: Anti-spam kill switch. ``False`` disables the
+                throttle on this builder. A ``dict`` (e.g.
+                ``{"rate": 100, "per": 3600.0, "on_exceed": "warn"}``)
+                builds a per-instance custom throttle. ``None`` (default)
+                resolves the throttle from configuration via the cascade
+                ``mail.presets.<name>.throttle`` > ``mail.throttle`` >
+                code defaults. See :class:`~kstlib.mail.MailThrottle` for
+                the available knobs.
 
         Raises:
             MailConfigurationError: If ``preset`` is passed but does not
-                resolve to a valid preset in configuration, or if a preset
-                default has a non-string value.
+                resolve to a valid preset in configuration, if a preset
+                default has a non-string value, or if the resolved
+                throttle configuration is invalid.
             MailValidationError: If a preset default holds an unparseable
                 email address.
 
@@ -220,6 +232,7 @@ class MailBuilder:
         self._encoding = encoding
         self._filesystem = filesystem or MailFilesystemGuards.default()
         self._limits = limits or get_mail_limits()
+        self._throttle: MailThrottle | None = get_or_create_throttle(resolved_preset_name, throttle)
         self._sender: EmailAddress | None = None
         self._reply_to: EmailAddress | None = None
         self._to: list[EmailAddress] = []
@@ -380,12 +393,23 @@ class MailBuilder:
     def send(self) -> EmailMessage:
         """Build and send the email using the configured transport.
 
+        If a :class:`~kstlib.mail.MailThrottle` is attached (default,
+        unless disabled via ``throttle=False``), it is consulted before
+        the transport. When the bucket is empty, the throttle either
+        raises :class:`~kstlib.mail.MailThrottledError` (mode ``raise``)
+        or logs a security warning and returns the built message without
+        sending (mode ``warn``).
+
         Returns:
-            The constructed EmailMessage after successful delivery.
+            The constructed :class:`~email.message.EmailMessage`. In
+            ``warn`` mode, the returned message may have been dropped
+            silently (a ``WARNING [SECURITY]`` log is emitted).
 
         Raises:
             MailConfigurationError: If no transport has been configured.
             MailTransportError: If the transport fails to deliver the message.
+            MailThrottledError: If the throttle is in ``raise`` mode and
+                the bucket is empty.
 
         """
         from kstlib.mail.transport import AsyncMailTransport, MailTransport
@@ -400,6 +424,8 @@ class MailBuilder:
             )
         assert isinstance(self._transport, MailTransport)
         message = self.build()
+        if self._throttle is not None and not self._throttle.consume(self._subject):
+            return message
         try:
             self._transport.send(message)
         except MailTransportError:
@@ -415,17 +441,27 @@ class MailBuilder:
     def _snapshot(self) -> MailBuilder:
         """Create an independent copy of this builder for decoration.
 
-        Returns a copy that shares the transport but has independent
-        message state, so decorated functions don't interfere with each other.
+        Returns a copy that shares the transport and throttle but has
+        independent message state, so decorated functions don't interfere
+        with each other. The throttle MUST be shared (not deep-copied)
+        so that ``@mail.notify`` on a hot function cannot bypass the
+        rate limit by getting its own bucket.
         """
-        # Save transport before deepcopy (transports should not be copied)
+        # Save transport and throttle before deepcopy: neither can be
+        # safely deep-copied (transport may hold sockets, throttle holds
+        # a threading.Lock) and both must be shared by reference so the
+        # snapshot enforces the same kill switch as the original builder.
         transport = self._transport
+        throttle = self._throttle
         self._transport = None
+        self._throttle = None
         try:
             snapshot = copy.deepcopy(self)
         finally:
             self._transport = transport
+            self._throttle = throttle
         snapshot._transport = transport
+        snapshot._throttle = throttle
         return snapshot
 
     @overload
@@ -935,32 +971,6 @@ def _detect_mime(path: Path) -> tuple[str, str]:
 _SUPPORTED_TRANSPORTS = ("smtp", "resend")
 
 
-def _load_mail_config() -> Any:
-    """Read ``mail`` section from kstlib configuration.
-
-    Returns:
-        The ``mail`` section as a Box/dict, or ``None`` if unavailable.
-
-    Raises:
-        MailConfigurationError: If the config loader cannot be imported or
-            raises while reading.
-
-    """
-    try:
-        from kstlib.config import get_config
-    except ImportError as exc:  # pragma: no cover - config is always present
-        raise MailConfigurationError("kstlib.config is not available") from exc
-
-    try:
-        cfg: Any = get_config()
-    except Exception as exc:
-        raise MailConfigurationError(f"Failed to load kstlib configuration: {exc}") from exc
-
-    if not hasattr(cfg, "get"):
-        return None
-    return cfg.get("mail")
-
-
 def _resolve_default_transport() -> TransportLike | None:
     """Resolve the transport from ``mail.default`` in configuration.
 
@@ -974,7 +984,7 @@ def _resolve_default_transport() -> TransportLike | None:
 
     """
     try:
-        mail_cfg = _load_mail_config()
+        mail_cfg = _load_mail_section()
     except MailConfigurationError:
         return None
 
@@ -992,10 +1002,10 @@ def _resolve_default_preset_name() -> str | None:
 
     Swallows any config loading error and returns ``None`` so that
     ``MailBuilder()`` stays usable even when the config file is missing.
-    Mirrors the silent-empty contract of :func:`_load_mail_config`.
+    Mirrors the silent-empty contract of :func:`_load_mail_section`.
     """
     try:
-        mail_cfg = _load_mail_config()
+        mail_cfg = _load_mail_section()
     except MailConfigurationError:
         return None
     if mail_cfg is None or not hasattr(mail_cfg, "get"):
@@ -1029,7 +1039,7 @@ def _load_preset_envelope_defaults(preset_name: str) -> dict[str, Any]:
 
     """
     try:
-        mail_cfg = _load_mail_config()
+        mail_cfg = _load_mail_section()
     except MailConfigurationError:
         return {}
     if mail_cfg is None or not hasattr(mail_cfg, "get"):
@@ -1078,7 +1088,7 @@ def _build_transport_from_preset(preset_name: str) -> TransportLike:
             field is missing or unsupported, or required fields are absent.
 
     """
-    mail_cfg = _load_mail_config()
+    mail_cfg = _load_mail_section()
     if mail_cfg is None:
         raise MailConfigurationError(
             f"Preset '{preset_name}' cannot be resolved: 'mail' section missing from configuration"
@@ -1113,7 +1123,7 @@ def _load_mail_ssl_section() -> Any | None:
     config loader cannot be reached.
     """
     try:
-        mail_section = _load_mail_config()
+        mail_section = _load_mail_section()
     except MailConfigurationError:
         return None
     if mail_section is None or not hasattr(mail_section, "get"):
