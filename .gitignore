@@ -9,7 +9,6 @@
 !/.github/
 .github/.tox-passed
 !/.editorconfig
-!/.coveragerc
 !/.coveragerc-nocli
 !/.readthedocs.yaml
 !/.pre-commit-config.yaml

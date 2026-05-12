@@ -19,6 +19,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [2.7.1] - 2026-05-13
+
+### Fixed
+
+- **Throttle adversarial tests determinism** : `tests/mail/test_throttle_adversarial.py`
+  was sensitive to runtime speed (logging overhead, CPU contention, accumulated test
+  runtime), causing off-by-one assertion failures on slower runs (regression-prone
+  on Python 3.10-3.13). Add autouse fixture `_frozen_clock` that monkeypatches
+  `time.monotonic` to `0.0` for all tests in the file, making tests deterministic
+  and independent of runtime speed (no token refill during the test window). Harden
+  two ceiling assertions now made strict by the frozen clock:
+  - `test_recursion_via_notify_is_throttled`: `<= 5` -> `== 5`
+  - `test_combined_stress_does_not_exceed_rate_per_window`: `<= 6` -> `== 5`
+- **Cross-platform LF line endings enforced via `.gitattributes`** : explicit
+  `eol=lf` on `*.py`, `*.pyi`, `*.toml`, `*.yml`, `*.yaml`, `*.json`, `*.ini`,
+  `*.cfg`, `*.conf`, `*.md`, `*.rst`, `*.txt` and on `LICENSE`, `CHANGELOG`,
+  `README` documentation files. Without this, Windows checkout produced CRLF
+  in worktree while `ruff format` enforces LF (`pyproject.toml`
+  `line-ending = "lf"`), causing systematic `ruff format --check` failures on
+  dev environments.
+- **`uv.lock` line endings enforced as LF** : new `# --- Lockfiles ---` section
+  in `.gitattributes` adds `uv.lock text eol=lf`. uv writes LF natively but
+  `core.autocrlf=true` on Windows would re-introduce CRLF at checkout, creating
+  churn. Explicit target marks the lockfile's criticality (source of truth for
+  resolved dep versions).
+- **`.coveragerc` untracked from repository** : the file was previously committed
+  but is generated locally for test coverage measurement. Removed from git
+  tracking and added to `.gitignore`.
+- **Pre-commit hook documentation hardening (Windows OneDrive users)** :
+  `CONTRIBUTING.md` adds an optional Windows hardening section recommending
+  to host the virtualenv outside OneDrive sync via the
+  `UV_PROJECT_ENVIRONMENT` environment variable (session isolation: defined
+  explicitly per terminal session, never persisted globally). Symlinks are
+  NOT recommended because OneDrive (and most folder-sync tools) traverse
+  symbolic links and sync the target content anyway, defeating the purpose.
+
+### Security
+
+- **deps: bump urllib3 2.6.3 -> 2.7.0**
+  ([CVE-2026-44431](https://nvd.nist.gov/vuln/detail/CVE-2026-44431),
+  [CVE-2026-44432](https://nvd.nist.gov/vuln/detail/CVE-2026-44432)) -
+  Two HIGH severity vulnerabilities patched by urllib3 2.7.0:
+  - **CVE-2026-44431** : `ProxyManager.connection_from_url` did not strip
+    sensitive headers (`Retry.remove_headers_on_redirect`) on cross-host
+    redirect.
+  - **CVE-2026-44432** : decompression-bomb safeguards bypass on `read(amt=N)`
+    with Brotli compression + `drain_conn()` after partial read (CWE-409,
+    client resource DoS).
+
+  Lockfile resolution stayed conservative (urllib3 only, zero collateral).
+
 ## [2.7.0] - 2026-05-09
 
 ### Added
@@ -1183,7 +1234,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.7.1...HEAD
+[2.7.1]: https://github.com/KaminoU/kstlib/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/KaminoU/kstlib/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/KaminoU/kstlib/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/KaminoU/kstlib/compare/v2.4.0...v2.5.0

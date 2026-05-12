@@ -75,6 +75,24 @@ def _clean_registry() -> None:
     _reset_registry()
 
 
+@pytest.fixture(autouse=True)
+def _frozen_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Freeze time.monotonic to make rate-limited tests deterministic.
+
+    Tests that assert strict token counts (e.g. rate=20 -> exactly 20 sends)
+    are sensitive to the rate limiter's continuous refill rate. On slower
+    runs (logging overhead, CPU contention, accumulated test runtime), the
+    elapsed time may grow large enough to refill 1 or 2 tokens between
+    sends, causing off-by-one failures.
+
+    Freezing time.monotonic to 0.0 ensures elapsed = 0 for all _refill
+    calls, so the bucket never gains extra tokens during the test.
+    """
+    import time
+
+    monkeypatch.setattr(time, "monotonic", lambda: 0.0)
+
+
 def _mock_throttle_section(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -263,8 +281,8 @@ class TestRunawayLoops:
             return deeply(n - 1) + 1
 
         deeply(20)
-        # rate=5 -> at most 5 mails reach the transport (warn mode silences the rest)
-        assert stub.count <= 5
+        # rate=5 + frozen clock -> exactly 5 mails reach the transport (warn mode silences the rest)
+        assert stub.count == 5, f"recursion bypassed throttle: {stub.count} sends (frozen clock: zero refill, rate=5)"
 
     def test_exception_handler_loop_throttled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """29: 100 chained exceptions notified -> at most 5 reach transport (rate=5)."""
@@ -423,10 +441,10 @@ class TestCombinedParanoia:
 
         asyncio.run(coro_all())
 
-        # Within a 60s window the bucket only refills up to rate=5. Total
-        # elapsed test time is under a second, so refill is negligible:
-        # at most 5-6 sends should have reached the transport.
-        assert stub.count <= 6, f"throttle leaked: {stub.count} sends crossed rate=5"
+        # Frozen clock -> zero refill during the test. Bucket starts at
+        # rate=5 tokens, drains to empty on the first 5 sends, stays empty
+        # for the remaining attempts (warn mode silences them).
+        assert stub.count == 5, f"throttle leaked: {stub.count} sends crossed rate=5 (frozen clock: zero refill)"
 
 
 # ---------------------------------------------------------------------------

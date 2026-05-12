@@ -64,7 +64,7 @@ dependencies = [
     # --- Security: transitive dep lower bounds (CVE) ---
     "cryptography>=46.0.7",  # CVE-2026-26007 + CVE-2026-34073 + CVE-2026-39892
     "requests>=2.33.0",      # CVE-2024-47081 + CVE-2026-25645 (via httpx)
-    "urllib3>=2.6.3",         # CVE-2025-50182/50181 + CVE-2025-66418/66471 + CVE-2026-21441 (via requests)
+    "urllib3>=2.7.0",         # CVE-2025-50182/50181 + CVE-2025-66418/66471 + CVE-2026-21441 + CVE-2026-44431 + CVE-2026-44432 (via requests)
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

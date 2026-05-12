@@ -53,6 +53,37 @@ conda create -n kstlib_dev python=3.10
 conda activate kstlib_dev
 ```
 
+#### Optional: Windows hardening (OneDrive users)
+
+If you develop on Windows with OneDrive (or any other folder-sync tool) syncing your project folder, placing `.venv` directly inside the synced folder can cause issues:
+
+- **SSD saturation** when sync replicates thousands of small files (binaries, dist-info, packages) in the venv
+- **Windows file locks** during `uv sync` / `uv run` that may fail partially when sync, antivirus, or IDE holds files open
+- **Slow startup** because the sync engine traverses the venv on every project open
+
+To avoid this, host the venv outside the synced folder and point uv at it via the `UV_PROJECT_ENVIRONMENT` environment variable (session isolation: defined explicitly per terminal session, never persisted globally):
+
+```powershell
+# 1. One-time setup: create the venv outside OneDrive
+mkdir -Force C:\dev\uvenv\kstlib
+uv venv --python 3.10 C:\dev\uvenv\kstlib\py310
+
+# 2. Per-session isolation: point uv at the off-OneDrive venv (before uv run, uv sync, etc.)
+$env:UV_PROJECT_ENVIRONMENT = "C:\dev\uvenv\kstlib\py310"
+
+# 3. Verify
+uv run python -c "import sys; print(sys.executable)"
+# Expected: a path under C:\dev\uvenv\kstlib\py310 (outside the synced folder)
+
+# 4. Install dependencies + pre-commit hook
+uv sync --all-extras
+uv run pre-commit install
+```
+
+Note: `UV_PROJECT_ENVIRONMENT` is set per-session for explicit isolation (not persisted to `setx`, not in a `.env` file, not in `$PROFILE`). Define it explicitly each time you open a new terminal for kstlib work. This is intentional: zero global pollution, no versioned secret leak, and the absence triggers an explicit error rather than a silent fallback to the OneDrive-synced location.
+
+Symlink-based approaches are NOT recommended: OneDrive (and most folder-sync tools) traverse symbolic links and sync the target content anyway, defeating the purpose. The session-isolated environment variable approach is the only reliable workaround.
+
 ### 3. Install in development mode
 
 #### Recommended: PEP 751 lockfile installation (supply chain verified)

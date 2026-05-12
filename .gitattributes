@@ -6,28 +6,37 @@
 * text=auto
 
 # --- Source code ---
-*.py text diff=python
-*.pyi text diff=python
+# eol=lf forced explicitly: ruff format strict (pyproject.toml line-ending = "lf")
+# requires LF in worktree, not just LF in index. Without eol=lf, Windows checkout
+# would produce CRLF and ruff format --check would fail systematically.
+*.py text eol=lf diff=python
+*.pyi text eol=lf diff=python
 
-# --- Configuration files ---
-*.toml text
-*.yml text
-*.yaml text
-*.json text
-*.ini text
-*.cfg text
-*.conf text
+# --- Configuration files (Python/YAML/JSON/INI/TOML) ---
+# eol=lf forced for cross-platform consistency (CI Linux + dev Windows)
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.conf text eol=lf
+
+# --- Lockfiles ---
+# eol=lf forced (uv writes LF, prevent autocrlf churn on Windows checkout)
+uv.lock text eol=lf
 
 # --- Documentation ---
-*.md text diff=markdown
-*.rst text
-*.txt text
-LICENSE text
-LICENSE.md text
-CHANGELOG text
-CHANGELOG.md text
-README text
-README.md text
+# eol=lf forced (Sphinx build + markdown linters expect LF)
+*.md text eol=lf diff=markdown
+*.rst text eol=lf
+*.txt text eol=lf
+LICENSE text eol=lf
+LICENSE.md text eol=lf
+CHANGELOG text eol=lf
+CHANGELOG.md text eol=lf
+README text eol=lf
+README.md text eol=lf
 
 # --- Scripts ---
 *.sh text eol=lf
