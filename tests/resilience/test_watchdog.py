@@ -331,16 +331,17 @@ class TestWatchdogContext:
         wd = watchdog_context(timeout=30, on_timeout=cb)
         assert wd._on_timeout is cb
 
-    def test_raise_on_timeout(self) -> None:
-        """Creates watchdog that raises on timeout."""
-        wd = watchdog_context(timeout=1, raise_on_timeout=True)  # Hard min is 1s
-        wd.start()
-        try:
-            time.sleep(1.2)
-            # The callback should raise, but it's caught internally
-            assert wd.is_triggered
-        finally:
-            wd.stop()
+    def test_raise_on_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """watchdog_context(raise_on_timeout) triggers once the clock passes the timeout."""
+        fake_time = [0.0]
+        monkeypatch.setattr("kstlib.resilience.watchdog.time.monotonic", lambda: fake_time[0])
+        wd = watchdog_context(timeout=1, raise_on_timeout=True)
+        fake_time[0] = 0.5
+        wd._check_timeout()
+        assert not wd.is_triggered
+        fake_time[0] = 2.0
+        wd._check_timeout()
+        assert wd.is_triggered
 
 
 class TestWatchdogExceptions:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from kstlib.auth.errors import (
     AuthError,
+    AuthExpiredError,
     AuthorizationError,
     CallbackServerError,
     ConfigurationError,
@@ -199,6 +200,72 @@ class TestPreflightError:
         assert isinstance(err, AuthError)
 
 
+class TestAuthExpiredError:
+    """Tests for AuthExpiredError (runtime HTTP 401 detection)."""
+
+    def test_instantiation_minimal(self) -> None:
+        """AuthExpiredError can be created with a message only."""
+        err = AuthExpiredError("Access token expired (HTTP 401).")
+        assert str(err) == "Access token expired (HTTP 401)."
+        assert err.message == "Access token expired (HTTP 401)."
+
+    def test_instantiation_with_attrs(self) -> None:
+        """token_source and suggested_action are stored on the instance."""
+        err = AuthExpiredError(
+            "Access token expired (HTTP 401).",
+            token_source="~/.sas/credentials.json",
+            suggested_action="Run: sas-admin auth login -u <user>",
+        )
+        assert err.token_source == "~/.sas/credentials.json"
+        assert err.suggested_action == "Run: sas-admin auth login -u <user>"
+
+    def test_heritage_auth_error(self) -> None:
+        """AuthExpiredError inherits from AuthError but not from TokenError."""
+        err = AuthExpiredError("Access token expired (HTTP 401).")
+        assert isinstance(err, AuthError)
+        assert not isinstance(err, TokenError), (
+            "AuthExpiredError must NOT inherit from TokenError (distinct lifecycle from TokenExpiredError)"
+        )
+
+    def test_attrs_default_none(self) -> None:
+        """token_source and suggested_action default to None when omitted."""
+        err = AuthExpiredError("Access token expired (HTTP 401).")
+        assert err.token_source is None
+        assert err.suggested_action is None
+
+    def test_str_representation(self) -> None:
+        """str(err) returns the bare message (no synthetic wrapper)."""
+        err = AuthExpiredError(
+            "Viya access_token expired or invalidated (HTTP 401).",
+            token_source="~/.sas/credentials.json",
+            suggested_action="Run: sas-admin auth login",
+        )
+        rendered = str(err)
+        assert rendered == "Viya access_token expired or invalidated (HTTP 401)."
+
+    def test_details_populated(self) -> None:
+        """details dict mirrors the optional attributes for introspection."""
+        err = AuthExpiredError(
+            "Access token expired (HTTP 401).",
+            token_source="env:KSTLIB_TOKEN",
+            suggested_action="Refresh and re-export the env var.",
+        )
+        assert err.details == {
+            "token_source": "env:KSTLIB_TOKEN",
+            "suggested_action": "Refresh and re-export the env var.",
+        }
+
+    def test_distinct_from_token_expired_error(self) -> None:
+        """AuthExpiredError and TokenExpiredError are unrelated subclasses."""
+        runtime_err = AuthExpiredError("Server returned 401.")
+        preflight_err = TokenExpiredError("Loaded token already expired.")
+        assert isinstance(runtime_err, AuthError)
+        assert isinstance(preflight_err, AuthError)
+        assert isinstance(preflight_err, TokenError)
+        assert not isinstance(runtime_err, TokenError)
+        assert not isinstance(preflight_err, AuthExpiredError)
+
+
 class TestExceptionHierarchy:
     """Tests for exception inheritance hierarchy."""
 
@@ -217,6 +284,7 @@ class TestExceptionHierarchy:
             AuthorizationError("test"),
             CallbackServerError("test"),
             PreflightError("step", "reason"),
+            AuthExpiredError("test"),
         ]
 
         for exc in exceptions:
@@ -235,3 +303,9 @@ class TestExceptionHierarchy:
 
         for exc in token_exceptions:
             assert isinstance(exc, TokenError), f"{type(exc).__name__} should inherit from TokenError"
+
+    def test_auth_expired_error_not_token_error(self) -> None:
+        """AuthExpiredError is distinct from the TokenError hierarchy."""
+        err = AuthExpiredError("Access token expired (HTTP 401).")
+        assert isinstance(err, AuthError)
+        assert not isinstance(err, TokenError)

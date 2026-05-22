@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from kstlib.auth import AuthExpiredError
 from kstlib.limits import get_rapi_limits
 from kstlib.rapi.config import (
     ApiConfig,
@@ -36,11 +37,108 @@ from kstlib.rapi.exceptions import (
 from kstlib.ssl import build_ssl_context
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 from kstlib.logging import TRACE_LEVEL, get_logger
 
 log = get_logger(__name__)
+
+# Heuristic keywords used to detect HTTP 401 responses that signal
+# access token expiration vs other 401 causes (permissions, audience
+# mismatch, etc.). Match is case-insensitive against the response body.
+_AUTH_EXPIRED_BODY_KEYWORDS: tuple[str, ...] = (
+    "expired",
+    "invalid_token",
+    "token expired",
+)
+
+# WWW-Authenticate parameter value that signals token expiration per
+# RFC 6750 Section 3 (Bearer error="invalid_token"). Match is
+# case-insensitive against the header value.
+_AUTH_EXPIRED_HEADER_MARKER: str = "invalid_token"
+
+
+def _source_for_env_credential(cred_config: Mapping[str, Any]) -> str | None:
+    """Derive a sanitized token source label for ``env`` credentials."""
+    var = cred_config.get("var") or cred_config.get("var_key") or (cred_config.get("fields") or {}).get("key")
+    return f"env:{var}" if var else None
+
+
+def _source_for_file_credential(cred_config: Mapping[str, Any]) -> str | None:
+    """Derive a sanitized token source label for ``file`` credentials."""
+    path = cred_config.get("path")
+    return str(path) if path else None
+
+
+def _source_for_sops_credential(cred_config: Mapping[str, Any]) -> str | None:
+    """Derive a sanitized token source label for ``sops`` credentials."""
+    path = cred_config.get("path")
+    return f"sops:{path}" if path else None
+
+
+def _source_for_provider_credential(cred_config: Mapping[str, Any]) -> str | None:
+    """Derive a sanitized token source label for ``provider`` credentials."""
+    provider = cred_config.get("provider")
+    return f"provider:{provider}" if provider else None
+
+
+# Dispatch table for AuthExpiredError.token_source labels keyed by
+# CredentialRecord.source. Each builder takes the raw credential
+# config dict (possibly empty) and returns a sanitized label or
+# ``None`` when the configured source is missing the expected key.
+_TOKEN_SOURCE_BUILDERS: dict[str, Callable[[Mapping[str, Any]], str | None]] = {
+    "env": _source_for_env_credential,
+    "file": _source_for_file_credential,
+    "sops": _source_for_sops_credential,
+    "provider": _source_for_provider_credential,
+}
+
+
+def _hint_for_file_credential(cred_config: Mapping[str, Any]) -> str:
+    """Build a re-authentication hint for ``file`` credentials."""
+    path = str(cred_config.get("path", ""))
+    if path and "credentials.json" in path:
+        return "Re-authenticate with: sas-admin --profile $VIYA_HOST -k auth login -u <user>"
+    if path:
+        return f"Re-authenticate via your credentials file: {path}"
+    return "Re-authenticate via your credentials file."
+
+
+def _hint_for_env_credential(cred_config: Mapping[str, Any]) -> str:
+    """Build a re-authentication hint for ``env`` credentials."""
+    var = cred_config.get("var") or cred_config.get("var_key") or (cred_config.get("fields") or {}).get("key")
+    if var:
+        return f"Refresh and re-export env var: ${var}"
+    return "Refresh and re-export your env-based credential."
+
+
+def _hint_for_sops_credential(cred_config: Mapping[str, Any]) -> str:
+    """Build a re-authentication hint for ``sops`` credentials."""
+    path = cred_config.get("path", "")
+    if path:
+        return f"Update SOPS-encrypted file: {path}"
+    return "Update your SOPS-encrypted credential file."
+
+
+def _hint_for_provider_credential(cred_config: Mapping[str, Any]) -> str:
+    """Build a re-authentication hint for ``provider`` credentials."""
+    provider = cred_config.get("provider", "")
+    if provider:
+        return f"Re-authenticate via your provider: kstlib auth login --provider {provider}"
+    return "Re-authenticate via your provider."
+
+
+# Dispatch table for AuthExpiredError.suggested_action hints keyed
+# by CredentialRecord.source. Each builder takes the raw credential
+# config dict (possibly empty) and returns a sanitized hint string
+# (never includes secret material, only source labels such as path
+# / env var / provider name).
+_AUTH_RENEW_HINT_BUILDERS: dict[str, Callable[[Mapping[str, Any]], str]] = {
+    "file": _hint_for_file_credential,
+    "env": _hint_for_env_credential,
+    "sops": _hint_for_sops_credential,
+    "provider": _hint_for_provider_credential,
+}
 
 
 def _log_trace(msg: str, *args: Any) -> None:
@@ -334,6 +432,10 @@ class RapiClient:
             RapiResponse with parsed data.
 
         Raises:
+            AuthExpiredError: If the response signals access token
+                expiration (HTTP 401 with body keyword or
+                ``WWW-Authenticate`` ``invalid_token`` marker).
+                Terminal, not retried.
             ConfirmationRequiredError: If safeguard requires confirmation.
             RequestError: If request fails after retries.
             ResponseTooLargeError: If response exceeds max size.
@@ -380,7 +482,13 @@ class RapiClient:
 
         # Execute with retries
         effective_timeout = timeout if timeout is not None else self._limits.timeout
-        return self._execute_with_retry(request, endpoint_config, effective_timeout)
+        return self._execute_with_retry(
+            request,
+            endpoint_config,
+            effective_timeout,
+            api_config=api_config,
+            effective_server=effective_server,
+        )
 
     async def call_async(
         self,
@@ -410,6 +518,10 @@ class RapiClient:
             RapiResponse with parsed data.
 
         Raises:
+            AuthExpiredError: If the response signals access token
+                expiration (HTTP 401 with body keyword or
+                ``WWW-Authenticate`` ``invalid_token`` marker).
+                Terminal, not retried.
             ConfirmationRequiredError: If safeguard requires confirmation.
             RequestError: If request fails after retries.
             ResponseTooLargeError: If response exceeds max size.
@@ -452,6 +564,8 @@ class RapiClient:
             request,
             endpoint_config,
             effective_timeout,
+            api_config=api_config,
+            effective_server=effective_server,
         )
 
     def _extract_query_params(
@@ -995,6 +1109,9 @@ class RapiClient:
         request: httpx.Request,
         endpoint_config: EndpointConfig,
         timeout: float,
+        *,
+        api_config: ApiConfig,
+        effective_server: ServerConfig | None = None,
     ) -> RapiResponse:
         """Execute request with retry logic.
 
@@ -1002,11 +1119,19 @@ class RapiClient:
             request: Prepared HTTP request.
             endpoint_config: Endpoint configuration.
             timeout: Request timeout in seconds.
+            api_config: Resolved API configuration, forwarded to
+                :meth:`_check_auth_expired` for credential-context
+                lookup on HTTP 401 detection.
+            effective_server: Optional resolved server profile,
+                forwarded to :meth:`_check_auth_expired`.
 
         Returns:
             RapiResponse.
 
         Raises:
+            AuthExpiredError: If the response signals access token
+                expiration (HTTP 401 with expiration markers).
+                Terminal, not retried.
             RequestError: If all retries fail.
             ResponseTooLargeError: If response is too large.
 
@@ -1031,13 +1156,16 @@ class RapiClient:
 
                 self._log_response(response, elapsed)
                 self._check_response_size(response)
-                return self._parse_response(response, endpoint_config, elapsed)
+                parsed = self._parse_response(response, endpoint_config, elapsed)
+                self._check_auth_expired(parsed, api_config, effective_server)
+                return parsed
 
             except ResponseTooLargeError:
                 raise
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
                 result = self._handle_retry_error(e, attempt + 1, endpoint_config)
                 if result is not None:
+                    self._check_auth_expired(result, api_config, effective_server)
                     return result
                 last_error = e
 
@@ -1051,6 +1179,9 @@ class RapiClient:
         request: httpx.Request,
         endpoint_config: EndpointConfig,
         timeout: float,
+        *,
+        api_config: ApiConfig,
+        effective_server: ServerConfig | None = None,
     ) -> RapiResponse:
         """Execute async request with retry logic.
 
@@ -1058,11 +1189,19 @@ class RapiClient:
             request: Prepared HTTP request.
             endpoint_config: Endpoint configuration.
             timeout: Request timeout in seconds.
+            api_config: Resolved API configuration, forwarded to
+                :meth:`_check_auth_expired` for credential-context
+                lookup on HTTP 401 detection.
+            effective_server: Optional resolved server profile,
+                forwarded to :meth:`_check_auth_expired`.
 
         Returns:
             RapiResponse.
 
         Raises:
+            AuthExpiredError: If the response signals access token
+                expiration (HTTP 401 with expiration markers).
+                Terminal, not retried.
             RequestError: If all retries fail.
             ResponseTooLargeError: If response is too large.
 
@@ -1091,13 +1230,16 @@ class RapiClient:
 
                 self._log_response(response, elapsed)
                 self._check_response_size(response)
-                return self._parse_response(response, endpoint_config, elapsed)
+                parsed = self._parse_response(response, endpoint_config, elapsed)
+                self._check_auth_expired(parsed, api_config, effective_server)
+                return parsed
 
             except ResponseTooLargeError:
                 raise
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
                 result = self._handle_retry_error(e, attempt + 1, endpoint_config)
                 if result is not None:
+                    self._check_auth_expired(result, api_config, effective_server)
                     return result
                 last_error = e
 
@@ -1142,6 +1284,226 @@ class RapiClient:
             elapsed=elapsed,
             endpoint_ref=endpoint_config.full_ref,
         )
+
+    def _check_auth_expired(
+        self,
+        response: RapiResponse,
+        api_config: ApiConfig,
+        effective_server: ServerConfig | None,
+    ) -> None:
+        """Detect HTTP 401 indicating access token expiration and raise.
+
+        Inspects an already-parsed response and, when the heuristic
+        matches, raises :class:`AuthExpiredError` with a contextual
+        hint derived from the credentials currently active for this
+        request. Non-401 responses and 401 responses without
+        expiration markers are left untouched (backward compat
+        preserved : the caller receives a ``RapiResponse(ok=False)``
+        for non-expiration 401s).
+
+        Heuristic (any match triggers detection) :
+
+        - response body (case-insensitive) contains one of the
+          keywords listed in ``_AUTH_EXPIRED_BODY_KEYWORDS``
+        - response ``WWW-Authenticate`` header (case-insensitive)
+          contains ``invalid_token`` (RFC 6750 Bearer
+          error="invalid_token")
+
+        Args:
+            response: Parsed ``RapiResponse`` to inspect.
+            api_config: Resolved API configuration used to send the
+                request.
+            effective_server: Optional resolved server profile
+                providing the effective credentials for this call.
+                ``None`` when falling back to the static
+                ``api_config``.
+
+        Raises:
+            AuthExpiredError: If the response signals access token
+                expiration via body keywords or ``WWW-Authenticate``
+                header. The exception carries a sanitized
+                ``token_source`` label and a contextual
+                ``suggested_action`` hint.
+
+        """
+        if response.status_code != 401:
+            return
+
+        body_lower = (response.text or "").lower()
+        has_body_keyword = any(kw in body_lower for kw in _AUTH_EXPIRED_BODY_KEYWORDS)
+
+        www_auth_value = response.headers.get("www-authenticate") or response.headers.get(
+            "WWW-Authenticate",
+            "",
+        )
+        has_header_marker = _AUTH_EXPIRED_HEADER_MARKER in www_auth_value.lower()
+
+        if not (has_body_keyword or has_header_marker):
+            # Backward compat: 401 without expiration markers returns
+            # a RapiResponse(ok=False) as before, not AuthExpiredError.
+            return
+
+        cred, credential_name = self._resolve_active_credential(api_config, effective_server)
+        token_source = self._derive_token_source(cred, credential_name, api_config, effective_server)
+        suggested_action = self._auth_renew_hint(cred, credential_name, api_config, effective_server)
+
+        # SECURITY (rules/code-rules.md Section 10) : tagged WARNING
+        # before raise, sanitized payload only (status code, content
+        # type, credential source label). NEVER log token value,
+        # response body, or Authorization header.
+        log.warning(
+            "[SECURITY] AuthExpired detected on endpoint %s (status=%d, content-type=%s, cred.source=%s)",
+            response.endpoint_ref,
+            response.status_code,
+            response.headers.get("content-type", "unknown"),
+            cred.source if cred else "unknown",
+        )
+
+        # User-facing ERROR (visible to apps consuming kstlib as a
+        # library) with the actionable re-authentication hint. The
+        # [SECURITY] WARNING above stays for audit/observability;
+        # this log targets human operators who need a clear next
+        # step. Sanitization rules apply equally: hint references
+        # source labels only (file path / env var name / SOPS path
+        # / provider name), never the token value.
+        log.error(
+            "Access token expired on endpoint '%s'. %s",
+            response.endpoint_ref,
+            suggested_action or "Please re-authenticate via your usual channel.",
+        )
+
+        raise AuthExpiredError(
+            f"Access token expired or invalidated (HTTP 401) on endpoint '{response.endpoint_ref}'.",
+            token_source=token_source,
+            suggested_action=suggested_action,
+        )
+
+    def _resolve_active_credential(
+        self,
+        api_config: ApiConfig,
+        effective_server: ServerConfig | None,
+    ) -> tuple[CredentialRecord | None, str | None]:
+        """Re-derive the credential active for the current request.
+
+        Used by :meth:`_check_auth_expired` to source a contextual
+        hint without mutating the request flow. Resolution errors
+        are swallowed so 401 detection always raises a meaningful
+        ``AuthExpiredError`` rather than being masked by a stale
+        credential resolution failure.
+
+        Returns:
+            Tuple ``(cred, credential_name)`` where ``cred`` is the
+            resolved record (or ``None`` on failure) and
+            ``credential_name`` is the registered name (or a
+            ``server.<profile>`` hint for inline server
+            credentials).
+
+        """
+        try:
+            if effective_server and effective_server.credentials:
+                cred = self._credential_resolver.resolve_inline(
+                    effective_server.credentials,
+                    name_hint=f"server.{effective_server.name}",
+                )
+                return cred, f"server.{effective_server.name}"
+            if api_config.credentials:
+                cred = self._credential_resolver.resolve(api_config.credentials)
+                return cred, api_config.credentials
+        except Exception:
+            # Credential resolution may fail between send time and
+            # 401 detection (env var unset, file removed, etc.). Fall
+            # back to a generic hint rather than mask the expiration.
+            log.debug("Credential re-resolution failed during AuthExpired detection", exc_info=True)
+        return None, None
+
+    def _credential_config(
+        self,
+        credential_name: str | None,
+        effective_server: ServerConfig | None,
+    ) -> Mapping[str, Any] | None:
+        """Return the raw credential configuration dict for hint derivation.
+
+        Args:
+            credential_name: Registered name of the credential, or
+                ``server.<profile>`` when the credential is declared
+                inline on a server profile.
+            effective_server: Optional resolved server profile.
+
+        Returns:
+            The credential config dict, or ``None`` when no source
+            is available (caller falls back to a generic hint).
+
+        """
+        if effective_server and effective_server.credentials:
+            return effective_server.credentials
+        if credential_name:
+            cfg = self._credential_resolver._config.get(credential_name)  # noqa: SLF001
+            if isinstance(cfg, dict):
+                return cfg
+        return None
+
+    def _derive_token_source(
+        self,
+        cred: CredentialRecord | None,
+        credential_name: str | None,
+        api_config: ApiConfig,
+        effective_server: ServerConfig | None,
+    ) -> str | None:
+        """Build a sanitized label identifying where the access token came from.
+
+        Used as the ``token_source`` attribute of
+        :class:`AuthExpiredError`. Returns ``None`` when no
+        credential context is available so callers do not surface a
+        misleading default.
+
+        Examples of generated labels :
+
+        - ``"~/.sas/credentials.json"`` (file-based, SAS Viya)
+        - ``"env:KSTLIB_TOKEN"`` (environment variable)
+        - ``"sops:secrets/viya.sops.json"`` (SOPS-encrypted)
+        - ``"provider:corporate"`` (kstlib.auth OIDC provider)
+
+        """
+        del api_config  # reserved for future per-API token source resolution
+        if cred is None:
+            return None
+
+        cred_config = self._credential_config(credential_name, effective_server)
+        fallback = f"{cred.source}:{credential_name}" if credential_name else None
+
+        if cred_config is None:
+            return fallback
+
+        builder = _TOKEN_SOURCE_BUILDERS.get(cred.source)
+        if builder is None:
+            return fallback
+        return builder(cred_config) or fallback
+
+    def _auth_renew_hint(
+        self,
+        cred: CredentialRecord | None,
+        credential_name: str | None,
+        api_config: ApiConfig,
+        effective_server: ServerConfig | None,
+    ) -> str:
+        """Build a contextual re-authentication hint for the user.
+
+        Used as the ``suggested_action`` attribute of
+        :class:`AuthExpiredError`. The hint is best-effort and
+        NEVER includes secret material : it only references
+        credential sources (file path, env var name, SOPS file
+        path, provider name).
+
+        """
+        del api_config  # reserved for future per-API hint customization
+        if cred is None:
+            return "Re-authenticate via your usual channel."
+
+        cred_config = self._credential_config(credential_name, effective_server) or {}
+        builder = _AUTH_RENEW_HINT_BUILDERS.get(cred.source)
+        if builder is None:
+            return "Re-authenticate via your usual channel."
+        return builder(cred_config)
 
 
 def call(

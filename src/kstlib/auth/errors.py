@@ -119,8 +119,89 @@ class PreflightError(AuthError):
         self.reason = reason
 
 
+class AuthExpiredError(AuthError):
+    """Raised when an authenticated request returns HTTP 401 indicating token expiration.
+
+    Surfaced by ``kstlib.rapi.client`` (and any other consumer) when a
+    server response signals that the previously-valid access token has
+    expired or been invalidated during the session. The user must
+    re-authenticate via the appropriate channel (for example,
+    ``sas-admin auth login`` for Viya, or via a dedicated OAuth client
+    when configured in :mod:`kstlib.auth`).
+
+    Note:
+        Distinct from :class:`TokenExpiredError`. The two cover
+        different lifecycle points and originate from different
+        sub-systems :
+
+        - ``AuthExpiredError`` (this class, inherits from
+          :class:`AuthError`) is raised by ``kstlib.rapi.client`` when
+          the server returns HTTP 401 at runtime, signalling that a
+          token which was valid at send time has been expired or
+          invalidated by the identity provider during the session.
+
+        - :class:`TokenExpiredError` (inherits from :class:`TokenError`)
+          is raised by ``kstlib.auth`` when a loaded token is detected
+          as already expired before the request is sent (client-side
+          pre-flight check).
+
+    Attributes:
+        token_source: Optional label identifying where the token was
+            loaded from (for example, ``'~/.sas/credentials.json'``,
+            ``'env:KSTLIB_TOKEN'``, ``'sops:secrets/api.sops.json'``).
+            ``None`` when the source is unknown.
+        suggested_action: Optional human-readable hint guiding the
+            user toward a successful re-authentication (for example,
+            ``'Run: sas-admin auth login -u <user>'``). ``None`` when
+            no contextual hint is available.
+
+    Examples:
+        >>> err = AuthExpiredError(
+        ...     "Access token expired (HTTP 401).",
+        ...     token_source="~/.sas/credentials.json",
+        ...     suggested_action="Run: sas-admin auth login -u <user>",
+        ... )
+        >>> err.token_source
+        '~/.sas/credentials.json'
+        >>> isinstance(err, AuthError)
+        True
+
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        token_source: str | None = None,
+        suggested_action: str | None = None,
+    ) -> None:
+        """Initialize AuthExpiredError.
+
+        Args:
+            message: Human-readable description of the expiration
+                (typically including the HTTP status and a short
+                rationale, never the raw token or response body).
+            token_source: Optional label for where the token came from
+                (used by callers to surface a contextual hint without
+                exposing the secret material itself).
+            suggested_action: Optional hint pointing the user to the
+                right re-authentication procedure.
+
+        """
+        super().__init__(
+            message,
+            details={
+                "token_source": token_source,
+                "suggested_action": suggested_action,
+            },
+        )
+        self.token_source = token_source
+        self.suggested_action = suggested_action
+
+
 __all__ = [
     "AuthError",
+    "AuthExpiredError",
     "AuthorizationError",
     "CallbackServerError",
     "ConfigurationError",

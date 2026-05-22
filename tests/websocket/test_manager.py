@@ -235,7 +235,8 @@ class TestWebSocketManagerContextManager:
             async with ws:
                 assert ws.state == ConnectionState.CONNECTED
 
-            assert ws.state == ConnectionState.CLOSED
+            # close() graceful semantic : DISCONNECTED non-terminal, reconnect possible
+            assert ws.state == ConnectionState.DISCONNECTED
 
 
 class TestWebSocketManagerStateMachine:
@@ -479,11 +480,52 @@ class TestWebSocketManagerForceClose:
         assert ws._auto_reconnect is False
 
     @pytest.mark.asyncio
-    async def test_close_is_alias_for_force_close(self) -> None:
-        """close is an alias for force_close."""
+    async def test_force_close_sets_shutdown_event(self) -> None:
+        """force_close sets is_shutdown (intentional emergency marker)."""
         from kstlib.websocket import WebSocketManager
 
         ws = WebSocketManager("wss://example.com/ws")
+        assert ws.is_shutdown is False
+        await ws.force_close()
+        assert ws.is_shutdown is True
+
+
+class TestCloseMethodGraceful:
+    """Tests for WebSocketManager.close() graceful semantic (non-terminal, reconnect possible)."""
+
+    @pytest.mark.asyncio
+    async def test_close_sets_state_disconnected_graceful(self) -> None:
+        """close() sets DISCONNECTED non-terminal (graceful semantic, reconnect possible)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+        ws._state = ConnectionState.CONNECTED
+        await ws.close()
+        assert ws.state == ConnectionState.DISCONNECTED
+        assert ws.state.is_terminal() is False
+
+    @pytest.mark.asyncio
+    async def test_close_preserves_auto_reconnect(self) -> None:
+        """close() does NOT touch _auto_reconnect (graceful preserves config)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws", auto_reconnect=True)
+        ws._state = ConnectionState.CONNECTED
+        await ws.close()
+        assert ws._auto_reconnect is True
+
+    @pytest.mark.asyncio
+    async def test_close_is_idempotent(self) -> None:
+        """close() is idempotent (no-op if state already CLOSED or DISCONNECTED)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+        # Initial state DISCONNECTED : close() is a no-op
+        await ws.close()
+        assert ws.state == ConnectionState.DISCONNECTED
+
+        # State CLOSED : close() is a no-op (no exception, no transition)
+        ws._state = ConnectionState.CLOSED
         await ws.close()
         assert ws.state == ConnectionState.CLOSED
 
@@ -796,6 +838,17 @@ class TestWebSocketManagerKill:
         assert ws.stats.disconnects == 1
         assert ws.stats.proactive_disconnects == 0
 
+    @pytest.mark.asyncio
+    async def test_kill_does_not_set_shutdown_event(self) -> None:
+        """kill() (reactive server kick) does NOT mark is_shutdown."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws", auto_reconnect=False)
+        ws._state = ConnectionState.CONNECTED
+        await ws.kill()
+        assert ws.is_shutdown is False
+        assert ws.state == ConnectionState.DISCONNECTED
+
 
 class TestWebSocketManagerShutdown:
     """Tests for WebSocketManager shutdown method."""
@@ -864,51 +917,98 @@ class TestWebSocketManagerIsDead:
         assert ws.is_dead is False
 
 
+class TestIsRecoverable:
+    """Tests for is_recoverable property (helper for watchdog consumers)."""
+
+    @pytest.mark.asyncio
+    async def test_is_recoverable_true_after_close_graceful(self) -> None:
+        """close() graceful -> is_recoverable True (reconnect possible)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+        ws._state = ConnectionState.CONNECTED
+        await ws.close()
+        assert ws.is_dead is True
+        assert ws.is_shutdown is False
+        assert ws.is_recoverable is True
+
+    @pytest.mark.asyncio
+    async def test_is_recoverable_true_after_kill(self) -> None:
+        """kill() reactive -> is_recoverable True (auto_reconnect via watchdog)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws", auto_reconnect=False)
+        ws._state = ConnectionState.CONNECTED
+        await ws.kill()
+        assert ws.is_dead is True
+        assert ws.is_shutdown is False
+        assert ws.is_recoverable is True
+
+    @pytest.mark.asyncio
+    async def test_is_recoverable_false_after_force_close(self) -> None:
+        """force_close() emergency -> is_recoverable False (intentional terminal)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+        ws._state = ConnectionState.CONNECTED
+        await ws.force_close()
+        assert ws.is_dead is True
+        assert ws.is_shutdown is True
+        assert ws.is_recoverable is False
+
+    @pytest.mark.asyncio
+    async def test_is_recoverable_false_after_shutdown(self) -> None:
+        """shutdown() intentional -> is_recoverable False (do not restart)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+        ws._state = ConnectionState.CONNECTED
+        await ws.shutdown()
+        assert ws.is_dead is True
+        assert ws.is_shutdown is True
+        assert ws.is_recoverable is False
+
+    def test_is_recoverable_false_when_connected(self) -> None:
+        """state CONNECTED -> is_recoverable False (is_dead=False)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+        ws._state = ConnectionState.CONNECTED
+        assert ws.is_dead is False
+        assert ws.is_recoverable is False
+
+
 class TestWebSocketManagerCloseMethods:
     """Tests comparing kill(), shutdown(), and force_close() behaviors."""
 
     @pytest.mark.asyncio
     async def test_kill_vs_shutdown_vs_force_close_states(self) -> None:
-        """Compare final states: kill=DISCONNECTED, shutdown/force_close=CLOSED."""
+        """Compare final states: kill=DISCONNECTED reactive, shutdown/force_close=CLOSED intentional."""
         from kstlib.websocket import WebSocketManager
 
-        # kill() -> DISCONNECTED (can reconnect)
+        # kill() -> DISCONNECTED (reactive, can reconnect, NOT is_shutdown)
         ws1 = WebSocketManager("wss://example.com/ws")
         ws1._state = ConnectionState.CONNECTED
         await ws1.kill()
         assert ws1.state == ConnectionState.DISCONNECTED
         assert ws1.state.can_connect()  # CAN reconnect
+        assert not ws1.is_shutdown  # Reactive, flag is NOT set
 
-        # shutdown() -> CLOSED (cannot reconnect)
+        # shutdown() -> CLOSED (intentional, cannot reconnect, is_shutdown=True)
         ws2 = WebSocketManager("wss://example.com/ws")
         ws2._state = ConnectionState.CONNECTED
         await ws2.shutdown()
         assert ws2.state == ConnectionState.CLOSED
         assert not ws2.state.can_connect()  # CANNOT reconnect
-        assert ws2.is_shutdown  # Flag is set
+        assert ws2.is_shutdown  # Intentional, flag IS set
 
-        # force_close() -> CLOSED (cannot reconnect)
+        # force_close() -> CLOSED (intentional emergency, cannot reconnect, is_shutdown=True)
         ws3 = WebSocketManager("wss://example.com/ws")
         ws3._state = ConnectionState.CONNECTED
         await ws3.force_close()
         assert ws3.state == ConnectionState.CLOSED
         assert not ws3.state.can_connect()  # CANNOT reconnect
-        assert not ws3.is_shutdown  # Flag is NOT set
-
-    @pytest.mark.asyncio
-    async def test_shutdown_sets_flag_force_close_does_not(self) -> None:
-        """shutdown sets is_shutdown, force_close does not."""
-        from kstlib.websocket import WebSocketManager
-
-        # shutdown sets the flag
-        ws1 = WebSocketManager("wss://example.com/ws")
-        await ws1.shutdown()
-        assert ws1.is_shutdown is True
-
-        # force_close does NOT set the flag
-        ws2 = WebSocketManager("wss://example.com/ws")
-        await ws2.force_close()
-        assert ws2.is_shutdown is False
+        assert ws3.is_shutdown  # Intentional emergency, flag IS set
 
     @pytest.mark.asyncio
     async def test_kill_records_reactive_disconnect(self) -> None:
@@ -1019,3 +1119,136 @@ class TestReceiveLoopCleanClose:
 
         ws._attempt_reconnect.assert_not_called()
         assert ws.state == ConnectionState.DISCONNECTED
+
+
+class TestIntegrationAsyncWithPatterns:
+    """Integration tests for the async with + stream pattern (validates close graceful fix)."""
+
+    @pytest.mark.asyncio
+    async def test_async_with_long_running_voluntary_exit_allows_reconnect(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """async with + voluntary break exits gracefully, then reconnect possible.
+
+        Validates the primary fix : pre-C2 the async with exit triggered
+        close() == force_close() == CLOSED terminal, preventing any
+        reconnect. Post-C2 close() is graceful (DISCONNECTED non-terminal)
+        and reconnect via explicit connect() works.
+        """
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+
+        async def fake_connect() -> None:
+            ws._state = ConnectionState.CONNECTED
+            ws._connected_event.set()
+
+        monkeypatch.setattr(ws, "connect", fake_connect)
+
+        for i in range(3):
+            await ws._message_queue.put({"msg": i})
+
+        received: list[Any] = []
+        async with ws:
+            async for msg in ws.stream():
+                received.append(msg)
+                if len(received) >= 3:
+                    break
+
+        # close() graceful : DISCONNECTED non-terminal, is_recoverable True
+        assert ws.state == ConnectionState.DISCONNECTED
+        assert ws.state.is_terminal() is False
+        assert ws.is_recoverable is True
+        assert len(received) == 3
+
+        # Semantic guard permits reconnect
+        assert ws.state.can_connect() is True
+
+        # Reconnect works
+        await ws.connect()
+        assert ws.state == ConnectionState.CONNECTED
+
+    @pytest.mark.asyncio
+    async def test_force_close_terminal_blocks_reconnect(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """force_close() emergency keeps CLOSED terminal + blocks reconnect (semantic guard)."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+
+        async def fake_connect() -> None:
+            ws._state = ConnectionState.CONNECTED
+            ws._connected_event.set()
+
+        monkeypatch.setattr(ws, "connect", fake_connect)
+        await ws.connect()
+        await ws.force_close()
+
+        assert ws.state == ConnectionState.CLOSED
+        assert ws.state.is_terminal() is True
+        assert ws.is_shutdown is True
+        assert ws.is_recoverable is False
+        # Semantic guard : CLOSED is not in can_connect()
+        assert ws.state.can_connect() is False
+
+    @pytest.mark.asyncio
+    async def test_kill_reactive_reconnect_possible(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """kill() reactive (simulated server disconnect) allows reconnect."""
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws", auto_reconnect=False)
+
+        async def fake_connect() -> None:
+            ws._state = ConnectionState.CONNECTED
+            ws._connected_event.set()
+
+        monkeypatch.setattr(ws, "connect", fake_connect)
+        await ws.connect()
+        await ws.kill()
+
+        assert ws.state == ConnectionState.DISCONNECTED
+        assert ws.is_shutdown is False
+        assert ws.is_recoverable is True
+        assert ws.state.can_connect() is True
+
+        # Reconnect works
+        await ws.connect()
+        assert ws.state == ConnectionState.CONNECTED
+
+    @pytest.mark.asyncio
+    async def test_async_with_exception_propagation_graceful_close(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Exception in async with body propagates, but close() stays graceful.
+
+        Validates the symmetric case to voluntary exit : when an exception
+        bubbles out of the async with body, __aexit__ still calls close()
+        graceful (not force_close). State ends DISCONNECTED non-terminal
+        so the caller can recover via reconnect.
+        """
+        from kstlib.websocket import WebSocketManager
+
+        ws = WebSocketManager("wss://example.com/ws")
+
+        async def fake_connect() -> None:
+            ws._state = ConnectionState.CONNECTED
+            ws._connected_event.set()
+
+        monkeypatch.setattr(ws, "connect", fake_connect)
+
+        with pytest.raises(ValueError, match="simulated downstream exception"):
+            async with ws:
+                raise ValueError("simulated downstream exception")
+
+        # Exception propagated, but close graceful
+        assert ws.state == ConnectionState.DISCONNECTED
+        assert ws.is_shutdown is False
+        assert ws.is_recoverable is True
+        assert ws.state.can_connect() is True

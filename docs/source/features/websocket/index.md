@@ -135,6 +135,38 @@ CONNECTED -> RECONNECTING -> DISCONNECTED (failure)
 CONNECTED -> CLOSING -> CLOSED
 ```
 
+## Lifecycle Methods
+
+The library exposes 4 methods to control connection lifecycle, each with distinct semantics. Pick based on your intent:
+
+| Method | Use case | State final | `is_dead` | `is_shutdown` | `is_recoverable` | Reconnect via `connect()` |
+|---|---|---|---|---|---|---|
+| `close()` | Graceful end-of-scope (e.g., `async with` exit, voluntary `break`) | `DISCONNECTED` | `True` | `False` | `True` | YES |
+| `force_close()` | Emergency intentional stop (e.g., critical error caught, immediate halt) | `CLOSED` | `True` | `True` | `False` | NO (warning + no-op) |
+| `shutdown()` | Intentional shutdown SIGINT-like (e.g., service stop, CTRL+C handler) | `CLOSED` | `True` | `True` | `False` | NO (warning + no-op) |
+| `kill()` | Simulate external server disconnect (test heartbeat/watchdog recovery) | `DISCONNECTED` | `True` | `False` | `True` | YES (or via `auto_reconnect`) |
+
+### When to use each
+
+- **`close()`** : default for long-running consumers using `async with`. Reconnect remains possible if you want to resume later. Idempotent (safe to call multiple times).
+- **`force_close()`** : when something went catastrophically wrong and you want the connection to be irrevocably terminated. Marks `is_shutdown=True` so external watchdog consumers (using `is_recoverable`) will NOT restart.
+- **`shutdown()`** : when the application is shutting down intentionally (SIGINT, service stop). Equivalent to `force_close()` plus an explicit shutdown event marker. Watchdog consumers will NOT restart.
+- **`kill()`** : test-only simulation of a server-side disconnect. Used to verify reconnection logic. Not for production code.
+
+### Watchdog consumer pattern
+
+External watchdog loops should use `is_recoverable` (not `is_dead` alone) to distinguish accidental disconnects from intentional shutdowns:
+
+```python
+async def watchdog_loop(ws):
+    while True:
+        await asyncio.sleep(5)
+        if ws.is_recoverable:
+            await ws.connect()  # Restart accidental disconnect
+        elif ws.is_shutdown:
+            break  # Intentional shutdown, exit watchdog
+```
+
 ## Disconnect Reasons
 
 Track why disconnections happened:

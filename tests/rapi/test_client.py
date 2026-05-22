@@ -1,13 +1,16 @@
 """Tests for kstlib.rapi.client module."""
 
+import logging
 from pathlib import Path
 from unittest import mock
 
 import httpx
 import pytest
 
+from kstlib.auth import AuthExpiredError
 from kstlib.rapi.client import RapiClient, RapiResponse
 from kstlib.rapi.config import RapiConfigManager, SafeguardConfig
+from kstlib.rapi.credentials import CredentialRecord
 from kstlib.rapi.exceptions import (
     ConfirmationRequiredError,
     EndpointNotFoundError,
@@ -689,6 +692,304 @@ class TestRapiClientAuth:
 
         assert "Authorization" not in headers
         assert "X-API-Key" not in headers
+
+
+class TestRapiClientAuthExpired:
+    """Tests for AuthExpired detection on HTTP 401 (rapi.client integration)."""
+
+    @staticmethod
+    def _mock_response(
+        status_code: int,
+        text: str,
+        headers: dict[str, str] | None = None,
+    ) -> mock.Mock:
+        """Build a mock httpx.Response with the given status, body, and headers."""
+        resp = mock.Mock(spec=httpx.Response)
+        resp.status_code = status_code
+        resp.text = text
+        resp.content = text.encode("utf-8")
+        resp.headers = {"content-type": "application/json", **(headers or {})}
+        resp.json.return_value = {}
+        return resp
+
+    @staticmethod
+    def _make_mock_client(mock_client_class: mock.Mock, mock_response: mock.Mock) -> mock.Mock:
+        """Wire mock_client_class to return a context-manager that yields mock_response."""
+        mock_client = mock.Mock()
+        mock_client.send.return_value = mock_response
+        mock_client.__enter__ = mock.Mock(return_value=mock_client)
+        mock_client.__exit__ = mock.Mock(return_value=False)
+        mock_client_class.return_value = mock_client
+        return mock_client
+
+    @staticmethod
+    def _client_with_env_cred() -> RapiClient:
+        """Build a RapiClient backed by a single env-based credential."""
+        config = {
+            "api": {
+                "test": {
+                    "base_url": "https://test.com",
+                    "credentials": "test_cred",
+                    "auth_type": "bearer",
+                    "endpoints": {"ep": {"path": "/"}},
+                }
+            }
+        }
+        cred_config = {"test_cred": {"type": "env", "var": "TEST_VIYA_TOKEN"}}
+        return RapiClient(
+            config_manager=RapiConfigManager(config),
+            credentials_config=cred_config,
+        )
+
+    # ---- Detection 401 (4 cases) ----------------------------------------
+
+    @mock.patch("httpx.Client")
+    def test_401_body_expired_raises_auth_expired(
+        self,
+        mock_client_class: mock.Mock,
+    ) -> None:
+        """HTTP 401 whose body contains an expiration keyword raises AuthExpiredError."""
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(401, '{"error":"token expired"}'),
+        )
+
+        client = self._client_with_env_cred()
+        with (
+            mock.patch.dict("os.environ", {"TEST_VIYA_TOKEN": "old_token"}),
+            pytest.raises(AuthExpiredError) as excinfo,
+        ):
+            client.call("test.ep")
+        assert "HTTP 401" in str(excinfo.value)
+        assert excinfo.value.token_source == "env:TEST_VIYA_TOKEN"
+
+    @mock.patch("httpx.Client")
+    def test_401_www_authenticate_invalid_token_raises_auth_expired(
+        self,
+        mock_client_class: mock.Mock,
+    ) -> None:
+        """HTTP 401 with WWW-Authenticate invalid_token raises AuthExpiredError."""
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(
+                401,
+                '{"error":"unauthorized"}',
+                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+            ),
+        )
+
+        client = self._client_with_env_cred()
+        with (
+            mock.patch.dict("os.environ", {"TEST_VIYA_TOKEN": "old_token"}),
+            pytest.raises(AuthExpiredError),
+        ):
+            client.call("test.ep")
+
+    @mock.patch("httpx.Client")
+    def test_401_other_body_returns_response_backward_compat(
+        self,
+        mock_client_class: mock.Mock,
+    ) -> None:
+        """HTTP 401 without expiration markers preserves backward-compat RapiResponse."""
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(401, '{"error":"forbidden by policy"}'),
+        )
+
+        client = self._client_with_env_cred()
+        with mock.patch.dict("os.environ", {"TEST_VIYA_TOKEN": "old_token"}):
+            response = client.call("test.ep")
+        assert response.status_code == 401
+        assert response.ok is False
+
+    @mock.patch("httpx.Client")
+    def test_403_with_expired_body_does_not_raise(
+        self,
+        mock_client_class: mock.Mock,
+    ) -> None:
+        """HTTP 403 with 'expired' keyword does NOT raise AuthExpiredError (not 401)."""
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(403, '{"error":"token expired"}'),
+        )
+
+        client = self._client_with_env_cred()
+        with mock.patch.dict("os.environ", {"TEST_VIYA_TOKEN": "tok"}):
+            response = client.call("test.ep")
+        assert response.status_code == 403
+        assert response.ok is False
+
+    # ---- Hint contextuel (3 cases) --------------------------------------
+
+    @mock.patch("httpx.Client")
+    def test_hint_file_credentials_json(
+        self,
+        mock_client_class: mock.Mock,
+        tmp_path: Path,
+    ) -> None:
+        """File credential pointing to credentials.json yields the sas-admin hint."""
+        # NB: ``access_token`` underscore key (the jq-like path regex used
+        # by CredentialResolver.extract_value only matches identifier
+        # characters; hyphenated keys require bracket notation).
+        cred_file = tmp_path / "credentials.json"
+        cred_file.write_text('{"access_token": "old_tok"}')
+
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(401, '{"error":"invalid_token"}'),
+        )
+
+        config = {
+            "api": {
+                "test": {
+                    "base_url": "https://test.com",
+                    "credentials": "viya_cred",
+                    "auth_type": "bearer",
+                    "endpoints": {"ep": {"path": "/"}},
+                }
+            }
+        }
+        cred_config = {
+            "viya_cred": {
+                "type": "file",
+                "path": str(cred_file),
+                "token_path": ".access_token",
+            }
+        }
+        client = RapiClient(
+            config_manager=RapiConfigManager(config),
+            credentials_config=cred_config,
+        )
+        with pytest.raises(AuthExpiredError) as excinfo:
+            client.call("test.ep")
+        assert excinfo.value.suggested_action is not None
+        assert "sas-admin" in excinfo.value.suggested_action
+        assert excinfo.value.token_source == str(cred_file)
+
+    @mock.patch("httpx.Client")
+    def test_hint_env_credential(
+        self,
+        mock_client_class: mock.Mock,
+    ) -> None:
+        """Env credential yields the refresh-env-var hint."""
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(401, '{"error":"token expired"}'),
+        )
+
+        client = self._client_with_env_cred()
+        with (
+            mock.patch.dict("os.environ", {"TEST_VIYA_TOKEN": "tok"}),
+            pytest.raises(AuthExpiredError) as excinfo,
+        ):
+            client.call("test.ep")
+        assert excinfo.value.suggested_action is not None
+        assert "env var" in excinfo.value.suggested_action
+        assert "TEST_VIYA_TOKEN" in excinfo.value.suggested_action
+
+    @mock.patch("httpx.Client")
+    def test_hint_sops_credential(
+        self,
+        mock_client_class: mock.Mock,
+    ) -> None:
+        """SOPS credential yields the update-SOPS-file hint."""
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(401, '{"error":"invalid_token"}'),
+        )
+
+        config = {
+            "api": {
+                "test": {
+                    "base_url": "https://test.com",
+                    "credentials": "viya_sops",
+                    "auth_type": "bearer",
+                    "endpoints": {"ep": {"path": "/"}},
+                }
+            }
+        }
+        cred_config = {
+            "viya_sops": {
+                "type": "sops",
+                "path": "secrets/viya.sops.json",
+                "token_path": ".access_token",
+            },
+        }
+        client = RapiClient(
+            config_manager=RapiConfigManager(config),
+            credentials_config=cred_config,
+        )
+        # Prime the resolver cache with a synthetic CredentialRecord so we
+        # avoid invoking the real SOPS provider (no decrypt at test time).
+        client._credential_resolver._cache["viya_sops"] = CredentialRecord(
+            value="dummy_token",
+            source="sops",
+        )
+        with pytest.raises(AuthExpiredError) as excinfo:
+            client.call("test.ep")
+        assert excinfo.value.suggested_action is not None
+        assert "SOPS" in excinfo.value.suggested_action
+        assert "viya.sops.json" in excinfo.value.suggested_action
+        assert excinfo.value.token_source == "sops:secrets/viya.sops.json"
+
+    # ---- Logging [SECURITY] sanitize (1 case) ---------------------------
+
+    @mock.patch("httpx.Client")
+    def test_logging_security_warning_sanitize(
+        self,
+        mock_client_class: mock.Mock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Detection emits [SECURITY] WARNING (audit) AND ERROR (user-facing).
+
+        Both levels share a strict sanitization policy : token value,
+        response body content, and ``access_token`` keyword must never
+        leak in ANY record regardless of level. The WARNING targets
+        audit / observability ; the ERROR targets human operators
+        consuming kstlib as a library who need an actionable hint.
+        """
+        secret_token = "supersecret_token_should_not_leak"
+        secret_body = f'{{"error":"token expired","access_token":"{secret_token}"}}'
+        self._make_mock_client(
+            mock_client_class,
+            self._mock_response(401, secret_body),
+        )
+
+        client = self._client_with_env_cred()
+        with (
+            mock.patch.dict("os.environ", {"TEST_VIYA_TOKEN": secret_token}),
+            caplog.at_level(logging.WARNING, logger="kstlib.rapi.client"),
+            pytest.raises(AuthExpiredError),
+        ):
+            client.call("test.ep")
+
+        # [SECURITY] tagged WARNING preserved for audit / observability.
+        security_records = [r for r in caplog.records if r.levelname == "WARNING" and "[SECURITY]" in r.getMessage()]
+        assert security_records, "Expected [SECURITY] tagged WARNING for AuthExpired detection"
+
+        # User-facing ERROR present with actionable hint (visible to
+        # apps consuming kstlib as a library even when AuthExpiredError
+        # is swallowed or generically caught upstream).
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert error_records, "Expected user-facing ERROR log for AuthExpired"
+        error_messages = [r.getMessage() for r in error_records]
+        assert any("expired" in msg.lower() for msg in error_messages), (
+            "Expected user-facing ERROR mentioning 'expired'"
+        )
+        assert any("test.ep" in msg for msg in error_messages), "Expected user-facing ERROR referencing the endpoint"
+        assert any(
+            "re-authenticate" in msg.lower() or "re-export" in msg.lower() or "update" in msg.lower()
+            for msg in error_messages
+        ), "Expected user-facing ERROR carrying a re-auth hint marker"
+
+        # Defense in depth : no token / body / Authorization leak in
+        # ANY level (audit and user-facing share the same redaction
+        # contract).
+        for rec in caplog.records:
+            msg = rec.getMessage()
+            assert secret_token not in msg, f"Token leak in log: {msg!r}"
+            assert "access_token" not in msg, f"Body content in log: {msg!r}"
+            assert "supersecret" not in msg, f"Secret material in log: {msg!r}"
 
 
 class TestRapiClientShortcuts:

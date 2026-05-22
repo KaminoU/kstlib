@@ -631,6 +631,66 @@ class TestRapiCall:
             assert result.exit_code == 1
             assert "Invalid output format" in result.stdout
 
+    def test_call_minify_without_raw_errors(self) -> None:
+        """--minify without --raw rejected with hint pointing to --raw --minify."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip", "--minify"])
+
+            # typer.BadParameter -> click UsageError -> exit code 2.
+            assert result.exit_code != 0
+            assert "--raw --minify" in result.output
+            assert "--minify requires --raw" in result.output
+            # Validation fails before any RapiClient construction or call.
+            mock_client_cls.assert_not_called()
+            mock_client.call.assert_not_called()
+
+    def test_call_minify_with_raw_ok(self) -> None:
+        """--minify together with --raw passes validation and produces compact JSON."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.return_value = _mock_response(
+                data={"key": "value"},
+                endpoint_ref="httpbin.get_ip",
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip", "--raw", "--minify"])
+
+            assert result.exit_code == 0
+            # Compact JSON: no whitespace between key/value separators.
+            assert '{"key":"value"}' in result.stdout
+            mock_client.call.assert_called_once()
+
+    def test_call_raw_only_passes_validation(self) -> None:
+        """--raw alone (no --minify) does not trigger the validation guard."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.return_value = _mock_response(
+                data={"key": "value"},
+                endpoint_ref="httpbin.get_ip",
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip", "--raw"])
+
+            assert result.exit_code == 0
+            mock_client.call.assert_called_once()
+
     def test_call_credential_error(self) -> None:
         """Credential error shows credential name."""
         with (
@@ -662,6 +722,76 @@ class TestRapiCall:
 
             assert result.exit_code == 1
             assert "too large" in result.stdout
+
+    def test_call_auth_expired_exit_4(self) -> None:
+        """AuthExpiredError triggers distinct exit code 4 with hint in output."""
+        from kstlib.auth import AuthExpiredError
+
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.side_effect = AuthExpiredError(
+                "Access token expired or invalidated (HTTP 401) on endpoint 'github.user'.",
+                token_source="~/.sas/credentials.json",
+                suggested_action="Re-authenticate with: sas-admin --profile $VIYA_HOST -k auth login -u <user>",
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "github.user"])
+
+            assert result.exit_code == 4
+            assert "expired" in result.output.lower()
+            assert "Source:" in result.output
+            assert "credentials.json" in result.output
+            assert "Hint:" in result.output
+            assert "sas-admin" in result.output
+
+    def test_call_auth_expired_env_hint(self) -> None:
+        """AuthExpiredError with env-source hint surfaces the env var name."""
+        from kstlib.auth import AuthExpiredError
+
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.side_effect = AuthExpiredError(
+                "Access token expired (HTTP 401).",
+                token_source="env:KSTLIB_TOKEN",
+                suggested_action="Refresh and re-export env var: $KSTLIB_TOKEN",
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "github.user"])
+
+            assert result.exit_code == 4
+            assert "Source: env:KSTLIB_TOKEN" in result.output
+            assert "Hint:" in result.output
+            assert "$KSTLIB_TOKEN" in result.output
+
+    def test_call_auth_expired_no_token_source_no_hint(self) -> None:
+        """AuthExpiredError without token_source/suggested_action keeps exit 4 with minimal message."""
+        from kstlib.auth import AuthExpiredError
+
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.side_effect = AuthExpiredError("Access token expired (HTTP 401).")
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "github.user"])
+
+            assert result.exit_code == 4
+            assert "expired" in result.output.lower()
+            assert "Source:" not in result.output
+            assert "Hint:" not in result.output
 
     # ========================================================================
     # Phase 4: --server flag (server profile selection)

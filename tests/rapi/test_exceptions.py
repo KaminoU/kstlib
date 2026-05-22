@@ -6,6 +6,7 @@ from kstlib.rapi.exceptions import (
     EndpointAmbiguousError,
     EndpointNotFoundError,
     EnvVarError,
+    MinifyRequiresRawError,
     RapiError,
     RequestError,
     ResponseTooLargeError,
@@ -254,3 +255,34 @@ class TestEnvVarError:
         error = EnvVarError("MY_VAR", source="test.yml")
         assert error.details["var_name"] == "MY_VAR"
         assert error.details["source"] == "test.yml"
+
+
+class TestMinifyRequiresRawError:
+    """Tests for MinifyRequiresRawError exception."""
+
+    def test_default_message_contains_hint(self) -> None:
+        """Default message exposes the --raw --minify hint."""
+        error = MinifyRequiresRawError()
+        rendered = str(error)
+        assert "--minify requires --raw" in rendered
+        assert "--raw --minify" in rendered
+        assert "Rich rendering" in rendered
+
+    def test_custom_message_overrides_default(self) -> None:
+        """Optional message argument replaces the default hint."""
+        error = MinifyRequiresRawError("Custom hint text for callers.")
+        assert str(error) == "Custom hint text for callers."
+
+    def test_none_falls_back_to_default(self) -> None:
+        """Explicit None message argument still yields the default hint."""
+        error = MinifyRequiresRawError(None)
+        assert "--raw --minify" in str(error)
+
+    def test_inherits_rapi_error(self) -> None:
+        """Verify MinifyRequiresRawError inherits from RapiError."""
+        error = MinifyRequiresRawError()
+        assert isinstance(error, RapiError)
+
+    def test_default_message_constant_is_hint(self) -> None:
+        """``DEFAULT_MESSAGE`` exposes the canonical hint string."""
+        assert "--raw --minify" in MinifyRequiresRawError.DEFAULT_MESSAGE

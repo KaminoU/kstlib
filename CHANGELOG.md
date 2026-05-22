@@ -19,6 +19,168 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.0.0] - 2026-05-22
+
+> **BREAKING changes** : `WebSocketManager.close()` semantic has changed
+> (see Changed section below for full details and migration hint).
+
+### Added
+
+- **NEW `WebSocketManager.is_recoverable` property** for external
+  watchdog consumers. Returns True when the connection is dead but NOT
+  intentionally shutdown (`is_dead and not is_shutdown`). Helps
+  distinguish accidental disconnects (graceful `close()` end-of-scope
+  or reactive `kill()`) from intentional terminal shutdowns
+  (`force_close()` or `shutdown()`). Watchdog consumers should use this
+  property rather than `is_dead` to avoid restarting an intentional
+  shutdown loop.
+- **Logging caller context in `debug` and `trace` preset file format**
+  (`src/kstlib/kstlib.conf.yml`) : log records emitted with these presets
+  now include `[<filename>:<lineno> <funcName>]` for diagnostic visibility
+  on post-mortem incident investigation. Console output remains unchanged
+  (Rich `show_path=true` already provides visual caller location). Other
+  presets (`dev`, `prod`, `trace_mail`) are not affected so clean
+  production logs are preserved.
+- **`MinifyRequiresRawError(RapiError)` exception**
+  (`kstlib.rapi.exceptions`) : exported via `kstlib.rapi.__all__`.
+  Surfaces the constraint that compact JSON (`minify`) is incompatible
+  with Rich console rendering, so callers must request raw output too.
+  The CLI emits the same constraint via `typer.BadParameter` for native
+  Typer error formatting ; this exception is reserved for callers that
+  need to raise it programmatically (for example, future pipeline
+  steps exposing equivalent `minify` and `out` semantics). Default
+  message exposed as the `DEFAULT_MESSAGE` class attribute and
+  contains the canonical hint pointing to `--raw --minify`.
+- **`AuthExpiredError(AuthError)` exception**
+  (`kstlib.auth.errors`) : exported via `kstlib.auth.__all__`.
+  Distinct from the existing `TokenExpiredError(TokenError)`. The two
+  cover different lifecycle points : `AuthExpiredError` is raised by
+  consumers (typically `kstlib.rapi.client`) on receiving an HTTP 401
+  at runtime, signalling that a token which was valid at send time
+  has been expired or invalidated by the identity provider during
+  the session ; `TokenExpiredError` is raised by `kstlib.auth` when
+  a loaded token is detected as already expired before the request
+  is sent (client-side pre-flight check). The new class carries two
+  optional attributes `token_source` (label such as
+  `'~/.sas/credentials.json'`, `'env:KSTLIB_TOKEN'`,
+  `'sops:secrets/api.sops.json'`) and `suggested_action` (re-auth
+  hint such as `'Run: sas-admin auth login -u <user>'`), mirrored
+  into the `details` dict for introspection. Used by upcoming runtime
+  401 detection in `kstlib.rapi.client`.
+
+### Changed
+
+- **`WebSocketManager.close()` semantic now graceful (BREAKING v3.0.0)** :
+  previously an alias for `force_close()` (State=CLOSED terminal, cannot
+  reconnect). Now closes gracefully : State=DISCONNECTED non-terminal,
+  reconnection remains possible via explicit `connect()` or auto-reconnect.
+  Restores Python `async with` convention so `__aexit__` no longer
+  prevents reconnection. The `_auto_reconnect` flag is preserved. The
+  method is idempotent (no-op if state is already CLOSED or DISCONNECTED).
+  Migration : use `force_close()` explicitly for emergency stop, or
+  `shutdown()` for intentional SIGINT-like shutdown.
+- **`WebSocketManager.force_close()` now marks `is_shutdown=True`** :
+  the intentional emergency stop now sets the shutdown event in addition
+  to flipping `auto_reconnect=False` and moving to State=CLOSED. Helps
+  watchdog consumers distinguish reactive disconnect (via `kill()`,
+  `is_shutdown=False`) from intentional terminal shutdown (via
+  `force_close()` or `shutdown()`, `is_shutdown=True`). The new
+  `is_recoverable` property (see Added section above) leverages this
+  distinction.
+- **CLI `rapi call --minify` without `--raw` now fails fast** : the
+  combination was previously silent (Rich console rendering reformats
+  output regardless of compact JSON flags, so `--minify` alone had no
+  visible effect). The CLI now rejects the combination at command
+  entry via `typer.BadParameter` with a hint message pointing to
+  `--raw --minify`. The validation runs before any RapiClient
+  construction or endpoint resolution so no I/O occurs on a rejected
+  invocation.
+- **`rapi.client` now detects access token expiration on HTTP 401**
+  : `RapiClient.call` (and its async counterpart) now inspects every
+  parsed response and raises `AuthExpiredError` when the response
+  indicates token expiration (heuristic : body contains `expired`,
+  `invalid_token`, or `token expired` case-insensitive, or
+  `WWW-Authenticate` header contains `invalid_token` per RFC 6750).
+  The exception carries a sanitized `token_source` label and a
+  contextual `suggested_action` hint derived from the credential
+  source (file path, env var, SOPS path, or provider name) without
+  ever exposing the secret material itself. Backward compat
+  preserved : HTTP 401 responses that lack expiration markers
+  continue to surface as `RapiResponse(ok=False)`. A tagged
+  `WARNING [SECURITY]` log entry is emitted before the raise
+  (status code, content type, credential source label only ; never
+  the response body or the token).
+- **`rapi.client` now also emits a user-facing `ERROR` log with
+  the re-auth hint** before raising `AuthExpiredError`. The
+  `WARNING [SECURITY]` audit entry is preserved untouched ; the
+  new `ERROR` line targets human operators consuming kstlib as a
+  library (the actionable hint stays visible even if the
+  exception is swallowed or generically caught upstream). Same
+  sanitization contract applies : the message references the
+  credential source label (file path / env var name / SOPS path
+  / provider name) but never the token value, the response body,
+  or the `Authorization` header.
+- **CLI `rapi call`** : `AuthExpiredError` now triggers exit code
+  4 (distinct from the generic exit code 1 used for other errors).
+  The error message displays the actionable re-authentication
+  hint on a dedicated `Hint:` line alongside the token source on
+  a `Source:` line. Shell scripts wrapping `kstlib rapi` can now
+  detect token expiration specifically and trigger an automated
+  re-login flow without having to parse the message body.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- **`fix-rapi-minify-requires-raw`** : the `--minify` CLI flag was
+  silently ineffective without `--raw` because Rich console rendering
+  reformats output regardless of compact JSON flags. Add
+  `_validate_output_flags()` rejection at command entry with an
+  explicit hint instead of swallowing the user intent.
+- **`fix-rapi-auth-expired-error-detection`** : `RapiClient` no
+  longer swallows expired SAS Viya (or any OAuth/OIDC) tokens
+  behind a generic `RapiResponse(ok=False)` exit. The detection
+  helper `_check_auth_expired()` invoked inside both
+  `_execute_with_retry` and `_execute_with_retry_async` surfaces
+  `AuthExpiredError` with a contextual re-authentication hint
+  (`sas-admin auth login` for SAS Viya credentials files, env var
+  refresh hint for env-based credentials, SOPS file path hint for
+  SOPS-backed credentials, `kstlib auth login` for provider-backed
+  credentials). The CLI exit code mapping to a distinct value
+  for `AuthExpiredError` ships in a follow-up commit.
+- **Watchdog timeout test determinism** : `tests/resilience/test_watchdog.py::test_raise_on_timeout`
+  relied on a real `time.sleep(1.2)` plus the background monitor thread, making it
+  timing-sensitive and flaky under runtime load (notably on Python 3.14). Rewritten
+  to mock `time.monotonic` and drive the timeout check synchronously, making the test
+  deterministic and independent of runtime speed.
+- **`SecretError` and `ConfigExportError` now inherit from
+  `KstlibError`** : both classes previously extended only
+  `RuntimeError`, so they escaped the library-wide
+  `except KstlibError` catch-all honored by every other kstlib
+  exception. `SecretError` (`kstlib.secrets`, base of
+  `SecretNotFoundError` and `SecretDecryptionError`) now extends
+  `(KstlibError, RuntimeError)`, and `ConfigExportError`
+  (`kstlib.config`) now extends `(ConfigError, RuntimeError)`.
+  `RuntimeError` is retained in both cases, so existing
+  `except RuntimeError` handlers and `isinstance` checks are
+  unaffected : the change only widens catchability.
+
+### Security
+
+- **`idna` lower bound raised to `>=3.15`** (transitive via `httpx`) :
+  addresses CVE-2026-45409, a quadratic-time denial of service on
+  oversized input that bypassed the CVE-2024-3651 mitigation. Fixed
+  upstream in idna 3.14 ; the floor is set to 3.15 (the Dependabot
+  target, which also adds an early DNS-length cap on labels).
+- **`authlib` lower bound raised to `>=1.6.12`** : upstream fix for
+  an open redirect to an unvalidated `redirect_uri` on
+  `InvalidScopeError` in the OpenID implicit and hybrid grants
+  (authlib 1.6.12). No CVE assigned upstream. The locked and tested
+  authlib version is 1.7.2 ; authlib 1.7.x delegates JOSE operations
+  to `joserfc`, a new transitive dependency.
+
 ## [2.7.1] - 2026-05-13
 
 ### Fixed
@@ -1234,7 +1396,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v2.7.1...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/KaminoU/kstlib/compare/v2.7.1...v3.0.0
 [2.7.1]: https://github.com/KaminoU/kstlib/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/KaminoU/kstlib/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/KaminoU/kstlib/compare/v2.5.0...v2.6.0

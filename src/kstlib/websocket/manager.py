@@ -952,6 +952,7 @@ class WebSocketManager:
 
         """
         self._auto_reconnect = False
+        self._shutdown_event.set()
         self._state = ConnectionState.CLOSING
 
         await self._cancel_background_tasks()
@@ -1070,12 +1071,78 @@ class WebSocketManager:
             ConnectionState.CLOSED,
         )
 
-    async def close(self) -> None:
-        """Gracefully close the connection.
+    @property
+    def is_recoverable(self) -> bool:
+        """Check if the connection is recoverable via reconnect.
 
-        Alias for force_close() when used in context manager.
+        True when the connection is dead but NOT intentionally shutdown.
+        Watchdog consumers should use this property (rather than
+        :attr:`is_dead`) to decide whether to restart the connection :
+        intentional shutdowns via :meth:`shutdown` or :meth:`force_close`
+        should NOT be restarted, only accidental disconnects (graceful
+        :meth:`close` end-of-scope or reactive :meth:`kill`).
+
+        Returns:
+            True if :attr:`is_dead` is True AND :attr:`is_shutdown` is False.
+
+        Examples:
+            >>> async def watchdog_loop(ws):  # doctest: +SKIP
+            ...     while True:
+            ...         await asyncio.sleep(5)
+            ...         if ws.is_recoverable:
+            ...             await ws.connect()  # Restart accidental disconnect
+            ...         elif ws.is_shutdown:
+            ...             break  # Intentional shutdown, exit watchdog
+
         """
-        await self.force_close()
+        return self.is_dead and not self.is_shutdown
+
+    async def close(self) -> None:
+        """Gracefully close the connection (non-terminal, reconnect possible).
+
+        Sets state to DISCONNECTED (non-terminal) so reconnection remains
+        possible via explicit :meth:`connect` or the auto-reconnect mechanism.
+        Preserves the ``_auto_reconnect`` flag. Background tasks are cancelled
+        and the underlying WebSocket is closed cleanly with code 1000.
+
+        Idempotent : returns immediately if state is already CLOSED or
+        DISCONNECTED (no double close, no exception on repeated calls).
+
+        Key difference from :meth:`force_close` and :meth:`shutdown` :
+
+        - ``close()`` : graceful end-of-scope (e.g. ``async with`` exit).
+          State=DISCONNECTED non-terminal. CAN reconnect. Does NOT mark
+          ``is_shutdown``.
+        - ``force_close()`` : emergency intentional stop. State=CLOSED terminal.
+          CANNOT reconnect. Marks ``is_shutdown=True``.
+        - ``shutdown()`` : intentional shutdown (SIGINT-like). State=CLOSED
+          terminal. CANNOT reconnect. Marks ``is_shutdown=True``.
+
+        Examples:
+            >>> async def main():  # doctest: +SKIP
+            ...     async with WebSocketManager("wss://example.com/ws") as ws:
+            ...         async for msg in ws.stream():
+            ...             ...
+            ...     # async with exited : close() graceful, ws.state == DISCONNECTED
+            ...     await ws.connect()  # Reconnect possible
+
+        """
+        if self._state in (ConnectionState.CLOSED, ConnectionState.DISCONNECTED):
+            return
+
+        self._state = ConnectionState.CLOSING
+
+        await self._cancel_background_tasks()
+
+        if self._ws is not None:
+            await self._ws.close(1000, "Graceful close")
+            self._ws = None
+
+        self._state = ConnectionState.DISCONNECTED
+        self._connected_event.clear()
+        self._disconnected_event.set()
+
+        log.info("WebSocket closed gracefully (reconnect possible)")
 
     # =========================================================================
     # MESSAGING METHODS

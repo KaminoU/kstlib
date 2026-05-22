@@ -78,3 +78,26 @@ class TestLogManagerWithPresets:
         handler_classes = [type(h).__name__ for h in mgr.handlers]
         assert "RichHandler" in handler_classes
         assert "TimedRotatingFileHandler" in handler_classes
+
+    def test_debug_preset_file_format_contains_caller_context(self) -> None:
+        """debug preset file format includes filename:lineno funcName for incident debugging."""
+        mgr = LogManager(preset="debug", register=False)
+        fmt = mgr._config.file.format
+        assert "%(filename)s" in fmt
+        assert "%(lineno)d" in fmt
+        assert "%(funcName)s" in fmt
+
+    def test_trace_preset_file_format_contains_caller_context(self) -> None:
+        """trace preset file format includes filename:lineno funcName for incident debugging."""
+        mgr = LogManager(preset="trace", register=False)
+        fmt = mgr._config.file.format
+        assert "%(filename)s" in fmt
+        assert "%(lineno)d" in fmt
+        assert "%(funcName)s" in fmt
+
+    def test_prod_preset_file_format_unchanged(self) -> None:
+        """prod preset file format must NOT include caller context (preserve clean prod logs)."""
+        mgr = LogManager(preset="prod", register=False)
+        fmt = mgr._config.file.format
+        assert "%(filename)s" not in fmt
+        assert "%(funcName)s" not in fmt

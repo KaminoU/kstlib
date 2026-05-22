@@ -421,6 +421,47 @@ class EnvVarError(RapiError):
         self.source = source
 
 
+class MinifyRequiresRawError(RapiError):
+    """Raised when ``--minify`` (compact JSON) is requested without ``--raw``.
+
+    Rich console rendering reformats output regardless of compact JSON
+    flags, so ``--minify`` without ``--raw`` is silently ineffective.
+    Surface the constraint at flag-validation time with a hint pointing
+    to ``--raw --minify``.
+
+    The kstlib CLI raises :class:`typer.BadParameter` directly for
+    native Typer error formatting. This exception is exported for
+    callers that need to surface the same constraint programmatically
+    (for example, future pipeline steps exposing equivalent
+    ``minify`` and ``out`` semantics).
+
+    Attributes:
+        message: Human-readable error message containing the hint.
+
+    Examples:
+        >>> error = MinifyRequiresRawError()
+        >>> "--raw --minify" in str(error)
+        True
+        >>> isinstance(error, RapiError)
+        True
+
+    """
+
+    DEFAULT_MESSAGE = (
+        "--minify requires --raw (Rich rendering ignores compact JSON formatting). Hint: use --raw --minify."
+    )
+
+    def __init__(self, message: str | None = None) -> None:
+        """Initialize MinifyRequiresRawError.
+
+        Args:
+            message: Optional custom message. Defaults to the canonical
+                hint pointing to ``--raw --minify``.
+
+        """
+        super().__init__(message or self.DEFAULT_MESSAGE)
+
+
 __all__ = [
     "ConfirmationRequiredError",
     "CredentialError",
@@ -428,6 +469,7 @@ __all__ = [
     "EndpointCollisionError",
     "EndpointNotFoundError",
     "EnvVarError",
+    "MinifyRequiresRawError",
     "RapiError",
     "RequestError",
     "ResponseTooLargeError",

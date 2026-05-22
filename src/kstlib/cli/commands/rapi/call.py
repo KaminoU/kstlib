@@ -7,6 +7,7 @@ from typing import Annotated, Any, cast
 
 import typer
 
+from kstlib.auth import AuthExpiredError
 from kstlib.cli.common import CommandResult, CommandStatus, console, exit_error, exit_with_result
 from kstlib.limits import get_rapi_render_config
 from kstlib.rapi import (
@@ -117,6 +118,96 @@ def _parse_body(body: str | None) -> dict[str, Any] | list[Any] | None:
         return json.loads(content)  # type: ignore[no-any-return]
     except json.JSONDecodeError as e:
         exit_error(f"Invalid JSON body: {e}")
+
+
+def _validate_format(fmt: str) -> None:
+    """Reject output formats outside the supported set with a friendly error.
+
+    Extracted from the ``call`` command body so the cyclomatic
+    complexity budget keeps room for the exception handlers that
+    cover the runtime error paths (auth expiration, HTTP errors,
+    safeguard checks, etc.).
+
+    Args:
+        fmt: Format value passed by the user via ``--format`` / ``-f``.
+
+    Raises:
+        typer.Exit: Exit code 1 if ``fmt`` is not one of ``json``,
+            ``text``, or ``full``.
+
+    """
+    if fmt not in ("json", "text", "full"):
+        exit_error(f"Invalid output format: '{fmt}'\nValid formats: json, text, full")
+
+
+def _is_multipart_file_body(endpoint_config: Any, body: str | None) -> bool:
+    """Return True when the call targets a multipart endpoint with a ``@file`` body.
+
+    Extracted from the ``call`` command body to keep its cyclomatic
+    complexity in check. The compound check is pulled out so each
+    short-circuit (``and``) does not count as a separate branch
+    against the caller's complexity budget.
+    """
+    return endpoint_config.is_multipart and body is not None and body.startswith("@")
+
+
+def _handle_auth_expired_error(error: AuthExpiredError, *, quiet: bool) -> None:
+    """Render an :class:`AuthExpiredError` and exit with code 4.
+
+    Distinct exit code lets shell scripts detect token expiration
+    specifically and trigger an automated re-login flow (decision
+    D5 in the v3.0.0 roadmap). The message body is built from the
+    exception attributes : ``Error: <message>``, optionally
+    ``Source: <token_source>``, optionally ``Hint: <suggested_action>``.
+
+    Args:
+        error: The caught :class:`AuthExpiredError`.
+        quiet: Whether the user passed ``--quiet`` / ``-q``.
+
+    Raises:
+        typer.Exit: Always exits with code 4.
+
+    """
+    message_lines = [f"Error: {error.message}"]
+    if error.token_source:
+        message_lines.append(f"Source: {error.token_source}")
+    if error.suggested_action:
+        message_lines.append(f"Hint: {error.suggested_action}")
+    exit_with_result(
+        CommandResult(
+            status=CommandStatus.ERROR,
+            message="\n".join(message_lines),
+            payload={
+                "token_source": error.token_source,
+                "suggested_action": error.suggested_action,
+            },
+        ),
+        quiet=quiet,
+        exit_code=4,
+        cause=error,
+    )
+
+
+def _validate_output_flags(raw: bool, minify: bool) -> None:
+    """Reject ``--minify`` without ``--raw`` at command entry.
+
+    Rich console rendering reformats output regardless of compact JSON
+    flags, so ``--minify`` without ``--raw`` is silently ineffective.
+    Fail fast with a hint instead of swallowing the user intent.
+
+    Args:
+        raw: True if the user passed ``--raw``.
+        minify: True if the user passed ``--minify``.
+
+    Raises:
+        typer.BadParameter: If ``minify`` is True and ``raw`` is False.
+            The message contains the hint ``--raw --minify``.
+
+    """
+    if minify and not raw:
+        raise typer.BadParameter(
+            "--minify requires --raw (Rich rendering ignores compact JSON formatting). Hint: use --raw --minify.",
+        )
 
 
 def _serialize_json(data: Any, *, minify: bool = False, indent: int = 2) -> str:
@@ -331,8 +422,10 @@ def call(
     headers = _parse_headers(header or [])
 
     # Validate output format
-    if fmt not in ("json", "text", "full"):
-        exit_error(f"Invalid output format: '{fmt}'\nValid formats: json, text, full")
+    _validate_format(fmt)
+
+    # Reject --minify without --raw before any work is done.
+    _validate_output_flags(raw=raw, minify=minify)
 
     from kstlib.cli.commands.rapi import _load_config_or_exit
 
@@ -346,7 +439,7 @@ def call(
 
         # For multipart endpoints with @file body, pass raw string to client
         # (client reads file as binary instead of CLI parsing as JSON)
-        if endpoint_config.is_multipart and body is not None and body.startswith("@"):
+        if _is_multipart_file_body(endpoint_config, body):
             parsed_body: Any = body
         else:
             parsed_body = _parse_body(body)
@@ -413,6 +506,8 @@ def call(
             exit_code=1,
             cause=e,
         )
+    except AuthExpiredError as e:
+        _handle_auth_expired_error(e, quiet=quiet)
     except RequestError as e:
         exit_with_result(
             CommandResult(

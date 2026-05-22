@@ -156,6 +156,22 @@ from kstlib.logging import init_logging
 init_logging(preset="debug")
 ```
 
+### Caller context in `debug` and `trace` presets
+
+For post-mortem incident debugging, the `debug` and `trace` presets enrich the file handler format with caller location :
+
+```text
+[2026-05-20 14:30:15 | INFO    ] ::: PID 1234 / TID 5678 ::: [manager.py:1115 close] WebSocket closed gracefully (reconnect possible)
+```
+
+The `[%(filename)s:%(lineno)d %(funcName)s]` segment is added only to the **file handler** format. Console output preserves the Rich `show_path: true` visual rendering, avoiding visual duplication.
+
+Other presets (`dev`, `prod`, `trace_mail`) are **not affected** so clean production logs are preserved.
+
+#### Why
+
+When investigating an incident from log files (no live terminal), seeing the caller location helps trace the exact code path that emitted each log record. Useful for diagnosing unexpected lifecycle transitions (e.g., who called `force_close()`, which `receive_loop` emitted the warning) or post-mortem reconstruction of a multi-task asyncio sequence.
+
 ## Recipes
 
 ### Default-muted verbose modules

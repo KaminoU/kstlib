@@ -20,6 +20,7 @@ from typing import Any, Final, cast
 
 import yaml
 
+from kstlib.config.exceptions import ConfigError
 from kstlib.config.loader import CONFIG_FILENAME
 
 try:
@@ -38,7 +39,7 @@ _SUPPORTED_EXTENSIONS: Final[dict[str, str]] = {
 _DEFAULT_FORMAT: Final[str] = "yaml"
 
 
-class ConfigExportError(RuntimeError):
+class ConfigExportError(ConfigError, RuntimeError):
     """Raised when configuration export fails."""
 
 

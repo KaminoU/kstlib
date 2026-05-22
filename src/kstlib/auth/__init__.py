@@ -58,6 +58,7 @@ from kstlib.auth.config import (
 )
 from kstlib.auth.errors import (
     AuthError,
+    AuthExpiredError,
     AuthorizationError,
     CallbackServerError,
     ConfigurationError,
@@ -100,6 +101,7 @@ __all__ = [
     "AbstractTokenStorage",
     # Errors
     "AuthError",
+    "AuthExpiredError",
     # Models
     "AuthFlow",
     "AuthProviderConfig",

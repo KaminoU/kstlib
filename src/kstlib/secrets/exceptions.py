@@ -1,13 +1,17 @@
 """Custom exceptions raised by the secrets subsystem."""
 
+from __future__ import annotations
+
 __all__ = [
     "SecretDecryptionError",
     "SecretError",
     "SecretNotFoundError",
 ]
 
+from kstlib.config.exceptions import KstlibError
 
-class SecretError(RuntimeError):
+
+class SecretError(KstlibError, RuntimeError):
     """Base class for all secrets related errors."""
 
 
