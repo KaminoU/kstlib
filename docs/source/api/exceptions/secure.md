@@ -7,8 +7,10 @@ integrating guardrails so you can differentiate between OS-level errors and poli
 ## Exception Hierarchy
 
 ```
-RuntimeError
-└── PathSecurityError    # Path traversal or policy violation
+KstlibError
+├── PathSecurityError              # filesystem guardrails (also inherits RuntimeError)
+└── PasswordError                  # password hashing (also inherits RuntimeError)
+    └── InvalidPasswordHashError   # stored hash is corrupt or not a valid Argon2 hash
 ```
 
 ```{note}
@@ -20,6 +22,12 @@ permission checks, traversal detection), but you still need to provision secure 
 
 - `PathSecurityError` inherits from `RuntimeError` and signals traversal attempts, wrong file types, or
   permissions that exceed the allowed mask defined by the active `GuardPolicy`.
+- `PasswordError` (under `KstlibError`, also a `RuntimeError`) signals a password hashing failure: the
+  optional `argon2-cffi` backend is not installed, the password is not `str`/`bytes`, it exceeds
+  `MAX_PASSWORD_LENGTH`, or the backend itself failed.
+- `InvalidPasswordHashError` (under `PasswordError`) is raised when a stored value is not a valid Argon2
+  hash. Note that `verify_password` returns `False` on a wrong password and raises
+  `InvalidPasswordHashError` only when the stored hash itself is corrupt or malformed.
 
 ## Usage patterns
 
@@ -50,10 +58,34 @@ except PathSecurityError:
     print("Traversal prevented by guardrails")
 ```
 
+### Verifying a password safely
+
+```python
+from kstlib.secure import InvalidPasswordHashError, verify_password
+
+try:
+    ok = verify_password(submitted_password, stored_hash)
+except InvalidPasswordHashError:
+    # The stored hash is corrupt or not an Argon2 hash: treat as an integrity
+    # error, never as a successful login.
+    ok = False
+
+if not ok:
+    reject()
+```
+
 ## Exception reference
 
 ```{eval-rst}
 .. autoexception:: kstlib.secure.fs.PathSecurityError
+    :members:
+    :show-inheritance:
+
+.. autoexception:: kstlib.secure.passwords.PasswordError
+    :members:
+    :show-inheritance:
+
+.. autoexception:: kstlib.secure.passwords.InvalidPasswordHashError
     :members:
     :show-inheritance:
 ```

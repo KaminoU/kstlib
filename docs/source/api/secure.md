@@ -1,11 +1,11 @@
-# Secure Guardrails
+# Secure
 
-Public helpers for filesystem guardrails. `kstlib.secure` exposes `GuardPolicy` presets and the
-`PathGuardrails` utility so mail templates, attachments, and other file-based assets stay confined to trusted
-directories.
+Public helpers in `kstlib.secure`: **filesystem guardrails** (`GuardPolicy` presets and the `PathGuardrails`
+utility so mail templates, attachments, and other file-based assets stay confined to trusted directories) and
+**password hashing** (`hash_password`, `verify_password`, `needs_rehash`) backed by Argon2id.
 
 ```{tip}
-See {doc}`../features/utils/secure_delete` for the feature guide.
+See {doc}`../features/secure/index` for the feature guide (filesystem guardrails and password hashing).
 ```
 
 ## Quick overview
@@ -76,4 +76,13 @@ external_guard.resolve_file("/opt/legacy/template.html")  # raises if file is mi
 	:undoc-members:
 	:show-inheritance:
 	:noindex:
+```
+
+Cost constants (`DEFAULT_*`, `MIN_*`, `MAX_PASSWORD_LENGTH`) and the hashing functions, defined in `kstlib.secure.passwords`:
+
+```{eval-rst}
+.. automodule:: kstlib.secure.passwords
+    :members:
+    :show-inheritance:
+    :noindex:
 ```

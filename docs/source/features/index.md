@@ -123,7 +123,7 @@ SOPS, AWS KMS, keyring, environment variable resolution.
 :link: secure/index
 :link-type: doc
 
-`PathGuardrails`, root pinning, POSIX permission enforcement.
+`PathGuardrails` path confinement + Argon2id password hashing.
 :::
 
 :::{grid-item-card} transform

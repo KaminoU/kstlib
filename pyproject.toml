@@ -125,6 +125,11 @@ db-crypto = [
     "sqlcipher3>=0.5,<1", # SQLCipher Python bindings
 ]
 
+# Password hashing (argon2id) - optional, prebuilt wheels on all platforms
+passwords = [
+    "argon2-cffi>=25.1,<26", # Argon2 password hashing (OWASP #1 recommendation)
+]
+
 # Documentation
 docs = [
     "sphinx>=8.1,<9",

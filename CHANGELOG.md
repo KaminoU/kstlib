@@ -19,6 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.1.0] - 2026-06-01
+
+### Added
+
+- **NEW password hashing helpers** in `kstlib.secure`
+  (`hash_password`, `verify_password`, `needs_rehash`), backed by Argon2id
+  via the optional `argon2-cffi` dependency (`pip install kstlib[passwords]`).
+  Cost parameters follow the `kwargs > kstlib config > defaults` cascade with
+  OWASP-aligned defaults (RFC 9106 low-memory: `time_cost=3`,
+  `memory_cost=65536` KiB, `parallelism=4`). Values resolved below the OWASP
+  minimum baseline (19 MiB / `t=2`) are clamped up and a `WARNING [SECURITY]`
+  is logged. Passwords longer than `MAX_PASSWORD_LENGTH` (4096 bytes) are
+  rejected as an anti-DoS guard, and passwords and hashes are never written
+  to the logs.
+- **NEW exceptions `PasswordError` and `InvalidPasswordHashError`**
+  (`kstlib.secure`), both under `KstlibError`. `verify_password` returns
+  `False` on a wrong password and raises `InvalidPasswordHashError` only when
+  the stored hash is corrupt or not a valid Argon2 hash.
+
 ## [3.0.0] - 2026-05-22
 
 > **BREAKING changes** : `WebSocketManager.close()` semantic has changed
@@ -1396,7 +1415,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/KaminoU/kstlib/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/KaminoU/kstlib/compare/v2.7.1...v3.0.0
 [2.7.1]: https://github.com/KaminoU/kstlib/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/KaminoU/kstlib/compare/v2.6.0...v2.7.0

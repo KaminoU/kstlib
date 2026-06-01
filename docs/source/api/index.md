@@ -123,7 +123,7 @@ Complete API documentation for all `kstlib` modules. Each page documents public 
 :link: secure
 :link-type: doc
 
-`PathGuardrails`, permissions, path validation.
+`PathGuardrails` path validation + Argon2id password hashing.
 :::
 
 :::{grid-item-card} transform

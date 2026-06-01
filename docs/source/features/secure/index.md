@@ -1,6 +1,6 @@
 # Secure
 
-Filesystem guardrails for path validation, root pinning, and POSIX permission enforcement. `kstlib.secure` is the hardening layer that mail attachments, mail templates, monitoring outputs, and any user-controlled path go through before being touched. The goal is to catch obvious mistakes (directory traversal, drive escape on Windows, world-readable secret files) before they reach the operating system.
+`kstlib.secure` provides two families of hardening helpers: **filesystem guardrails** (path validation, root pinning, POSIX permission enforcement) and **password hashing** (Argon2id). The guardrails are the hardening layer that mail attachments, mail templates, monitoring outputs, and any user-controlled path go through before being touched, catching obvious mistakes (directory traversal, drive escape on Windows, world-readable secret files) before they reach the operating system. The password hashing helpers let an application that is its own identity provider store and verify user credentials safely.
 
 ```{tip}
 For the API reference of the underlying classes (`PathGuardrails`, `GuardPolicy`, `PathSecurityError`,
@@ -76,3 +76,69 @@ Filesystem guardrails never replace OS-level permissions. They provide a consist
 modules so misconfigurations are caught early, but you still need to provision directories and set
 permissions correctly at the OS level.
 ```
+
+## Password hashing (Argon2id)
+
+Hash and verify local user passwords with Argon2id, the OWASP top recommendation for password storage. The backend is the optional `argon2-cffi` dependency:
+
+```bash
+pip install kstlib[passwords]
+```
+
+```{tip}
+For the API reference (functions, cost constants, and the `PasswordError` /
+`InvalidPasswordHashError` exceptions), see {doc}`../../api/secure` and
+{doc}`../../api/exceptions/secure`.
+```
+
+### When to use
+
+- **Use it** to store and verify passwords for users **your application authenticates itself** (the app is the identity provider).
+- **Do not use it** for OAuth2/OIDC login flows: use {doc}`../auth/index` instead.
+- **Do not use it** to store recoverable secrets: a password hash is one-way and cannot be decrypted. To encrypt and retrieve secrets, use {doc}`../secrets/index`.
+
+### TL;DR
+
+```python
+from kstlib.secure import hash_password, verify_password, needs_rehash
+
+# At registration: hash once, persist the returned PHC string.
+stored = hash_password(user_password)
+
+# At login: verify the candidate, then opportunistically upgrade the stored
+# hash if the cost policy has since been strengthened.
+if verify_password(submitted_password, stored):
+    if needs_rehash(stored):
+        stored = hash_password(submitted_password)  # persist the upgraded hash
+    grant_access()
+else:
+    reject()
+```
+
+`verify_password` returns `False` for a wrong password (it never raises on a mismatch). It raises `InvalidPasswordHashError` only when `stored_hash` is corrupt or not a valid Argon2 hash.
+
+### Why Argon2id
+
+Argon2id won the 2015 Password Hashing Competition and is the OWASP first choice: it is memory-hard, which makes large-scale GPU/ASIC cracking expensive. The built-in defaults follow the RFC 9106 low-memory profile (`time_cost=3`, `memory_cost=65536` KiB = 64 MiB, `parallelism=4`), which already tracks the OWASP recommendation.
+
+### Tuning the cost (optional)
+
+The defaults are safe out of the box. To tune the cost, override them once in `kstlib.conf.yml`:
+
+```yaml
+secure:
+    passwords:
+        time_cost: 4         # iterations (floor: 2)
+        memory_cost: 131072  # KiB, here 128 MiB (floor: 19456 = 19 MiB)
+        parallelism: 4       # parallel lanes (floor: 1)
+        hash_len: 32         # derived hash length in bytes (floor: 16)
+        salt_len: 16         # random salt length in bytes (floor: 16)
+```
+
+Resolution follows the cascade `kwargs > config > defaults`. The three cost knobs (`time_cost`, `memory_cost`, `parallelism`) can also be overridden per call as keyword arguments to `hash_password`. Output sizing (`hash_len`, `salt_len`) is **config-only**: it must stay consistent across all stored hashes, so it is deliberately not a per-call argument.
+
+### Security behavior
+
+- **Never logged**: passwords and hashes are never written to the logs, even at `TRACE`.
+- **Floors, not failures**: any cost parameter resolved below its security floor is clamped up to the floor and a `WARNING [SECURITY]` is logged (never silently dropped, never raised). The floors are the OWASP minimum baseline (19 MiB / `t=2`); the defaults sit well above them, so the floor only blocks a deliberate downgrade.
+- **Anti-DoS**: passwords longer than `MAX_PASSWORD_LENGTH` (4096 bytes) are rejected. `hash_password` raises `PasswordError`; `verify_password` returns `False`.
