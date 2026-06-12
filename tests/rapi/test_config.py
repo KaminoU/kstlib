@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from kstlib.limits import HARD_MAX_CONFIG_FILE_SIZE
 from kstlib.rapi.config import (
     ApiConfig,
     EndpointConfig,
@@ -768,6 +769,13 @@ endpoints:
         """Raise FileNotFoundError for missing file."""
         with pytest.raises(FileNotFoundError):
             RapiConfigManager.from_file("nonexistent.rapi.yml")
+
+    def test_from_file_oversized_rejected(self, tmp_path: Path) -> None:
+        """Raise ValueError for a file exceeding the size cap, before parsing."""
+        rapi_file = tmp_path / "huge.rapi.yml"
+        rapi_file.write_bytes(b"#" * (HARD_MAX_CONFIG_FILE_SIZE + 1))
+        with pytest.raises(ValueError, match="too large"):
+            RapiConfigManager.from_file(str(rapi_file))
 
     def test_from_file_missing_base_url(self, tmp_path: Path) -> None:
         """Raise ValueError for missing base_url."""
@@ -2297,3 +2305,110 @@ endpoints:
         with mock.patch("kstlib.config.get_config", return_value=mock_config):
             with pytest.raises(EndpointCollisionError):
                 load_rapi_config()
+
+
+class TestEndpointConfigExtract:
+    """Tests for the EndpointConfig extract: directive validation."""
+
+    def test_no_extract_defaults_none(self) -> None:
+        """An endpoint without extract: has extract == None."""
+        config = EndpointConfig(name="ep", api_name="demo", path="/x")
+        assert config.extract is None
+
+    def test_valid_extract_kept(self) -> None:
+        """A valid extract map is stored as-is."""
+        config = EndpointConfig(
+            name="ep",
+            api_name="demo",
+            path="/x",
+            extract={"id": "id", "region": "metadata.region"},
+        )
+        assert config.extract == {"id": "id", "region": "metadata.region"}
+
+    def test_body_keyword_not_compiled(self) -> None:
+        """The reserved $body value is accepted without JMESPath compilation."""
+        config = EndpointConfig(name="ep", api_name="demo", path="/x", extract={"state": "$body"})
+        assert config.extract == {"state": "$body"}
+
+    def test_complex_filter_expression(self) -> None:
+        """A JMESPath filter expression is accepted."""
+        config = EndpointConfig(
+            name="ep",
+            api_name="demo",
+            path="/x",
+            extract={"active": "items[?status=='active'].id"},
+        )
+        assert "active" in (config.extract or {})
+
+    def test_invalid_jmespath_raises(self) -> None:
+        """An invalid JMESPath expression raises ValueError at construction."""
+        with pytest.raises(ValueError, match="valid JMESPath"):
+            EndpointConfig(name="ep", api_name="demo", path="/x", extract={"bad": "items["})
+
+    def test_non_dict_raises(self) -> None:
+        """A non-mapping extract raises TypeError."""
+        with pytest.raises(TypeError, match="must be a mapping"):
+            EndpointConfig(name="ep", api_name="demo", path="/x", extract="nope")  # type: ignore[arg-type]
+
+    def test_non_str_value_raises(self) -> None:
+        """A non-string expression raises TypeError."""
+        bad: dict[str, object] = {"id": 123}
+        with pytest.raises(TypeError, match="must map str to str"):
+            EndpointConfig(name="ep", api_name="demo", path="/x", extract=bad)  # type: ignore[arg-type]
+
+    def test_too_many_keys_raises(self) -> None:
+        """An extract map exceeding the key limit raises ValueError."""
+        big = {f"k{i}": "id" for i in range(33)}
+        with pytest.raises(ValueError, match="too many keys"):
+            EndpointConfig(name="ep", api_name="demo", path="/x", extract=big)
+
+    def test_expression_too_long_raises(self) -> None:
+        """An over-long expression raises ValueError before compilation."""
+        with pytest.raises(ValueError, match="too long"):
+            EndpointConfig(name="ep", api_name="demo", path="/x", extract={"x": "a" * 513})
+
+    def test_key_name_at_limit_accepted(self) -> None:
+        """An extract key exactly at the field-name length limit is accepted."""
+        config = EndpointConfig(name="ep", api_name="demo", path="/x", extract={"k" * 64: "id"})
+        assert config.extract == {"k" * 64: "id"}
+
+    def test_key_name_too_long_raises(self) -> None:
+        """An extract key over the field-name length limit raises ValueError."""
+        with pytest.raises(ValueError, match=r"extract key .* too long: 65 > 64"):
+            EndpointConfig(name="ep", api_name="demo", path="/x", extract={"k" * 65: "id"})
+
+    def test_type_error_message_is_bounded(self) -> None:
+        """The str-to-str TypeError message stays bounded for a huge key."""
+        bad: dict[str, object] = {"k" * 100_000: 123}
+        with pytest.raises(TypeError, match="must map str to str") as excinfo:
+            EndpointConfig(name="ep", api_name="demo", path="/x", extract=bad)  # type: ignore[arg-type]
+        assert len(str(excinfo.value)) < 256
+
+    def test_loaded_from_manager(self) -> None:
+        """extract: survives loading through RapiConfigManager."""
+        manager = RapiConfigManager(
+            {
+                "api": {
+                    "demo": {
+                        "base_url": "https://httpbin.org",
+                        "endpoints": {"job": {"path": "/job", "extract": {"id": "id", "raw": "$body"}}},
+                    }
+                }
+            }
+        )
+        _, endpoint = manager.resolve("demo.job")
+        assert endpoint.extract == {"id": "id", "raw": "$body"}
+
+    def test_invalid_extract_fails_at_load(self) -> None:
+        """An invalid extract: expression fails fast at config load."""
+        with pytest.raises(ValueError, match="valid JMESPath"):
+            RapiConfigManager(
+                {
+                    "api": {
+                        "demo": {
+                            "base_url": "https://httpbin.org",
+                            "endpoints": {"job": {"path": "/job", "extract": {"bad": "items["}}},
+                        }
+                    }
+                }
+            )

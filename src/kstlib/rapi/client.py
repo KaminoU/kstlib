@@ -16,10 +16,17 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 import httpx
+import jmespath
+from box import Box
+from jmespath.exceptions import JMESPathError
 
 from kstlib.auth import AuthExpiredError
 from kstlib.limits import get_rapi_limits
 from kstlib.rapi.config import (
+    _BODY_KEYWORD,
+    _MAX_EXTRACT_EXPR_LENGTH,
+    _MAX_EXTRACT_KEYS,
+    _MAX_FIELD_NAME_LENGTH,
     ApiConfig,
     EndpointConfig,
     HmacConfig,
@@ -31,6 +38,7 @@ from kstlib.rapi.config import (
 from kstlib.rapi.credentials import CredentialRecord, CredentialResolver
 from kstlib.rapi.exceptions import (
     ConfirmationRequiredError,
+    RapiError,
     RequestError,
     ResponseTooLargeError,
 )
@@ -207,9 +215,222 @@ def _validate_safeguard(
         raise ConfirmationRequiredError(endpoint_config.full_ref, expected=expected, actual=confirm)
 
 
+# Heuristic field-extraction keys (collection shapes: HAL, SAS Viya, ...) back
+# the ``.id`` / ``.ids`` / ``.count`` accessors when no per-endpoint ``extract:``
+# directive (stored into ``RapiResponse.extracted``) applies. The default values
+# live solely in the embedded ``kstlib.conf.yml`` (``rapi.extraction``); there is
+# no in-code copy. ``get_config`` always layers that embedded section in, so a
+# standard run resolves the documented defaults; users override the lists there
+# (cascade: extracted > config). Each configured list is hardened on resolution
+# (size, element length, and JMESPath validity for ``ids_paths``); an invalid
+# override is rejected with a ``[SECURITY]`` warning and that list degrades to
+# empty instead of crashing the client at init.
+
+
+@dataclass(frozen=True, slots=True)
+class _ExtractionKeys:
+    """Resolved heuristic key lists for response field extraction."""
+
+    id_keys: tuple[str, ...]
+    ids_paths: tuple[str, ...]
+    count_keys: tuple[str, ...]
+
+
+def _load_rapi_extraction_config() -> Any:
+    """Return the ``rapi.extraction`` config section, or an empty mapping.
+
+    Falls back to an empty mapping when no kstlib configuration is loaded, so
+    response extraction works standalone without any ``kstlib.conf.yml``
+    present. Mirrors the cascade loader used by ``kstlib.secure.passwords``.
+    """
+    from kstlib.config import get_config
+    from kstlib.config.exceptions import ConfigNotLoadedError
+
+    try:
+        cfg: Any = get_config()
+    except ConfigNotLoadedError:
+        return {}
+    except Exception:  # any loader failure falls back to safe defaults
+        log.debug("Could not load kstlib config; using default rapi extraction keys")
+        return {}
+    rapi_section: Any = cfg.get("rapi", {}) if hasattr(cfg, "get") else {}
+    extraction: Any = rapi_section.get("extraction", {}) if hasattr(rapi_section, "get") else {}
+    return extraction if hasattr(extraction, "get") else {}
+
+
+def _extraction_item_violation(item: Any, *, max_len: int, compile_jmespath: bool) -> str | None:
+    """Return a sanitized violation reason for one list element, or None if valid.
+
+    The reason names the nature of the violation only, never the offending
+    value, so it is safe to log.
+
+    Args:
+        item: Raw element to validate (expected to be a string).
+        max_len: Maximum accepted length for the element.
+        compile_jmespath: Whether the element must compile as a JMESPath expression.
+
+    Returns:
+        A short reason string when invalid, or None when the element is valid.
+    """
+    if not isinstance(item, str):
+        return f"non-string entry (got {type(item).__name__})"
+    if len(item) > max_len:
+        return f"entry too long ({len(item)} > {max_len})"
+    if compile_jmespath:
+        try:
+            jmespath.compile(item)
+        except JMESPathError:
+            return "invalid JMESPath expression"
+    return None
+
+
+def _extraction_list_violation(value: Any, *, max_len: int, compile_jmespath: bool) -> str | None:
+    """Return a sanitized violation reason for an override list, or None if valid.
+
+    Hardening for an external config input (defense in depth): rejects values
+    that are not a non-empty list, oversized lists, non-string or overlong
+    elements, and (when *compile_jmespath* is set) invalid JMESPath expressions.
+    The returned reason names the nature of the violation only, never the
+    offending value, so it is safe to log.
+
+    Args:
+        value: Raw configured list to validate.
+        max_len: Maximum accepted length for a single element.
+        compile_jmespath: Whether each element must compile as a JMESPath expression.
+
+    Returns:
+        A short reason string when invalid, or None when the list is valid.
+    """
+    if not isinstance(value, (list, tuple)):
+        return f"not a list (got {type(value).__name__})"
+    if not value:
+        return "empty list"
+    if len(value) > _MAX_EXTRACT_KEYS:
+        return f"too many entries ({len(value)} > {_MAX_EXTRACT_KEYS})"
+    for item in value:
+        reason = _extraction_item_violation(item, max_len=max_len, compile_jmespath=compile_jmespath)
+        if reason is not None:
+            return reason
+    return None
+
+
+def _resolve_key_list(section: Any, key: str, *, max_len: int, compile_jmespath: bool) -> tuple[str, ...]:
+    """Resolve and harden one extraction key list from the config section.
+
+    Reads ``section[key]`` and returns it as a validated tuple. A missing list
+    yields an empty tuple silently. A present but invalid list (failing the
+    size, length, or JMESPath checks) is rejected with a ``[SECURITY]`` warning
+    naming the list and the violation (never the offending value) and also
+    yields an empty tuple, so a typo in a global override degrades the heuristic
+    instead of crashing the client at init.
+
+    Args:
+        section: The ``rapi.extraction`` config mapping (or an empty mapping).
+        key: Which list to resolve (``id_keys``, ``ids_paths``, ``count_keys``).
+        max_len: Maximum accepted length for a single element.
+        compile_jmespath: Whether each element must compile as a JMESPath expression.
+
+    Returns:
+        The validated list as a tuple, or an empty tuple when absent or invalid.
+    """
+    value: Any = section.get(key) if hasattr(section, "get") else None
+    if value is None:
+        _log_trace("extraction %s absent from config", key)
+        return ()
+    reason = _extraction_list_violation(value, max_len=max_len, compile_jmespath=compile_jmespath)
+    if reason is not None:
+        log.warning(
+            "[SECURITY] rapi.extraction.%s rejected (%s); heuristic disabled for this list",
+            key,
+            reason,
+        )
+        return ()
+    resolved = tuple(value)
+    _log_trace("extraction %s resolved from config (%d keys)", key, len(resolved))
+    return resolved
+
+
+def _resolve_extraction_keys() -> _ExtractionKeys:
+    """Resolve the heuristic key lists from the embedded/user ``rapi.extraction``.
+
+    The default values live in the embedded ``kstlib.conf.yml``; ``get_config``
+    always layers that base in, so a standard run resolves the documented
+    defaults, a valid user override is honored, an invalid one is hardened away
+    (empty + ``[SECURITY]`` warning), and a total config-load failure degrades
+    every list to empty.
+    """
+    section = _load_rapi_extraction_config()
+    return _ExtractionKeys(
+        id_keys=_resolve_key_list(section, "id_keys", max_len=_MAX_FIELD_NAME_LENGTH, compile_jmespath=False),
+        ids_paths=_resolve_key_list(section, "ids_paths", max_len=_MAX_EXTRACT_EXPR_LENGTH, compile_jmespath=True),
+        count_keys=_resolve_key_list(section, "count_keys", max_len=_MAX_FIELD_NAME_LENGTH, compile_jmespath=False),
+    )
+
+
+def _first_present(obj: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    """Return the stringified value of the first present key in *obj*, or None."""
+    for key in keys:
+        value = obj.get(key)
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _extracted_get(extracted: Mapping[str, Any], key: str) -> Any:
+    """Read a key from an ``extract:`` result mapping, or None when absent.
+
+    Typed against ``Mapping`` so the read goes through the annotated
+    ``Mapping.get`` rather than python-box's unannotated ``Box.get``.
+    """
+    return extracted.get(key)
+
+
+def _eval_extract(extract: dict[str, str] | None, data: Any, text: str) -> Box:
+    """Evaluate an endpoint ``extract:`` map into a result Box.
+
+    Each value is a JMESPath expression evaluated against the parsed body,
+    except the reserved ``$body`` keyword which yields the raw response text.
+    An expression that fails at evaluation stores None (never raises); the
+    warning names the key only, never the extracted value or the body.
+    """
+    if not extract:
+        return Box()
+    result: dict[str, Any] = {}
+    for key, expr in extract.items():
+        if expr == _BODY_KEYWORD:
+            _log_trace("extract %r resolved from $body keyword (type=str, len=%d)", key, len(text))
+            result[key] = text
+        elif data is None:
+            _log_trace("extract %r: body not JSON, storing None", key)
+            result[key] = None
+        else:
+            try:
+                value = jmespath.search(expr, data)
+            except JMESPathError:
+                log.warning("extract: key %r expression failed to evaluate; storing None", key)
+                result[key] = None
+            else:
+                _log_trace(
+                    "extract %r resolved from JMESPath %r (type=%s, present=%s)",
+                    key,
+                    expr,
+                    type(value).__name__,
+                    value is not None,
+                )
+                result[key] = value
+    return Box(result)
+
+
 @dataclass
 class RapiResponse:
     """Response from an API call.
+
+    Beyond the raw ``status_code`` / ``headers`` / ``data`` / ``text`` fields,
+    the response exposes convenience accessors that pull common identifiers out
+    of HAL / SAS Viya style payloads (``.id``, ``.ids``, ``.count``,
+    ``.next_url``, ``.has_next``), a JMESPath escape hatch (``.get``), and a
+    strict JSON accessor (``.json``). The heuristic key lists are overridable
+    via the ``rapi.extraction`` config section.
 
     Attributes:
         status_code: HTTP status code.
@@ -218,6 +439,11 @@ class RapiResponse:
         text: Raw response text.
         elapsed: Request duration in seconds.
         endpoint_ref: Full endpoint reference used.
+        extracted: Values produced by an endpoint ``extract:`` directive
+            (empty unless the endpoint defines one). Takes priority over the
+            heuristic accessors.
+        extraction_keys: Resolved heuristic key lists (internal; defaults to
+            the built-in HAL/Viya keys, overridable via ``rapi.extraction``).
 
     Examples:
         >>> response = RapiResponse(status_code=200, data={"ip": "1.2.3.4"})
@@ -225,6 +451,12 @@ class RapiResponse:
         True
         >>> response.data["ip"]
         '1.2.3.4'
+        >>> RapiResponse(status_code=200, data={"id": "abc-123"}).id
+        'abc-123'
+        >>> RapiResponse(status_code=200, data={"items": [{"id": "a"}, {"id": "b"}]}).ids
+        ['a', 'b']
+        >>> RapiResponse(status_code=204, data=None).ids
+        []
 
     """
 
@@ -234,11 +466,156 @@ class RapiResponse:
     text: str = ""
     elapsed: float = 0.0
     endpoint_ref: str = ""
+    extracted: Box = field(default_factory=Box)
+    extraction_keys: _ExtractionKeys = field(default_factory=_resolve_extraction_keys, repr=False)
 
     @property
     def ok(self) -> bool:
         """Return True if status code indicates success (2xx)."""
         return 200 <= self.status_code < 300
+
+    @property
+    def id(self) -> str | None:
+        """Return the resource id, or None when it cannot be resolved.
+
+        Resolution order: the ``extract:`` value stored under ``id``, then the
+        configured ``id_keys`` on the root object, then the id of the first
+        item for a list payload (with a warning). Returns None for a non-JSON
+        body.
+        """
+        extracted_id = _extracted_get(self.extracted, "id")
+        if extracted_id is not None:
+            _log_trace("resolved .id from extract: directive")
+            return str(extracted_id)
+        if isinstance(self.data, dict):
+            value = _first_present(self.data, self.extraction_keys.id_keys)
+            if value is None:
+                _log_trace(".id: no id_keys field matched on dict response")
+            elif log.isEnabledFor(TRACE_LEVEL):
+                matched = next((k for k in self.extraction_keys.id_keys if self.data.get(k) is not None), None)
+                _log_trace("resolved .id from field %r", matched)
+            return value
+        if isinstance(self.data, list) and self.data:
+            first = self.data[0]
+            if isinstance(first, dict):
+                value = _first_present(first, self.extraction_keys.id_keys)
+                if value is not None:
+                    log.warning(
+                        "Multiple results on '%s', returning id of the first item",
+                        self.endpoint_ref or "<response>",
+                    )
+                    if log.isEnabledFor(TRACE_LEVEL):
+                        matched = next((k for k in self.extraction_keys.id_keys if first.get(k) is not None), None)
+                        _log_trace("resolved .id from first list item field %r", matched)
+                return value
+            return None
+        if self.data is None:
+            log.warning(".id requested on a non-JSON response from '%s'", self.endpoint_ref or "<response>")
+        return None
+
+    @property
+    def ids(self) -> list[str]:
+        """Return all resource ids as a list of strings (empty when none).
+
+        Resolution order: the ``extract:`` value stored under ``ids``, then the
+        first configured ``ids_paths`` JMESPath that yields a non-empty list.
+        Always returns a ``list[str]`` (never None), including [] for a non-JSON
+        or empty body.
+        """
+        extracted_ids = _extracted_get(self.extracted, "ids")
+        if isinstance(extracted_ids, list):
+            _log_trace("resolved .ids from extract: directive (%d items)", len(extracted_ids))
+            return [str(item) for item in extracted_ids]
+        for path in self.extraction_keys.ids_paths:
+            found = self._search(path)
+            if isinstance(found, list) and found:
+                _log_trace("resolved .ids from %r (%d items)", path, len(found))
+                return [str(item) for item in found if item is not None]
+        _log_trace(".ids: no ids_paths matched")
+        return []
+
+    @property
+    def count(self) -> int | None:
+        """Return the collection count, or None when not present.
+
+        Resolution order: the ``extract:`` value stored under ``count``, then
+        the configured ``count_keys`` on the root object. Booleans are not
+        accepted as counts.
+        """
+        extracted_count = _extracted_get(self.extracted, "count")
+        if isinstance(extracted_count, int) and not isinstance(extracted_count, bool):
+            _log_trace("resolved .count from extract: directive -> %d", extracted_count)
+            return extracted_count
+        if isinstance(self.data, dict):
+            for key in self.extraction_keys.count_keys:
+                value = self.data.get(key)
+                if isinstance(value, int) and not isinstance(value, bool):
+                    _log_trace("resolved .count from field %r -> %d", key, value)
+                    return value
+        _log_trace(".count: no count_keys field matched")
+        return None
+
+    @property
+    def next_url(self) -> str | None:
+        """Return the next-page URL, or None when there is none.
+
+        Resolution order: the ``extract:`` value stored under ``next_url``,
+        then the ``links[?rel=='next'].href`` JMESPath (HAL/Viya pagination).
+        """
+        extracted_next = _extracted_get(self.extracted, "next_url")
+        if isinstance(extracted_next, str):
+            _log_trace("resolved .next_url from extract: directive")
+            return extracted_next
+        found = self._search("links[?rel=='next'].href | [0]")
+        if isinstance(found, str):
+            _log_trace("resolved .next_url from JMESPath links[?rel=='next'].href")
+            return found
+        return None
+
+    @property
+    def has_next(self) -> bool:
+        """Return True when the response advertises a next-page link."""
+        return self.next_url is not None
+
+    def get(self, expr: str) -> Any:
+        """Evaluate a JMESPath expression against the parsed JSON body.
+
+        Args:
+            expr: JMESPath expression to evaluate.
+
+        Returns:
+            The matched value, or None when the expression matches nothing, the
+            body is not JSON, or the expression is invalid (never raises).
+        """
+        return self._search(expr)
+
+    def json(self) -> dict[str, Any] | list[Any]:
+        """Return the parsed JSON body (dict or list).
+
+        Returns:
+            The parsed JSON object or array.
+
+        Raises:
+            RapiError: If the response body is not a JSON object or array.
+        """
+        if isinstance(self.data, dict):
+            return self.data
+        if isinstance(self.data, list):
+            return self.data
+        raise RapiError(
+            f"Response body is not JSON for endpoint '{self.endpoint_ref or '<response>'}'",
+            details={"status_code": self.status_code, "endpoint_ref": self.endpoint_ref},
+        )
+
+    def _search(self, expr: str) -> Any:
+        """Run a JMESPath search against the body, swallowing errors."""
+        if self.data is None:
+            return None
+        try:
+            return jmespath.search(expr, self.data)
+        except JMESPathError:
+            log.warning("Invalid JMESPath expression: %s", expr)
+            return None
 
 
 class RapiClient:
@@ -303,6 +680,11 @@ class RapiClient:
             ssl_verify=ssl_verify,
             ssl_ca_bundle=ssl_ca_bundle,
         )
+
+        # Resolve heuristic extraction keys once from the embedded/user config
+        # (rapi.extraction). Stamped onto every RapiResponse so the .id / .ids /
+        # .count accessors stay pure (no config I/O on attribute access).
+        self._extraction_keys = _resolve_extraction_keys()
 
         log.debug(
             "RapiClient initialized (timeout=%.1fs, max_retries=%d)",
@@ -1283,6 +1665,8 @@ class RapiClient:
             text=text,
             elapsed=elapsed,
             endpoint_ref=endpoint_config.full_ref,
+            extracted=_eval_extract(endpoint_config.extract, data, text),
+            extraction_keys=self._extraction_keys,
         )
 
     def _check_auth_expired(

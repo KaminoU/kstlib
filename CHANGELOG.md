@@ -19,6 +19,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.2.0] - 2026-06-12
+
+### Added
+
+- **NEW response extraction accessors on `RapiResponse`** (`kstlib.rapi`):
+  `.id`, `.ids`, `.count`, `.next_url`, `.has_next` resolve common identifiers
+  out of HAL / SAS Viya style payloads, plus a `.get(jmespath)` escape hatch
+  (never raises) and a strict `.json()` accessor. The heuristic key lists are
+  config-driven and overridable via the new `rapi.extraction` section of
+  `kstlib.conf.yml` without touching code.
+- **NEW per-endpoint `extract:` directive** in `*.rapi.yml`: a `key: jmespath`
+  map (with the reserved `$body` keyword for the raw response text) compiled
+  when the config loads, so invalid expressions fail fast. Results populate
+  `RapiResponse.extracted` and take priority over the heuristic accessors.
+- **NEW CLI extraction flags on `kstlib rapi`**: `--pick <jmespath>` (`-p`,
+  ad-hoc single value), `--extract key=jmespath` (named, repeatable),
+  `--show-id` and `--show-ids` (config-driven heuristic). The four are mutually
+  exclusive; `--show-id` / `--pick` exit 1 on an empty result, while
+  `--show-ids` / `--extract` treat empty as a legitimate result (exit 0).
+- **NEW `rapi.extraction` config section** (`id_keys`, `ids_paths`,
+  `count_keys`) in the embedded `kstlib.conf.yml`: the single source of the
+  extraction heuristic defaults, discoverable and overridable.
+- **NEW CLI flag `--show-extracted [KEY]` on `kstlib rapi`**: print values
+  declared by the endpoint `extract:` directive by their business name
+  (`--show-extracted object_ids`), or every declared key as a JSON dict with
+  the bare flag. Mutually exclusive with the four other extraction flags and
+  compatible with `--raw` / `--minify` / `--out` / `--quiet`. Exits 1 when the
+  requested key (or the whole directive) is missing or its expression matched
+  nothing; a declared key holding an empty collection is a legitimate result
+  (exit 0).
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- **Restored the implicit CLI endpoint routing** (`kstlib rapi <api>.<endpoint>`
+  without the `call` subcommand) on Typer 0.26+. Typer 0.26 ships a vendored
+  click whose `UsageError` is a distinct class from `click.UsageError`, so the
+  previous exception-based redirect never matched and the shortcut failed with
+  `No such command`. The redirect now rewrites the arguments before resolution,
+  based on `get_command()` returning `None` for unknown names, a contract that
+  holds across the whole supported Typer range (`>=0.19,<1`). The explicit
+  `kstlib rapi call ...` form was never affected.
+
+### Security
+
+- **Hardened the `rapi.extraction.*` config input** (defense in depth): each
+  overridden list is validated on resolution (max 32 entries; field names up to
+  64 chars; `ids_paths` JMESPath expressions up to 512 chars that must compile).
+  An invalid override is rejected with a `WARNING [SECURITY]` (naming the list
+  and the violation, never the offending value) and that list degrades to empty
+  instead of crashing the client at initialization.
+- **Capped two RAPI config inputs** (defense in depth): endpoint `extract:`
+  key names are limited to 64 chars (aligned with the other field-name gates)
+  with bounded validation messages, and `*.rapi.yml` files larger than 10 MiB
+  are rejected before parsing, mirroring the main config loader cap.
+
 ## [3.1.0] - 2026-06-01
 
 ### Added
@@ -1415,7 +1476,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.2.0...HEAD
+[3.2.0]: https://github.com/KaminoU/kstlib/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/KaminoU/kstlib/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/KaminoU/kstlib/compare/v2.7.1...v3.0.0
 [2.7.1]: https://github.com/KaminoU/kstlib/compare/v2.7.0...v2.7.1

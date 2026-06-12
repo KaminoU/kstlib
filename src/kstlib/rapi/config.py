@@ -18,6 +18,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import jmespath
+from jmespath.exceptions import JMESPathError
+
+from kstlib.limits import HARD_MAX_CONFIG_FILE_SIZE
 from kstlib.logging import TRACE_LEVEL
 from kstlib.rapi.exceptions import (
     EndpointAmbiguousError,
@@ -72,6 +76,11 @@ _MAX_HEADER_NAME_LENGTH = 128  # Max length for header names
 # Deep defense: safeguard validation
 _MAX_SAFEGUARD_LENGTH = 128
 _SAFEGUARD_PATTERN = re.compile(r"^[A-Za-z0-9_\-\s\{\}/]+$")
+
+# Deep defense: endpoint extract: directive (JMESPath extraction map)
+_BODY_KEYWORD = "$body"  # Reserved extract: value yielding the raw response text
+_MAX_EXTRACT_KEYS = 32  # Max number of extract keys per endpoint
+_MAX_EXTRACT_EXPR_LENGTH = 512  # Max length of a single JMESPath expression
 
 # Default HTTP methods that require safeguard
 _DEFAULT_SAFEGUARD_METHODS = frozenset({"DELETE", "PUT"})
@@ -426,10 +435,18 @@ def _parse_rapi_file(
 
     Raises:
         TypeError: If file format is invalid.
-        ValueError: If required fields are missing.
+        ValueError: If required fields are missing or the file exceeds
+            the size limit.
 
     """
     import yaml
+
+    # Security: reject oversized files before parsing to prevent OOM
+    file_size = path.stat().st_size
+    if file_size > HARD_MAX_CONFIG_FILE_SIZE:
+        raise ValueError(
+            f"RAPI config file too large ({file_size} bytes > {HARD_MAX_CONFIG_FILE_SIZE} bytes): {path.name}"
+        )
 
     content = path.read_text(encoding="utf-8")
     data = yaml.safe_load(content)
@@ -653,6 +670,40 @@ def _track_endpoint_sources(
             endpoint_sources[full_ref].append(str(path))
 
 
+def _validate_extract_map(extract: Any, full_ref: str) -> None:
+    """Validate an endpoint ``extract:`` map (deep defense + JMESPath compile).
+
+    Args:
+        extract: The raw extract map (result key -> JMESPath expression).
+        full_ref: Endpoint full reference (for error messages).
+
+    Raises:
+        TypeError: If the map is not a str-to-str mapping.
+        ValueError: If it exceeds the size limits or an expression is invalid.
+
+    """
+    if not isinstance(extract, dict):
+        raise TypeError(f"extract for '{full_ref}' must be a mapping, got {type(extract).__name__}")
+    if len(extract) > _MAX_EXTRACT_KEYS:
+        raise ValueError(f"extract for '{full_ref}' has too many keys: {len(extract)} > {_MAX_EXTRACT_KEYS}")
+    for key, expr in extract.items():
+        if not isinstance(key, str) or not isinstance(expr, str):
+            raise TypeError(f"extract for '{full_ref}' must map str to str, got {key!r:.64}: {expr!r:.64}")
+        if len(key) > _MAX_FIELD_NAME_LENGTH:
+            raise ValueError(f"extract key for '{full_ref}' too long: {len(key)} > {_MAX_FIELD_NAME_LENGTH}")
+        if len(expr) > _MAX_EXTRACT_EXPR_LENGTH:
+            raise ValueError(
+                f"extract['{key}'] for '{full_ref}' expression too long: {len(expr)} > {_MAX_EXTRACT_EXPR_LENGTH}"
+            )
+        if expr != _BODY_KEYWORD:
+            try:
+                jmespath.compile(expr)
+            except JMESPathError as exc:
+                raise ValueError(
+                    f"extract['{key}'] for '{full_ref}' is not a valid JMESPath expression: {expr!r}"
+                ) from exc
+
+
 @dataclass(frozen=True, slots=True)
 class EndpointConfig:
     """Configuration for a single API endpoint.
@@ -673,6 +724,11 @@ class EndpointConfig:
             any ``server:`` directive set at the file level on the parent
             ``ApiConfig``. Validated at config-load time when
             ``rapi.servers`` is present.
+        extract: Optional map of result key to JMESPath expression, applied
+            to the parsed response body to populate
+            ``RapiResponse.extracted``. The reserved value ``$body`` yields
+            the raw response text (for non-JSON endpoints). JMESPath syntax
+            is validated at config-load time.
 
     Examples:
         >>> config = EndpointConfig(
@@ -698,6 +754,7 @@ class EndpointConfig:
     description: str | None = None
     multipart: MultipartConfig | None = None
     server: str | None = None
+    extract: dict[str, str] | None = None
 
     @property
     def is_multipart(self) -> bool:
@@ -706,7 +763,7 @@ class EndpointConfig:
         return "multipart/form-data" in ct.lower()
 
     def __post_init__(self) -> None:
-        """Validate safeguard field (deep defense)."""
+        """Validate safeguard and extract fields (deep defense)."""
         if self.safeguard is not None:
             if len(self.safeguard) > _MAX_SAFEGUARD_LENGTH:
                 raise ValueError(f"safeguard too long: {len(self.safeguard)} > {_MAX_SAFEGUARD_LENGTH}")
@@ -715,6 +772,8 @@ class EndpointConfig:
                     f"safeguard contains invalid characters: {self.safeguard!r}. "
                     f"Allowed: A-Z, a-z, 0-9, _, -, space, {'{}'}, /"
                 )
+        if self.extract is not None:
+            _validate_extract_map(self.extract, self.full_ref)
 
     @property
     def full_ref(self) -> str:
@@ -1407,6 +1466,7 @@ class RapiConfigManager:
                     description=ep_data.get("description"),
                     multipart=multipart_config,
                     server=ep_data.get("server"),
+                    extract=ep_data.get("extract"),
                 )
 
                 # Validate safeguard requirement

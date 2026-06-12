@@ -288,6 +288,24 @@ kstlib rapi github.user -f full -o result.json
 kstlib rapi list
 kstlib rapi list github  # filter by API
 kstlib rapi list --verbose  # show methods and auth
+
+# Extraction: resolved resource id (config-driven heuristic; exit 1 if none)
+kstlib rapi github.user --show-id
+
+# Extraction: every id of a collection, one per line (pipeable)
+kstlib rapi myapi.items-list --show-ids
+
+# Extraction: one value via ad-hoc JMESPath
+kstlib rapi github.user --pick login
+
+# Extraction: several named values (key=jmespath, repeatable)
+kstlib rapi github.user --extract login=login --extract id=id
+
+# Extraction: a key declared by the endpoint extract: directive, by name
+kstlib rapi myapi.item-get abc-123 --show-extracted object_ids
+
+# Extraction: all keys declared by the extract: directive (JSON dict)
+kstlib rapi myapi.item-get abc-123 --show-extracted
 ```
 
 ### Options
@@ -302,6 +320,19 @@ kstlib rapi list --verbose  # show methods and auth
 | `--quiet` | `-q` | Suppress status messages |
 | `--raw` | | Output raw JSON without Rich formatting (pipeable) |
 | `--minify` | | Output compact single-line JSON |
+| `--pick` | `-p` | Extract a single value via ad-hoc JMESPath (e.g. `--pick data.id`) |
+| `--extract` | | Extract named values `key=jmespath` (repeatable) |
+| `--show-id` | | Print the resolved resource id (config-driven heuristic) |
+| `--show-ids` | | Print all resolved resource ids (config-driven heuristic) |
+| `--show-extracted` | | Print values declared by the endpoint `extract:` directive (`[KEY]` optional) |
+
+The five extraction flags are mutually exclusive (at most one per call).
+`--show-id` and `--pick` exit 1 when the value is empty (a scripting guard);
+`--show-ids` and `--extract` treat an empty result as legitimate (exit 0).
+`--show-extracted` exits 1 when the requested key (or the whole `extract:`
+directive) is missing or its expression matched nothing; a declared key holding
+an empty collection is legitimate (exit 0). See
+{doc}`../features/rapi/index` for the decision table and JMESPath cheat-sheet.
 
 ### Server Profile Selection
 
@@ -386,6 +417,33 @@ response.text        # Raw response text
 response.headers     # Response headers
 response.elapsed     # Request duration in seconds
 response.endpoint_ref # "github.user"
+
+# Extraction accessors (config-driven heuristic; an extract: directive wins)
+response.id          # resolved resource id (str | None)
+response.ids         # all resource ids (list[str], never None)
+response.count       # collection size (int | None)
+response.next_url    # next-page URL from HAL/Viya links (str | None)
+response.has_next    # True when a next-page link is present
+response.extracted   # values from an endpoint extract: directive (Box)
+
+response.get("user.login")  # ad-hoc JMESPath escape hatch (None on miss, never raises)
+response.json()             # strict parsed JSON (dict|list), raises RapiError if not JSON
+```
+
+The heuristic accessors read HAL / SAS Viya style payloads out of the box and
+are tuned via the `rapi.extraction` config section. See
+{doc}`../features/rapi/index` for the full extraction guide (endpoint
+`extract:` directive, CLI flags, and JMESPath cheat-sheet).
+
+```python
+# Collection {"count": 42, "items": [{"id": "a"}, {"id": "b"}]}
+coll = client.call("myapi.items-list")
+coll.count      # 42
+coll.ids        # ['a', 'b']
+coll.has_next   # True when a links[?rel=='next'] entry is present
+
+# Single resource {"id": "abc-123", "name": "report"}
+client.call("myapi.item-get", id="abc-123").id   # 'abc-123'
 ```
 
 ## Credentials

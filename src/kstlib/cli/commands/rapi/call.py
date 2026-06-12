@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 import typer
+from typer.core import TyperCommand
 
 from kstlib.auth import AuthExpiredError
 from kstlib.cli.common import CommandResult, CommandStatus, console, exit_error, exit_with_result
@@ -21,6 +22,11 @@ from kstlib.rapi import (
     ServerNotFoundError,
 )
 from kstlib.utils.serialization import is_xml_content, to_json, to_xml
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    import click
 
 
 def _parse_args(
@@ -306,6 +312,397 @@ def _format_output(
         console.print_json(content)
 
 
+def _normalize_show_extracted(args: list[str]) -> list[str]:
+    """Rewrite bare ``--show-extracted`` tokens into ``--show-extracted=``.
+
+    A bare flag is one at the end of the argument list, or followed by a
+    token that cannot be an extracted key name: another option (leading
+    ``-``) or a ``key=value`` query argument (contains ``=``). The rewrite
+    gives the flag an explicit empty value (empty string selects all keys)
+    so click never consumes the next token as the key.
+
+    Args:
+        args: Raw CLI tokens for the call command.
+
+    Returns:
+        The token list with bare ``--show-extracted`` occurrences rewritten.
+
+    Examples:
+        >>> _normalize_show_extracted(["ep", "--show-extracted"])
+        ['ep', '--show-extracted=']
+        >>> _normalize_show_extracted(["ep", "--show-extracted", "object_ids"])
+        ['ep', '--show-extracted', 'object_ids']
+        >>> _normalize_show_extracted(["ep", "--show-extracted", "limit=5"])
+        ['ep', '--show-extracted=', 'limit=5']
+
+    """
+    result: list[str] = []
+    for index, token in enumerate(args):
+        if token == "--show-extracted":
+            nxt = args[index + 1] if index + 1 < len(args) else None
+            if nxt is None or nxt.startswith("-") or "=" in nxt:
+                result.append("--show-extracted=")
+                continue
+        result.append(token)
+    return result
+
+
+class _CallCommand(TyperCommand):
+    """Click command giving ``--show-extracted`` an optional value.
+
+    Typer cannot express click's optional-value options (``is_flag=False``
+    plus ``flag_value`` are explicitly unsupported), so a bare
+    ``--show-extracted`` is rewritten to ``--show-extracted=`` (empty value
+    selects all keys) before parsing. The next token is treated as the KEY
+    only when it looks like one (no leading dash, no ``=``), so
+    ``--show-extracted limit=5`` keeps ``limit=5`` as a query argument.
+    """
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        """Normalize bare ``--show-extracted`` tokens, then parse as usual."""
+        return super().parse_args(ctx, _normalize_show_extracted(args))
+
+
+def _parse_extract_specs(specs: list[str]) -> dict[str, str]:
+    """Parse ``key=jmespath`` extraction specs into an ordered mapping.
+
+    Args:
+        specs: Raw ``--extract`` values like ``["id=data.id", "name=user.name"]``.
+
+    Returns:
+        Mapping of output key to JMESPath expression, preserving input order.
+
+    Raises:
+        typer.BadParameter: If a spec lacks ``=`` or has an empty key.
+
+    Examples:
+        >>> _parse_extract_specs(["id=data.id", "name=user.name"])
+        {'id': 'data.id', 'name': 'user.name'}
+
+    """
+    result: dict[str, str] = {}
+    for spec in specs:
+        if "=" not in spec:
+            raise typer.BadParameter(f"Invalid --extract spec '{spec}'. Expected format: key=jmespath.")
+        key, expr = spec.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise typer.BadParameter(f"Invalid --extract spec '{spec}'. Key must not be empty.")
+        result[key] = expr
+    return result
+
+
+def _validate_extraction_flags(
+    pick: str | None,
+    extract: list[str] | None,
+    show_id: bool,
+    show_ids: bool,
+    show_extracted: str | None,
+) -> None:
+    """Reject more than one extraction mode and malformed ``--extract`` specs.
+
+    The five extraction flags are mutually exclusive: at most one may be active
+    per call (``--extract`` may repeat with itself). ``--extract`` specs are
+    validated up front so a malformed ``key=jmespath`` fails before any network
+    request is issued.
+
+    Args:
+        pick: Value passed via ``--pick`` / ``-p`` (None when absent).
+        extract: Values passed via repeated ``--extract`` (None when absent).
+        show_id: Whether ``--show-id`` was set.
+        show_ids: Whether ``--show-ids`` was set.
+        show_extracted: Value passed via ``--show-extracted`` (None when
+            absent; empty string selects all extracted keys).
+
+    Raises:
+        typer.BadParameter: If more than one extraction mode is active, or an
+            ``--extract`` spec is not a valid ``key=jmespath`` pair.
+
+    """
+    active = [
+        name
+        for name, on in (
+            ("--pick", pick is not None),
+            ("--extract", bool(extract)),
+            ("--show-id", show_id),
+            ("--show-ids", show_ids),
+            ("--show-extracted", show_extracted is not None),
+        )
+        if on
+    ]
+    if len(active) > 1:
+        raise typer.BadParameter(
+            "Only one of --pick / --extract / --show-id / --show-ids / --show-extracted "
+            f"may be used at once (got: {', '.join(active)}).",
+        )
+    if extract:
+        _parse_extract_specs(extract)
+
+
+def _is_extraction_requested(
+    pick: str | None,
+    extract: list[str] | None,
+    show_id: bool,
+    show_ids: bool,
+    show_extracted: str | None,
+) -> bool:
+    """Return True when any extraction flag is active.
+
+    Args:
+        pick: Value passed via ``--pick`` (None when absent).
+        extract: Values passed via ``--extract`` (None when absent).
+        show_id: Whether ``--show-id`` was set.
+        show_ids: Whether ``--show-ids`` was set.
+        show_extracted: Value passed via ``--show-extracted`` (None when
+            absent).
+
+    Returns:
+        True if at least one extraction flag selects extraction output.
+
+    """
+    return pick is not None or bool(extract) or show_id or show_ids or show_extracted is not None
+
+
+def _render_extracted_content(value: Any, *, raw: bool, minify: bool, indent: int) -> str:
+    """Render an extracted value to a plain (pipeable) stdout string.
+
+    Extraction output is never Rich-formatted: the feature targets scripting and
+    piping. Scalars render bare (no quotes), lists render as a JSON array by
+    default or one item per line with ``--raw``, and dicts (or any other shape)
+    render as JSON.
+
+    Args:
+        value: The extracted value (scalar, list, dict, or None).
+        raw: Whether ``--raw`` was set (newline-delimited list items).
+        minify: Whether ``--minify`` was set (compact JSON).
+        indent: JSON indentation for the pretty (non-minified) form.
+
+    Returns:
+        The string to write to stdout (empty string for an empty raw list).
+
+    """
+    if value is None or isinstance(value, (str, int, float)):
+        return str(value)
+    if isinstance(value, list) and raw and not minify:
+        return "\n".join("" if item is None else str(item) for item in value)
+    return _serialize_json(value, minify=minify, indent=indent)
+
+
+def _emit_extracted_value(
+    value: Any,
+    *,
+    out: str | None,
+    quiet: bool,
+    raw: bool,
+    minify: bool,
+    indent: int,
+    empty_hint: str | None,
+) -> None:
+    """Write an extracted value to stdout or a file, honoring the empty policy.
+
+    Args:
+        value: The extracted value to emit.
+        out: Optional file path to write to instead of stdout.
+        quiet: Whether to suppress the "Output written to" confirmation.
+        raw: Whether ``--raw`` was set.
+        minify: Whether ``--minify`` was set.
+        indent: JSON indentation for the pretty form.
+        empty_hint: When set and ``value`` is None, write this hint to stderr and
+            exit with code 1 (``--show-id`` / ``--pick``). When None, an empty
+            value is a legitimate result (``--show-ids`` / ``--extract``).
+
+    Raises:
+        typer.Exit: Exit code 1 when ``empty_hint`` is set and ``value`` is None.
+
+    """
+    if empty_hint is not None and value is None:
+        typer.echo(empty_hint, err=True)
+        raise typer.Exit(code=1)
+    content = _render_extracted_content(value, raw=raw, minify=minify, indent=indent)
+    suppress_empty_line = raw and isinstance(value, list) and not value
+    if out is not None:
+        from pathlib import Path
+
+        Path(out).write_text(content, encoding="utf-8")
+        if not quiet:
+            console.print(f"[green]Output written to:[/green] {out}")
+    elif not suppress_empty_line:
+        print(content)
+
+
+def _resolve_show_extracted(response: RapiResponse, key: str) -> tuple[Any, str | None]:
+    """Resolve the ``--show-extracted`` value and its empty-policy hint.
+
+    The policy frontier is declared vs not declared: an endpoint without an
+    ``extract:`` directive or an unknown key is a usage failure (exit 1 via
+    the hint), while a declared key holding an empty collection is a
+    legitimate result. A declared key that evaluated to None (expression
+    matched nothing) also fails, mirroring ``--pick``. Hints name keys only,
+    never extracted values.
+
+    Args:
+        response: The API response whose ``extracted`` mapping is read.
+        key: The requested key, or an empty string to select all keys.
+
+    Returns:
+        Tuple of (value to emit, empty hint). The hint is consumed by
+        :func:`_emit_extracted_value` only when the value is None.
+
+    """
+    extracted: Mapping[str, Any] = response.extracted
+    if not extracted:
+        return None, "No extract: directive declared for this endpoint."
+    if not key:
+        return dict(extracted), None
+    if key not in extracted:
+        available = ", ".join(sorted(extracted))
+        return None, f"No extracted key '{key}'. Available: {available}."
+    return extracted.get(key), f"Extracted key '{key}' matched nothing."
+
+
+def _handle_extraction_output(
+    response: RapiResponse,
+    *,
+    pick: str | None,
+    extract: list[str] | None,
+    show_id: bool,
+    show_ids: bool,
+    show_extracted: str | None,
+    out: str | None,
+    quiet: bool,
+    raw: bool,
+    minify: bool,
+) -> None:
+    """Emit the value selected by the active extraction flag.
+
+    Exactly one extraction flag is active here (validated upstream by
+    :func:`_validate_extraction_flags`). ``--show-id`` / ``--pick`` treat a None
+    result as a failure (exit 1 via ``empty_hint``); ``--show-ids`` /
+    ``--extract`` accept empty results as legitimate. ``--show-extracted``
+    follows the declared-vs-not-declared policy of
+    :func:`_resolve_show_extracted`.
+
+    Args:
+        response: The API response to extract from.
+        pick: JMESPath expression from ``--pick`` (None when absent).
+        extract: ``key=jmespath`` specs from ``--extract`` (None when absent).
+        show_id: Whether ``--show-id`` was set.
+        show_ids: Whether ``--show-ids`` was set.
+        show_extracted: Key from ``--show-extracted`` (None when absent;
+            empty string selects all extracted keys).
+        out: Optional output file path.
+        quiet: Whether to suppress the file-write confirmation.
+        raw: Whether ``--raw`` was set.
+        minify: Whether ``--minify`` was set.
+
+    """
+    indent = get_rapi_render_config().json_indent or 2
+    if show_extracted is not None:
+        value, hint = _resolve_show_extracted(response, show_extracted)
+        _emit_extracted_value(
+            value,
+            out=out,
+            quiet=quiet,
+            raw=raw,
+            minify=minify,
+            indent=indent,
+            empty_hint=hint,
+        )
+    elif show_id:
+        _emit_extracted_value(
+            response.id,
+            out=out,
+            quiet=quiet,
+            raw=raw,
+            minify=minify,
+            indent=indent,
+            empty_hint="No id could be resolved from the response.",
+        )
+    elif show_ids:
+        _emit_extracted_value(
+            response.ids,
+            out=out,
+            quiet=quiet,
+            raw=raw,
+            minify=minify,
+            indent=indent,
+            empty_hint=None,
+        )
+    elif pick is not None:
+        _emit_extracted_value(
+            response.get(pick),
+            out=out,
+            quiet=quiet,
+            raw=raw,
+            minify=minify,
+            indent=indent,
+            empty_hint=f"JMESPath expression matched nothing: {pick}",
+        )
+    else:
+        specs = _parse_extract_specs(extract or [])
+        result = {key: response.get(expr) for key, expr in specs.items()}
+        _emit_extracted_value(
+            result,
+            out=out,
+            quiet=quiet,
+            raw=raw,
+            minify=minify,
+            indent=indent,
+            empty_hint=None,
+        )
+
+
+def _render_response(
+    response: RapiResponse,
+    *,
+    fmt: str,
+    quiet: bool,
+    out: str | None,
+    raw: bool,
+    minify: bool,
+    pick: str | None,
+    extract: list[str] | None,
+    show_id: bool,
+    show_ids: bool,
+    show_extracted: str | None,
+) -> None:
+    """Dispatch response rendering to extraction output or the default formatter.
+
+    When any extraction flag is active, ``--format`` is ignored and the extracted
+    value is emitted as plain (pipeable) stdout. Otherwise the standard
+    :func:`_format_output` path renders the full response.
+
+    Args:
+        response: The API response to render.
+        fmt: Output format for the default path (json, text, full).
+        quiet: Whether ``--quiet`` was set.
+        out: Optional output file path.
+        raw: Whether ``--raw`` was set.
+        minify: Whether ``--minify`` was set.
+        pick: JMESPath expression from ``--pick``.
+        extract: ``key=jmespath`` specs from ``--extract``.
+        show_id: Whether ``--show-id`` was set.
+        show_ids: Whether ``--show-ids`` was set.
+        show_extracted: Key from ``--show-extracted`` (None when absent).
+
+    """
+    if _is_extraction_requested(pick, extract, show_id, show_ids, show_extracted):
+        _handle_extraction_output(
+            response,
+            pick=pick,
+            extract=extract,
+            show_id=show_id,
+            show_ids=show_ids,
+            show_extracted=show_extracted,
+            out=out,
+            quiet=quiet,
+            raw=raw,
+            minify=minify,
+        )
+    else:
+        _format_output(response, fmt, quiet, out, raw=raw, minify=minify)
+
+
 def call(
     endpoint: Annotated[
         str,
@@ -381,6 +778,46 @@ def call(
             help="Output compact single-line JSON.",
         ),
     ] = False,
+    pick: Annotated[
+        str | None,
+        typer.Option(
+            "--pick",
+            "-p",
+            help="Extract a single value via JMESPath (ad-hoc). Example: --pick data.id",
+        ),
+    ] = None,
+    extract: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--extract",
+            help="Extract named values: key=jmespath (repeatable). Example: --extract id=data.id --extract name=user.name",
+        ),
+    ] = None,
+    show_id: Annotated[
+        bool,
+        typer.Option(
+            "--show-id",
+            help="Print the resolved resource id (config-driven heuristic).",
+        ),
+    ] = False,
+    show_ids: Annotated[
+        bool,
+        typer.Option(
+            "--show-ids",
+            help="Print all resolved resource ids (config-driven heuristic).",
+        ),
+    ] = False,
+    show_extracted: Annotated[
+        str | None,
+        typer.Option(
+            "--show-extracted",
+            metavar="[KEY]",
+            help=(
+                "Print values declared by the endpoint extract: directive. "
+                "With KEY, print that key only; without, print all extracted keys as JSON."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Make an API call to a configured endpoint.
 
@@ -416,6 +853,20 @@ def call(
         kstlib rapi --server github github.repos-list
         kstlib rapi -s jira jira.issues-search
 
+        # Extract a single value via JMESPath (ad-hoc, pipeable)
+        kstlib rapi github.user --pick login
+
+        # Extract named values into a JSON object
+        kstlib rapi github.user --extract login=login --extract uid=id
+
+        # Show the resolved resource id / ids (config-driven heuristic)
+        kstlib rapi jira.issues-get ISSUE-1 --show-id
+        kstlib rapi github.repos-list --show-ids
+
+        # Show values declared by the endpoint extract: directive
+        kstlib rapi myapi.item-get abc-123 --show-extracted object_ids
+        kstlib rapi myapi.item-get abc-123 --show-extracted
+
     """
     # Parse arguments
     positional_args, keyword_args = _parse_args(args or [])
@@ -426,6 +877,9 @@ def call(
 
     # Reject --minify without --raw before any work is done.
     _validate_output_flags(raw=raw, minify=minify)
+
+    # Reject conflicting extraction flags / malformed --extract specs early.
+    _validate_extraction_flags(pick, extract, show_id, show_ids, show_extracted)
 
     from kstlib.cli.commands.rapi import _load_config_or_exit
 
@@ -453,8 +907,21 @@ def call(
             **cast("dict[str, Any]", keyword_args),
         )
 
-        # Format and print output
-        _format_output(response, fmt, quiet, out, raw=raw, minify=minify)
+        # Format and print output. Extraction flags override --format with
+        # plain, pipeable stdout; otherwise the standard formatter is used.
+        _render_response(
+            response,
+            fmt=fmt,
+            quiet=quiet,
+            out=out,
+            raw=raw,
+            minify=minify,
+            pick=pick,
+            extract=extract,
+            show_id=show_id,
+            show_ids=show_ids,
+            show_extracted=show_extracted,
+        )
 
         # Exit with appropriate code
         if not response.ok:

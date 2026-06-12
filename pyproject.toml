@@ -38,6 +38,7 @@ dependencies = [
     "python-box>=7.3,<8",    # Dot-access dicts (Box, BoxList, ConfigBox)
     "platformdirs>=4.0,<5",  # Cross-platform system config dirs (XDG on Linux, native on Mac/Windows)
     "defusedxml>=0.7,<1",    # XXE-safe XML parsing for kstlib.transform (CVE protection)
+    "jmespath>=1.0,<2",      # JMESPath query for rapi extraction (and transform patches).
 
     # --- CLI & Output Interface ---
     "typer>=0.19,<1", # CLI framework (based on Click)
@@ -463,6 +464,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["httpx", "httpx.*"]
 # httpx type stubs not always installed
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["jmespath", "jmespath.*"]
+# jmespath ships no type stubs (no py.typed marker, no types-jmespath)
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

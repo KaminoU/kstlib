@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import click
 import typer
 from typer.core import TyperGroup
 
@@ -12,6 +11,8 @@ from kstlib.cli.common import console
 from kstlib.rapi import load_rapi_config
 
 if TYPE_CHECKING:
+    import click
+
     from kstlib.rapi.config import RapiConfigManager
 
 # Known subcommands that should not be treated as endpoints
@@ -40,7 +41,7 @@ def _load_config_or_exit() -> RapiConfigManager:
 
 # Sub-command imports come AFTER _load_config_or_exit so the callers
 # can import it without triggering a circular-import failure.
-from .call import call  # noqa: E402
+from .call import _CallCommand, call  # noqa: E402
 from .list import list_endpoints  # noqa: E402
 from .show import show_endpoint  # noqa: E402
 
@@ -54,15 +55,15 @@ class RapiGroup(TyperGroup):
         args: list[str],
     ) -> tuple[str | None, click.Command | None, list[str]]:
         """Override command resolution to treat unknown commands as endpoints."""
-        # Try normal resolution first
-        try:
-            return super().resolve_command(ctx, args)
-        except click.UsageError:
-            # If command not found and looks like an endpoint, redirect to call
-            if args and args[0] not in _SUBCOMMANDS and "." in args[0]:
-                # Treat as implicit call: prepend "call" to args
-                return super().resolve_command(ctx, ["call", *args])
-            raise
+        # Rewrite BEFORE resolution instead of catching the resolution error:
+        # Typer 0.26+ ships a vendored click whose UsageError is a distinct
+        # class from click.UsageError, so an except-based fallback never
+        # matches there. get_command() returning None for unknown names is
+        # the contract that holds across all supported Typer versions.
+        if args and args[0] not in _SUBCOMMANDS and "." in args[0] and self.get_command(ctx, args[0]) is None:
+            # Treat as implicit call: prepend "call" to args
+            args = ["call", *args]
+        return super().resolve_command(ctx, args)
 
 
 rapi_app = typer.Typer(
@@ -73,8 +74,9 @@ rapi_app = typer.Typer(
 # Register explicit commands
 rapi_app.command(name="list")(list_endpoints)
 rapi_app.command(name="show")(show_endpoint)
-# Keep "call" for explicit usage (shown in help)
-rapi_app.command(name="call", hidden=False)(call)
+# Keep "call" for explicit usage (shown in help). The custom command class
+# gives --show-extracted its optional-value behavior (token normalization).
+rapi_app.command(name="call", hidden=False, cls=_CallCommand)(call)
 
 
 def register_cli(app: typer.Typer) -> None:

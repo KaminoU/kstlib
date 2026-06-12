@@ -823,6 +823,21 @@ rapi:
     # XML pretty-print. Set to true to enable formatted XML output.
     xml: true
 
+  # Heuristic field-extraction defaults (collection shapes: HAL, SAS Viya, ...).
+  # Back the .id / .ids / .count response accessors when no per-endpoint
+  # extract: directive applies. Override any of the 3 lists here (a per-endpoint
+  # extract: still wins). Hardened on load: max 32 entries per list; id_keys and
+  # count_keys are field names (max 64 chars); ids_paths are JMESPath expressions
+  # (max 512 chars) that must compile. An invalid override is ignored with a
+  # [SECURITY] warning, leaving that list disabled.
+  extraction:
+    # Field names tried in order to resolve the single-resource .id accessor.
+    id_keys: ["id", "uri", "name", "key", "objectId"]
+    # JMESPath expressions tried in order to resolve the .ids list accessor.
+    ids_paths: ["items[*].id", "members[*].id", "results[*].id", "data[*].id", "value[*].id"]
+    # Field names tried in order to resolve the .count accessor.
+    count_keys: ["count", "total", "totalCount"]
+
   # API services and their endpoints
   # Define your own APIs here or use external *.rapi.yml files
   api: {}

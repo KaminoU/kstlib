@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import importlib
 import json
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
+from box import Box
 from typer.testing import CliRunner
 
 from kstlib.cli.app import app
@@ -141,6 +142,33 @@ def _mock_response(
     response.endpoint_ref = endpoint_ref
     response.headers = {"content-type": "application/json"}
     return response
+
+
+def _extraction_response(
+    *,
+    id_value: str | None = None,
+    ids_value: list[str] | None = None,
+    get_map: dict[str, Any] | None = None,
+    extracted_map: dict[str, Any] | None = None,
+    status_code: int = 200,
+) -> RapiResponse:
+    """Build a mock RapiResponse with extraction accessors configured.
+
+    The accessors (`.id`, `.ids`, `.get`) are properties/methods on the real
+    class, so they are set here where the local is MagicMock-typed (mypy would
+    reject setting them on a `RapiResponse`-typed handle). The `extracted`
+    mapping mirrors what an endpoint `extract:` directive would produce.
+    """
+    response = MagicMock(spec=RapiResponse)
+    response.data = {}
+    response.status_code = status_code
+    response.ok = 200 <= status_code < 400
+    response.id = id_value
+    response.ids = ids_value if ids_value is not None else []
+    response.extracted = Box(extracted_map or {})
+    resolved = get_map or {}
+    response.get.side_effect = lambda expr: resolved.get(expr)
+    return cast("RapiResponse", response)
 
 
 class TestRapiList:
@@ -898,6 +926,212 @@ class TestRapiCall:
             assert "(none configured)" in result.stdout
 
 
+class TestRapiCallExtraction:
+    """Tests for `kstlib rapi call` extraction flags (--pick/--extract/--show-id/--show-ids)."""
+
+    @staticmethod
+    def _run(args: list[str], response: RapiResponse | None) -> tuple[Any, MagicMock, MagicMock]:
+        """Invoke `rapi call` with the client patched, returning result + client mocks."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            if response is not None:
+                mock_client.call.return_value = response
+            mock_client_cls.return_value = mock_client
+            result = runner.invoke(app, ["rapi", "call", *args])
+        return result, mock_client_cls, mock_client
+
+    def test_pick_scalar(self) -> None:
+        """--pick prints a scalar value bare (no quotes, no Rich)."""
+        resp = _extraction_response(get_map={"login": "octocat"})
+
+        result, _, client = self._run(["github.user", "--pick", "login"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "octocat"
+        client.call.assert_called_once()
+
+    def test_pick_list_default_json_array(self) -> None:
+        """--pick returning a list prints a JSON array by default."""
+        resp = _extraction_response(get_map={"items[*].id": ["a", "b"]})
+
+        result, *_ = self._run(["httpbin.get_ip", "--pick", "items[*].id"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == ["a", "b"]
+
+    def test_pick_list_raw_lines(self) -> None:
+        """--pick list with --raw prints one element per line."""
+        resp = _extraction_response(get_map={"items[*].id": ["a", "b", "c"]})
+
+        result, *_ = self._run(["httpbin.get_ip", "--pick", "items[*].id", "--raw"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip().splitlines() == ["a", "b", "c"]
+
+    def test_pick_dict_json(self) -> None:
+        """--pick returning a dict prints JSON."""
+        resp = _extraction_response(get_map={"obj": {"k": "v"}})
+
+        result, *_ = self._run(["httpbin.get_ip", "--pick", "obj"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"k": "v"}
+
+    def test_pick_no_match_exits_1(self) -> None:
+        """--pick matching nothing (None) writes a hint to stderr and exits 1."""
+        resp = _extraction_response(get_map={"login": "octocat"})
+
+        result, *_ = self._run(["github.user", "--pick", "missing"], resp)
+
+        assert result.exit_code == 1
+        assert "matched nothing" in result.output
+
+    def test_extract_single_and_multi_keys(self) -> None:
+        """--extract builds a JSON dict from key=jmespath specs."""
+        resp = _extraction_response(get_map={"login": "octocat", "id": 583231})
+
+        result, *_ = self._run(
+            ["github.user", "--extract", "login=login", "--extract", "uid=id"],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"login": "octocat", "uid": 583231}
+
+    def test_extract_raw_minify_compact(self) -> None:
+        """--extract with --raw --minify produces compact JSON."""
+        resp = _extraction_response(get_map={"a": 1})
+
+        result, *_ = self._run(["httpbin.get_ip", "--extract", "a=a", "--raw", "--minify"], resp)
+
+        assert result.exit_code == 0
+        assert '{"a":1}' in result.stdout
+
+    def test_extract_malformed_spec_no_equals(self) -> None:
+        """--extract spec without '=' is rejected before any client call."""
+        result, client_cls, _ = self._run(["github.user", "--extract", "noequals"], None)
+
+        assert result.exit_code == 2
+        assert "Invalid --extract spec" in result.output
+        client_cls.assert_not_called()
+
+    def test_extract_malformed_spec_empty_key(self) -> None:
+        """--extract spec with an empty key is rejected."""
+        result, client_cls, _ = self._run(["github.user", "--extract", "=data.id"], None)
+
+        assert result.exit_code == 2
+        assert "Key must not be empty" in result.output
+        client_cls.assert_not_called()
+
+    def test_show_id_present(self) -> None:
+        """--show-id prints the resolved id and exits 0."""
+        resp = _extraction_response(id_value="abc-123")
+
+        result, *_ = self._run(["github.user", "--show-id"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "abc-123"
+
+    def test_show_id_absent_exits_1(self) -> None:
+        """--show-id with no resolvable id writes a hint to stderr and exits 1."""
+        resp = _extraction_response(id_value=None)
+
+        result, *_ = self._run(["github.user", "--show-id"], resp)
+
+        assert result.exit_code == 1
+        assert "No id could be resolved" in result.output
+
+    def test_show_ids_populated(self) -> None:
+        """--show-ids prints all ids as a JSON array."""
+        resp = _extraction_response(ids_value=["a", "b", "c"])
+
+        result, *_ = self._run(["github.user", "--show-ids"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == ["a", "b", "c"]
+
+    def test_show_ids_empty_is_valid(self) -> None:
+        """--show-ids with an empty list prints [] and exits 0 (empty is legitimate)."""
+        resp = _extraction_response(ids_value=[])
+
+        result, *_ = self._run(["github.user", "--show-ids"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "[]"
+
+    def test_show_ids_raw_empty_emits_nothing(self) -> None:
+        """--show-ids --raw with an empty list emits no line (scriptable)."""
+        resp = _extraction_response(ids_value=[])
+
+        result, *_ = self._run(["github.user", "--show-ids", "--raw"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == ""
+
+    def test_mutual_exclusivity_rejected(self) -> None:
+        """Combining two extraction modes is rejected before any client call."""
+        combos = (
+            ["--show-id", "--show-ids"],
+            ["--pick", "x", "--show-id"],
+            ["--extract", "a=b", "--pick", "x"],
+            ["--extract", "a=b", "--show-ids"],
+        )
+        for combo in combos:
+            result, client_cls, _ = self._run(["github.user", *combo], None)
+
+            assert result.exit_code == 2, combo
+            assert "Only one of" in result.output
+            client_cls.assert_not_called()
+
+    def test_extraction_pick_to_file(self, tmp_path: Any) -> None:
+        """--pick with --out writes the extracted value to a file."""
+        resp = _extraction_response(get_map={"obj": {"k": "v"}})
+
+        out_file = tmp_path / "extract.json"
+        result, *_ = self._run(["httpbin.get_ip", "--pick", "obj", "-o", str(out_file)], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(out_file.read_text()) == {"k": "v"}
+        assert "Output written to" in result.stdout
+
+    def test_extraction_to_file_quiet(self, tmp_path: Any) -> None:
+        """--pick with --out and --quiet suppresses the confirmation message."""
+        resp = _extraction_response(get_map={"login": "octocat"})
+
+        out_file = tmp_path / "value.txt"
+        result, *_ = self._run(
+            ["github.user", "--pick", "login", "-o", str(out_file), "-q"],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert out_file.read_text() == "octocat"
+        assert "Output written to" not in result.stdout
+
+    def test_format_ignored_when_extraction_active(self) -> None:
+        """--format is ignored when an extraction flag is active."""
+        resp = _extraction_response(id_value="abc-123")
+
+        result, *_ = self._run(["github.user", "--show-id", "--format", "full"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "abc-123"
+        assert "status_code" not in result.stdout
+
+    def test_extraction_non_ok_response_still_exits_1(self) -> None:
+        """A non-OK HTTP response still exits 1 even when a value was extracted."""
+        resp = _extraction_response(id_value="abc", status_code=404)
+
+        result, *_ = self._run(["github.user", "--show-id"], resp)
+
+        assert result.exit_code == 1
+        assert "abc" in result.stdout
+
+
 class TestRapiListQueryIndicator:
     """Tests for query parameter indicator in `kstlib rapi list`."""
 
@@ -1044,3 +1278,303 @@ class TestRapiShow:
             assert result.exit_code == 0
             assert "Examples" in result.stdout
             assert "kstlib rapi binance.ticker" in result.stdout
+
+
+class TestRapiImplicitRouting:
+    """Tests for implicit endpoint routing (`rapi <api>.<endpoint>` without `call`)."""
+
+    @staticmethod
+    def _run(args: list[str], response: RapiResponse | None) -> tuple[Any, MagicMock, MagicMock]:
+        """Invoke `rapi` with the client patched, returning result + client mocks."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            if response is not None:
+                mock_client.call.return_value = response
+            mock_client_cls.return_value = mock_client
+            result = runner.invoke(app, ["rapi", *args])
+        return result, mock_client_cls, mock_client
+
+    def test_implicit_matches_explicit_call(self) -> None:
+        """`rapi <endpoint>` produces the same result as `rapi call <endpoint>`."""
+        data = {"origin": "1.2.3.4"}
+        implicit, _, implicit_client = self._run(
+            ["httpbin.get_ip"],
+            _mock_response(data=data, endpoint_ref="httpbin.get_ip"),
+        )
+        explicit, _, explicit_client = self._run(
+            ["call", "httpbin.get_ip"],
+            _mock_response(data=data, endpoint_ref="httpbin.get_ip"),
+        )
+
+        assert implicit.exit_code == 0
+        assert explicit.exit_code == 0
+        assert implicit.stdout == explicit.stdout
+        implicit_client.call.assert_called_once()
+        explicit_client.call.assert_called_once()
+
+    def test_implicit_preserves_flags(self) -> None:
+        """Flags on the implicit form behave exactly as on the explicit form."""
+        implicit, *_ = self._run(
+            ["github.user", "--show-ids"],
+            _extraction_response(ids_value=["a", "b"]),
+        )
+        explicit, *_ = self._run(
+            ["call", "github.user", "--show-ids"],
+            _extraction_response(ids_value=["a", "b"]),
+        )
+
+        assert implicit.exit_code == 0
+        assert explicit.exit_code == 0
+        assert implicit.stdout == explicit.stdout
+        assert json.loads(implicit.stdout) == ["a", "b"]
+
+    def test_implicit_preserves_positional_args(self) -> None:
+        """Positional endpoint arguments survive the implicit redirect."""
+        response = _mock_response(data={"ok": True}, endpoint_ref="httpbin.delay")
+
+        result, _, client = self._run(["httpbin.delay", "3"], response)
+
+        assert result.exit_code == 0
+        assert "3" in client.call.call_args.args
+
+    def test_unknown_command_without_dot_is_not_redirected(self) -> None:
+        """An unknown token without a dot keeps the native error, no redirect."""
+        result, client_cls, _ = self._run(["bogus"], None)
+
+        assert result.exit_code != 0
+        assert "No such command" in result.output
+        client_cls.assert_not_called()
+
+    def test_real_subcommands_not_captured(self) -> None:
+        """`list` and `show` resolve as real sub-commands, never as endpoints."""
+        for args, marker in (
+            (["list"], "httpbin"),
+            (["show", "httpbin.get_ip"], "get_ip"),
+        ):
+            result, client_cls, _ = self._run(args, None)
+
+            assert result.exit_code == 0, f"args={args}"
+            assert marker in result.stdout
+            client_cls.assert_not_called()
+
+
+class TestRapiConfigLoading:
+    """Tests for the shared config loading helper used by list/show/call."""
+
+    def test_load_failure_exits_1(self) -> None:
+        """A config loading error prints a friendly message and exits 1."""
+        with patch.object(rapi_pkg, "load_rapi_config") as mock_load:
+            mock_load.side_effect = RuntimeError("boom")
+
+            result = runner.invoke(app, ["rapi", "list"])
+
+        assert result.exit_code == 1
+        assert "Failed to load rapi config" in result.output
+
+    def test_load_success_flows_to_command(self) -> None:
+        """A successful load feeds the sub-command without interference."""
+        with patch.object(rapi_pkg, "load_rapi_config") as mock_load:
+            mock_load.return_value = _mock_config_manager()
+
+            result = runner.invoke(app, ["rapi", "list"])
+
+        assert result.exit_code == 0
+        assert "httpbin" in result.stdout
+
+
+class TestRapiShowExtracted:
+    """Tests for `--show-extracted` (values declared by the endpoint extract: directive)."""
+
+    @staticmethod
+    def _run(args: list[str], response: RapiResponse | None) -> tuple[Any, MagicMock, MagicMock]:
+        """Invoke `rapi call` with the client patched, returning result + client mocks."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            if response is not None:
+                mock_client.call.return_value = response
+            mock_client_cls.return_value = mock_client
+            result = runner.invoke(app, ["rapi", "call", *args])
+        return result, mock_client_cls, mock_client
+
+    def test_key_scalar_prints_bare(self) -> None:
+        """A declared scalar key prints bare (no quotes, no Rich)."""
+        resp = _extraction_response(extracted_map={"object_id": "abc-123"})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "object_id"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "abc-123"
+
+    def test_key_list_prints_json_array(self) -> None:
+        """A declared list key prints a JSON array by default."""
+        resp = _extraction_response(extracted_map={"object_ids": ["a", "b"]})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "object_ids"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == ["a", "b"]
+
+    def test_key_list_raw_one_per_line(self) -> None:
+        """A declared list key with --raw prints one element per line."""
+        resp = _extraction_response(extracted_map={"object_ids": ["a", "b", "c"]})
+
+        result, *_ = self._run(
+            ["github.user", "--show-extracted", "object_ids", "--raw"],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert result.stdout.strip().splitlines() == ["a", "b", "c"]
+
+    def test_key_absent_exits_1_names_available(self) -> None:
+        """An unknown key fails with a hint naming the available keys."""
+        resp = _extraction_response(extracted_map={"object_ids": ["a"]})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "bogus"], resp)
+
+        assert result.exit_code == 1
+        assert "No extracted key 'bogus'" in result.output
+        assert "object_ids" in result.output
+
+    def test_key_evaluated_to_none_exits_1(self) -> None:
+        """A declared key whose expression matched nothing fails with a hint."""
+        resp = _extraction_response(extracted_map={"object_ids": None})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "object_ids"], resp)
+
+        assert result.exit_code == 1
+        assert "matched nothing" in result.output
+
+    def test_key_empty_list_is_legitimate(self) -> None:
+        """A declared key holding an empty collection exits 0 (legitimate result)."""
+        resp = _extraction_response(extracted_map={"object_ids": []})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "object_ids"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "[]"
+
+    def test_all_keys_prints_json_dict(self) -> None:
+        """The bare flag prints all extracted keys as a JSON dict."""
+        resp = _extraction_response(extracted_map={"object_id": "x", "names": ["a"]})
+
+        result, *_ = self._run(["github.user", "--show-extracted"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"object_id": "x", "names": ["a"]}
+
+    def test_all_keys_without_directive_exits_1(self) -> None:
+        """The bare flag on an endpoint without extract: directive fails with a hint."""
+        resp = _extraction_response(extracted_map={})
+
+        result, *_ = self._run(["github.user", "--show-extracted"], resp)
+
+        assert result.exit_code == 1
+        assert "No extract: directive declared" in result.output
+
+    @pytest.mark.parametrize(
+        "other",
+        [["--pick", "login"], ["--extract", "a=a"], ["--show-id"], ["--show-ids"]],
+        ids=["pick", "extract", "show-id", "show-ids"],
+    )
+    def test_exclusive_with_each_other_flag(self, other: list[str]) -> None:
+        """--show-extracted rejects combination with every other extraction flag."""
+        result, client_cls, _ = self._run(
+            ["github.user", "--show-extracted", "k", *other],
+            None,
+        )
+
+        assert result.exit_code == 2
+        assert "Only one of" in result.output
+        client_cls.assert_not_called()
+
+    def test_bare_flag_before_option_not_greedy(self) -> None:
+        """A bare flag followed by another option selects all keys, option preserved."""
+        resp = _extraction_response(extracted_map={"object_ids": ["a", "b"]})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "--raw"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"object_ids": ["a", "b"]}
+
+    def test_bare_flag_before_query_arg_preserved(self) -> None:
+        """A bare flag followed by key=value keeps it as a query argument."""
+        resp = _extraction_response(extracted_map={"object_id": "x"})
+
+        result, _, client = self._run(
+            ["httpbin.get_ip", "--show-extracted", "limit=5"],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"object_id": "x"}
+        assert client.call.call_args.kwargs["limit"] == "5"
+
+    def test_equals_form_selects_key(self) -> None:
+        """The --show-extracted=key form selects the key explicitly."""
+        resp = _extraction_response(extracted_map={"object_id": "abc-123"})
+
+        result, *_ = self._run(["github.user", "--show-extracted=object_id"], resp)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "abc-123"
+
+    def test_raw_minify_compact_json(self) -> None:
+        """--raw --minify renders the selected dict as compact JSON."""
+        resp = _extraction_response(extracted_map={"a": 1})
+
+        result, *_ = self._run(
+            ["github.user", "--show-extracted", "--raw", "--minify"],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert '{"a":1}' in result.stdout
+
+    def test_out_file_writes_and_confirms(self, tmp_path: Any) -> None:
+        """--out writes the extracted value to a file with a confirmation."""
+        resp = _extraction_response(extracted_map={"object_ids": ["a", "b"]})
+        target = tmp_path / "extracted.json"
+
+        result, *_ = self._run(
+            ["github.user", "--show-extracted", "object_ids", "--out", str(target)],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert json.loads(target.read_text(encoding="utf-8")) == ["a", "b"]
+        assert "Output written to" in result.stdout
+
+    def test_out_file_quiet_is_silent(self, tmp_path: Any) -> None:
+        """--out with --quiet writes the file without the confirmation line."""
+        resp = _extraction_response(extracted_map={"object_id": "x"})
+        target = tmp_path / "extracted.txt"
+
+        result, *_ = self._run(
+            ["github.user", "--show-extracted", "object_id", "--out", str(target), "--quiet"],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert target.read_text(encoding="utf-8") == "x"
+        assert "Output written to" not in result.stdout
+
+    def test_format_ignored_when_active(self) -> None:
+        """--format is ignored while --show-extracted drives the output."""
+        resp = _extraction_response(extracted_map={"object_id": "x"})
+
+        result, *_ = self._run(
+            ["github.user", "-f", "full", "--show-extracted", "object_id"],
+            resp,
+        )
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "x"

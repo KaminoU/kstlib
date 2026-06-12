@@ -80,8 +80,17 @@ kstlib -vvv rapi github.user
 
 | Command | Description |
 | - | - |
-| `kstlib rapi <api>.<endpoint> [args...]` | Make API call (implicit) |
+| `kstlib rapi <api>.<endpoint> [args...]` | Make API call (implicit shortcut) |
+| `kstlib rapi call <api>.<endpoint> [args...]` | Make API call (explicit form) |
 | `kstlib rapi list [API]` | List configured endpoints |
+
+```{note}
+`kstlib rapi <api>.<endpoint>` is a shortcut for
+`kstlib rapi call <api>.<endpoint>`; both forms are strictly equivalent and
+accept the same options. The explicit `call` form is recommended in scripts
+(stable, unambiguous) and remains available whenever you prefer to spell the
+resolution out.
+```
 
 ### Call Options
 
@@ -94,6 +103,15 @@ kstlib -vvv rapi github.user
 | `--quiet` | `-q` | Suppress status messages |
 | `--raw` | | Output raw JSON without Rich formatting (pipeable) |
 | `--minify` | | Output compact single-line JSON |
+| `--pick` | `-p` | Extract a single value via ad-hoc JMESPath |
+| `--extract` | | Extract named values `key=jmespath` (repeatable) |
+| `--show-id` | | Print the resolved resource id (config-driven heuristic) |
+| `--show-ids` | | Print all resolved resource ids (config-driven heuristic) |
+| `--show-extracted` | | Print values declared by the endpoint `extract:` directive (`[KEY]` optional) |
+
+The five extraction flags are mutually exclusive. See
+[Response Extraction](#response-extraction) below for the decision table and the
+JMESPath cheat-sheet.
 
 ### Verbosity Levels
 
@@ -165,7 +183,14 @@ endpoints:
       per_page: "10"
   repos-issues:
     path: "/repos/{owner}/{repo}/issues"
+    extract:                       # named values, see Response Extraction
+      issue_ids: "[*].id"
 ```
+
+An endpoint can also declare an `extract:` map (named JMESPath values, exposed
+on `response.extracted` and via `--show-extracted`) and a `server:` directive;
+see [Response Extraction](#response-extraction) and
+[Multi-server patterns](#multi-server-patterns) for the full semantics.
 
 Load via include patterns:
 
@@ -641,6 +666,172 @@ async def main():
     )
 
 asyncio.run(main())
+```
+
+## Response Extraction
+
+REST payloads bury the value you actually want (an id, a count, a next-page
+link) inside nested JSON. RAPI offers three ways to pull it out, from
+zero-config to fully explicit.
+
+### Heuristic accessors (zero-config)
+
+A `RapiResponse` exposes convenience accessors tuned for HAL / SAS Viya style
+collections. They work out of the box and never raise:
+
+```python
+# Collection {"count": 42, "items": [{"id": "a"}, {"id": "b"}]}
+coll = client.call("myapi.items-list")
+coll.count      # 42
+coll.ids        # ['a', 'b']  (list[str], never None)
+coll.has_next   # True when a links[?rel=='next'] entry is present
+coll.next_url   # the next-page href (str | None)
+
+# Single resource {"id": "abc-123", "name": "report"}
+item = client.call("myapi.item-get", id="abc-123")
+item.id         # 'abc-123'  (str | None)
+```
+
+The key lists are config-driven and overridable in `kstlib.conf.yml` without
+touching code:
+
+```yaml
+rapi:
+  extraction:
+    id_keys: ["id", "uri", "name", "key", "objectId"]
+    ids_paths: ["items[*].id", "members[*].id", "results[*].id", "data[*].id", "value[*].id"]
+    count_keys: ["count", "total", "totalCount"]
+```
+
+An override is hardened on load (max 32 entries; `id_keys` / `count_keys` are
+field names up to 64 chars; `ids_paths` are JMESPath expressions up to 512 chars
+that must compile). An invalid override is ignored with a `WARNING [SECURITY]`
+and that list is disabled, rather than crashing the client.
+
+### Endpoint `extract:` directive (per-endpoint contract)
+
+When a payload does not fit the heuristic, declare a `key: jmespath` map on the
+endpoint in its `*.rapi.yml`. Each value is a JMESPath expression against the
+parsed JSON body, except the reserved `$body` keyword, which captures the raw
+response text (for non-JSON endpoints such as `text/plain`). Expressions are
+compiled when the config loads (invalid ones fail fast), and the results land in
+`response.extracted`, taking priority over the heuristic accessors:
+
+Given a JSON payload from `GET /jobs/{id}`:
+
+```json
+{"result": {"state": "RUNNING", "worker": {"host": "node-7"}}}
+```
+
+and a `text/plain` body `RUNNING` from `GET /jobs/{id}/state`, declare:
+
+```yaml
+# jobs.rapi.yml
+endpoints:
+  job-status:                      # JSON response -> JMESPath on the parsed body
+    method: GET
+    path: /jobs/{id}
+    extract:
+      state: result.state         # "result" is a payload key, not a keyword
+      worker: result.worker.host  # "state" / "worker" are names you choose
+
+  job-state:                       # text/plain response -> $body grabs the raw text
+    method: GET
+    path: /jobs/{id}/state
+    extract:
+      value: $body                 # reserved keyword: the entire raw body
+```
+
+```python
+resp = client.call("jobs.job-status", id="abc")
+resp.extracted.state    # 'RUNNING'
+resp.extracted.worker   # 'node-7'
+
+# text/plain endpoint: $body returns the raw body
+st = client.call("jobs.job-state", id="abc")
+st.extracted.value      # 'RUNNING'
+```
+
+The keys on the left are the business names you pick; the values are standard
+JMESPath evaluated against the payload, except `$body`, which captures the
+whole raw response text (never a fragment) for non-JSON endpoints.
+
+### `.get()` escape hatch and strict `.json()`
+
+```python
+resp.get("result.items[?ok].id")  # ad-hoc JMESPath, None on miss, never raises
+resp.json()                       # strict dict|list, raises RapiError if not JSON
+```
+
+### CLI extraction flags
+
+The same capabilities are exposed on `kstlib rapi`. The five flags are mutually
+exclusive (at most one per call):
+
+| Flag | Mode | Use when |
+| - | - | - |
+| `--show-id` | heuristic | You want the resource id and trust the config-driven keys (zero JMESPath). Exits 1 if none found. |
+| `--show-ids` | heuristic | You want every id from a collection, one per line for piping. Empty result is OK (exit 0). |
+| `--pick <jmespath>` | ad-hoc | You know the exact path and want one value. You spell out the JMESPath. Exits 1 if empty. |
+| `--extract key=<jmespath>` | ad-hoc, named | You want several named values at once (repeatable). Empty result is OK (exit 0). |
+| `--show-extracted [key]` | declared | The endpoint declares an `extract:` map and you want a declared key by its business name, without re-typing the JMESPath. The bare flag prints all declared keys as a JSON dict. Exits 1 when the key (or the whole directive) is missing or the expression matched nothing; an empty collection is OK (exit 0). |
+
+```bash
+# Heuristic: id of a single resource (pipeable, exit 1 if missing)
+kstlib rapi myapi.item-get id=abc-123 --show-id
+
+# Heuristic: every id of a collection, one per line
+kstlib rapi myapi.items-list --show-ids | while read id; do echo "got $id"; done
+
+# Ad-hoc: pick one value
+kstlib rapi github.user --pick login
+
+# Ad-hoc: several named values
+kstlib rapi github.user --extract login=login --extract id=id
+
+# Declared: a key from the endpoint extract: map above, by business name
+kstlib rapi jobs.job-status abc --show-extracted state
+
+# Declared: every key from the extract: map, as a JSON dict
+kstlib rapi jobs.job-status abc --show-extracted
+```
+
+Rule of thumb: reach for `--show-id` / `--show-ids` when the config heuristic
+already knows your payload shape; reach for `--show-extracted` when the endpoint
+declares an `extract:` map (the JMESPath lives in the YAML, you type the business
+name); reach for `--pick` / `--extract` when you want to spell out the JMESPath
+yourself or pull non-id fields.
+
+### JMESPath cheat-sheet
+
+`--pick`, `--extract`, the endpoint `extract:` map, and `response.get()` all
+take [JMESPath](https://jmespath.org/) expressions. Common, spec-guaranteed
+patterns:
+
+| Expression | Result |
+| - | - |
+| `result.state` | nested field access |
+| `items[*].id` | project a field across a list |
+| `items[0].id` / `items[-1].id` | first / last element |
+| `items[?ok].id` | filter (`ok` truthy), then project |
+| `items[?state=='DONE'].id` | filter by equality |
+| `items[?state != 'FAILED'].id` | filter by inequality |
+| `items[?state=='DONE' && ok].id` | combine predicates with `&&` / `\|\|` |
+| `items[?starts_with(name, 'pre')].id` | string functions: `starts_with`, `contains`, `ends_with` |
+| `length(items)` | built-in function |
+| `items[*].id \| [0]` | pipe to post-process |
+| `{id: id, name: user.name}` | multiselect into a new shape |
+
+```{warning}
+**Date-range filters are not spec-guaranteed.** An expression like
+`items[?created > '2026-01-01']` happens to work on `jmespath.py` for
+zero-padded ISO-8601 strings, but the JMESPath specification reserves the
+ordering operators (`>`, `>=`, `<`, `<=`) for **numbers**; a string operand
+makes the comparison yield `null` (the item is filtered out). This is
+non-spec behavior: it is not guaranteed and may break on a future or different
+implementation. For durable filtering, use `starts_with(created, '2026-01')`
+or compare a numeric timestamp field instead. See the
+[JMESPath specification](https://jmespath.org/specification.html).
 ```
 
 ## Credentials
