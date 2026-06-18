@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
 import typer
@@ -530,19 +531,44 @@ def _emit_extracted_value(
         print(content)
 
 
-def _resolve_show_extracted(response: RapiResponse, key: str) -> tuple[Any, str | None]:
+def _split_extracted_keys(spec: str) -> list[str]:
+    """Split a ``--show-extracted`` spec on commas/whitespace, dropping empties.
+
+    Examples:
+        >>> _split_extracted_keys("v1,v2")
+        ['v1', 'v2']
+        >>> _split_extracted_keys("v1 v2")
+        ['v1', 'v2']
+        >>> _split_extracted_keys("v1, ,v2")
+        ['v1', 'v2']
+        >>> _split_extracted_keys("")
+        []
+
+    """
+    return [key for key in re.split(r"[,\s]+", spec) if key]
+
+
+def _resolve_show_extracted(response: RapiResponse, spec: str) -> tuple[Any, str | None]:
     """Resolve the ``--show-extracted`` value and its empty-policy hint.
 
-    The policy frontier is declared vs not declared: an endpoint without an
-    ``extract:`` directive or an unknown key is a usage failure (exit 1 via
-    the hint), while a declared key holding an empty collection is a
-    legitimate result. A declared key that evaluated to None (expression
-    matched nothing) also fails, mirroring ``--pick``. Hints name keys only,
-    never extracted values.
+    The failure semantics follow the output form:
+
+    - No ``spec`` (bare flag): the whole ``extracted`` mapping is returned as a
+      dict (exit 0; a missing ``extract:`` directive still fails).
+    - A single key: the raw value is returned and a None value fails (exit 1),
+      mirroring ``--pick``. This keeps backward compatibility with v3.2.0
+      scripts that read one key.
+    - Several keys (comma/space-separated): a JSON object subset is returned
+      (exit 0). A declared key whose expression matched nothing appears as
+      ``null``; only an unknown key fails.
+
+    An endpoint without an ``extract:`` directive, or an unknown key, is a
+    usage failure (exit 1 via the hint). Hints name keys only, never values.
 
     Args:
         response: The API response whose ``extracted`` mapping is read.
-        key: The requested key, or an empty string to select all keys.
+        spec: The requested keys (comma/space-separated), or an empty string
+            to select all keys.
 
     Returns:
         Tuple of (value to emit, empty hint). The hint is consumed by
@@ -552,12 +578,22 @@ def _resolve_show_extracted(response: RapiResponse, key: str) -> tuple[Any, str 
     extracted: Mapping[str, Any] = response.extracted
     if not extracted:
         return None, "No extract: directive declared for this endpoint."
-    if not key:
+    keys = _split_extracted_keys(spec)
+    if not keys:
         return dict(extracted), None
-    if key not in extracted:
+    if len(keys) == 1:
+        key = keys[0]
+        if key not in extracted:
+            available = ", ".join(sorted(extracted))
+            return None, f"No extracted key '{key}'. Available: {available}."
+        return extracted.get(key), f"Extracted key '{key}' matched nothing."
+    missing = [key for key in keys if key not in extracted]
+    if missing:
         available = ", ".join(sorted(extracted))
-        return None, f"No extracted key '{key}'. Available: {available}."
-    return extracted.get(key), f"Extracted key '{key}' matched nothing."
+        noun = "key" if len(missing) == 1 else "keys"
+        names = ", ".join(f"'{key}'" for key in missing)
+        return None, f"No extracted {noun} {names}. Available: {available}."
+    return {key: extracted[key] for key in keys}, None
 
 
 def _handle_extraction_output(
@@ -811,10 +847,12 @@ def call(
         str | None,
         typer.Option(
             "--show-extracted",
-            metavar="[KEY]",
+            metavar="[KEY[,KEY...]]",
             help=(
                 "Print values declared by the endpoint extract: directive. "
-                "With KEY, print that key only; without, print all extracted keys as JSON."
+                "One KEY prints that value; several comma/space-separated keys "
+                "print a JSON object subset; without a value, print all keys as JSON. "
+                'Quote keys with spaces ("v1 v2") or join with commas (v1,v2) so the shell does not split them.'
             ),
         ),
     ] = None,

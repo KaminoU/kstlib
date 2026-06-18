@@ -304,6 +304,9 @@ kstlib rapi github.user --extract login=login --extract id=id
 # Extraction: a key declared by the endpoint extract: directive, by name
 kstlib rapi myapi.item-get abc-123 --show-extracted object_ids
 
+# Extraction: a subset of declared keys, as a JSON object
+kstlib rapi myapi.item-get abc-123 --show-extracted object_ids,status
+
 # Extraction: all keys declared by the extract: directive (JSON dict)
 kstlib rapi myapi.item-get abc-123 --show-extracted
 ```
@@ -324,14 +327,18 @@ kstlib rapi myapi.item-get abc-123 --show-extracted
 | `--extract` | | Extract named values `key=jmespath` (repeatable) |
 | `--show-id` | | Print the resolved resource id (config-driven heuristic) |
 | `--show-ids` | | Print all resolved resource ids (config-driven heuristic) |
-| `--show-extracted` | | Print values declared by the endpoint `extract:` directive (`[KEY]` optional) |
+| `--show-extracted` | | Print values declared by the endpoint `extract:` directive (`[KEY[,KEY...]]` optional) |
 
 The five extraction flags are mutually exclusive (at most one per call).
 `--show-id` and `--pick` exit 1 when the value is empty (a scripting guard);
 `--show-ids` and `--extract` treat an empty result as legitimate (exit 0).
-`--show-extracted` exits 1 when the requested key (or the whole `extract:`
-directive) is missing or its expression matched nothing; a declared key holding
-an empty collection is legitimate (exit 0). See
+`--show-extracted` adapts its failure policy to the output form. With a single
+key it behaves like `--pick`: it exits 1 when the key is missing or its
+expression matched nothing (a declared key holding an empty collection is still
+legitimate, exit 0). With several comma/space-separated keys it prints a JSON
+object subset and exits 0; a declared key whose expression matched nothing
+appears as `null`, and only an unknown key fails. The bare flag prints all
+declared keys; a missing `extract:` directive always fails. See
 {doc}`../features/rapi/index` for the decision table and JMESPath cheat-sheet.
 
 ### Server Profile Selection

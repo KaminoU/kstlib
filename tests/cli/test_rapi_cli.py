@@ -1480,6 +1480,61 @@ class TestRapiShowExtracted:
         assert result.exit_code == 1
         assert "No extract: directive declared" in result.output
 
+    def test_multi_key_comma_prints_subset(self) -> None:
+        """Several comma-separated keys print a JSON object subset (exit 0)."""
+        resp = _extraction_response(extracted_map={"v1": "a", "v2": "b", "v3": "c"})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "v1,v2"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"v1": "a", "v2": "b"}
+
+    def test_multi_key_space_prints_subset(self) -> None:
+        """Several space-separated keys (quoted) print a JSON object subset."""
+        resp = _extraction_response(extracted_map={"v1": "a", "v2": "b", "v3": "c"})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "v1 v2"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"v1": "a", "v2": "b"}
+
+    def test_multi_key_comma_space_mix_prints_subset(self) -> None:
+        """A mix of commas and spaces between keys is accepted."""
+        resp = _extraction_response(extracted_map={"v1": "a", "v2": "b"})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "v1, v2"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"v1": "a", "v2": "b"}
+
+    def test_multi_key_empty_segments_dropped(self) -> None:
+        """Empty segments in the spec are dropped (``v1,,v2`` resolves to {v1, v2})."""
+        resp = _extraction_response(extracted_map={"v1": "a", "v2": "b"})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "v1,,v2"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"v1": "a", "v2": "b"}
+
+    def test_multi_key_includes_none_as_null(self) -> None:
+        """A multi-key subset includes a None-valued declared key as JSON null (exit 0)."""
+        resp = _extraction_response(extracted_map={"v1": "a", "v2": None})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "v1,v2"], resp)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"v1": "a", "v2": None}
+
+    def test_multi_key_unknown_exits_1_lists_missing(self) -> None:
+        """An unknown key in a multi-key spec fails, naming the missing key and available keys."""
+        resp = _extraction_response(extracted_map={"v1": "a", "v2": "b"})
+
+        result, *_ = self._run(["github.user", "--show-extracted", "v1,bogus"], resp)
+
+        assert result.exit_code == 1
+        assert "bogus" in result.output
+        assert "v1" in result.output
+
     @pytest.mark.parametrize(
         "other",
         [["--pick", "login"], ["--extract", "a=a"], ["--show-id"], ["--show-ids"]],

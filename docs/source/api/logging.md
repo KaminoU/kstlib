@@ -61,6 +61,7 @@ logger:
             format: "::: PID %(process)d / TID %(thread)d ::: %(message)s"
             show_path: true
             tracebacks_show_locals: true
+            stream: stdout  # stdout (default) | stderr
         file:
             level: DEBUG
             datefmt: "%Y-%m-%d %H:%M:%S"

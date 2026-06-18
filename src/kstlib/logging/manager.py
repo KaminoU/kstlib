@@ -49,7 +49,7 @@ from rich.logging import RichHandler
 from rich.theme import Theme
 from rich.traceback import Traceback
 
-from kstlib.config import get_config
+from kstlib.config import ConfigError, get_config
 
 # =============================================================================
 # HARDCODED LIMITS (Deep Defense)
@@ -253,6 +253,7 @@ FALLBACK_DEFAULTS = {
         "format": "::: PID %(process)d / TID %(thread)d ::: %(message)s",
         "show_path": True,
         "tracebacks_show_locals": False,
+        "stream": "stdout",
     },
     "file": {
         "level": "DEBUG",
@@ -340,7 +341,15 @@ class LogManager(logging.Logger):
         # Setup console and theme
         self.width = shutil.get_terminal_size(fallback=(120, 30)).columns
         theme = self._create_theme()
-        self.console = Console(theme=theme, width=self.width)
+        # Route console output to stdout (default) or stderr. Routing to stderr
+        # keeps stdout clean for CLIs that emit data/JSON there (Unix data vs
+        # diagnostics separation). Fail fast on a typo so a misconfigured value
+        # never silently falls back to stdout and corrupts piped data.
+        stream = self._config.console.get("stream", "stdout")
+        if stream not in ("stdout", "stderr"):
+            raise ConfigError(f"Invalid console.stream {stream!r}: expected 'stdout' or 'stderr'")
+        _internal_log.debug("[INIT] console stream resolved to %r", stream)
+        self.console = Console(theme=theme, width=self.width, stderr=(stream == "stderr"))
 
         # Setup handlers
         self._setup_handlers()

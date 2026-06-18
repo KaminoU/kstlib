@@ -39,7 +39,7 @@ __logo__ = (
 )
 
 __app_name__ = "kstlib"
-__version__ = "3.2.0"
+__version__ = "3.3.0"
 __description__ = (
     "Config-driven helpers for Python projects (dynamic config, secure secrets, preset logging, and more…)"
 )

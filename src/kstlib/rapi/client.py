@@ -47,6 +47,7 @@ from kstlib.ssl import build_ssl_context
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+from kstlib._shared.logging_helpers import log_trace
 from kstlib.logging import TRACE_LEVEL, get_logger
 
 log = get_logger(__name__)
@@ -147,11 +148,6 @@ _AUTH_RENEW_HINT_BUILDERS: dict[str, Callable[[Mapping[str, Any]], str]] = {
     "sops": _hint_for_sops_credential,
     "provider": _hint_for_provider_credential,
 }
-
-
-def _log_trace(msg: str, *args: Any) -> None:
-    """Log at TRACE level."""
-    log.log(TRACE_LEVEL, msg, *args)
 
 
 @dataclass
@@ -335,7 +331,7 @@ def _resolve_key_list(section: Any, key: str, *, max_len: int, compile_jmespath:
     """
     value: Any = section.get(key) if hasattr(section, "get") else None
     if value is None:
-        _log_trace("extraction %s absent from config", key)
+        log_trace(log, "extraction %s absent from config", key)
         return ()
     reason = _extraction_list_violation(value, max_len=max_len, compile_jmespath=compile_jmespath)
     if reason is not None:
@@ -346,7 +342,7 @@ def _resolve_key_list(section: Any, key: str, *, max_len: int, compile_jmespath:
         )
         return ()
     resolved = tuple(value)
-    _log_trace("extraction %s resolved from config (%d keys)", key, len(resolved))
+    log_trace(log, "extraction %s resolved from config (%d keys)", key, len(resolved))
     return resolved
 
 
@@ -398,10 +394,10 @@ def _eval_extract(extract: dict[str, str] | None, data: Any, text: str) -> Box:
     result: dict[str, Any] = {}
     for key, expr in extract.items():
         if expr == _BODY_KEYWORD:
-            _log_trace("extract %r resolved from $body keyword (type=str, len=%d)", key, len(text))
+            log_trace(log, "extract %r resolved from $body keyword (type=str, len=%d)", key, len(text))
             result[key] = text
         elif data is None:
-            _log_trace("extract %r: body not JSON, storing None", key)
+            log_trace(log, "extract %r: body not JSON, storing None", key)
             result[key] = None
         else:
             try:
@@ -410,7 +406,8 @@ def _eval_extract(extract: dict[str, str] | None, data: Any, text: str) -> Box:
                 log.warning("extract: key %r expression failed to evaluate; storing None", key)
                 result[key] = None
             else:
-                _log_trace(
+                log_trace(
+                    log,
                     "extract %r resolved from JMESPath %r (type=%s, present=%s)",
                     key,
                     expr,
@@ -485,15 +482,15 @@ class RapiResponse:
         """
         extracted_id = _extracted_get(self.extracted, "id")
         if extracted_id is not None:
-            _log_trace("resolved .id from extract: directive")
+            log_trace(log, "resolved .id from extract: directive")
             return str(extracted_id)
         if isinstance(self.data, dict):
             value = _first_present(self.data, self.extraction_keys.id_keys)
             if value is None:
-                _log_trace(".id: no id_keys field matched on dict response")
+                log_trace(log, ".id: no id_keys field matched on dict response")
             elif log.isEnabledFor(TRACE_LEVEL):
                 matched = next((k for k in self.extraction_keys.id_keys if self.data.get(k) is not None), None)
-                _log_trace("resolved .id from field %r", matched)
+                log_trace(log, "resolved .id from field %r", matched)
             return value
         if isinstance(self.data, list) and self.data:
             first = self.data[0]
@@ -506,7 +503,7 @@ class RapiResponse:
                     )
                     if log.isEnabledFor(TRACE_LEVEL):
                         matched = next((k for k in self.extraction_keys.id_keys if first.get(k) is not None), None)
-                        _log_trace("resolved .id from first list item field %r", matched)
+                        log_trace(log, "resolved .id from first list item field %r", matched)
                 return value
             return None
         if self.data is None:
@@ -524,14 +521,14 @@ class RapiResponse:
         """
         extracted_ids = _extracted_get(self.extracted, "ids")
         if isinstance(extracted_ids, list):
-            _log_trace("resolved .ids from extract: directive (%d items)", len(extracted_ids))
+            log_trace(log, "resolved .ids from extract: directive (%d items)", len(extracted_ids))
             return [str(item) for item in extracted_ids]
         for path in self.extraction_keys.ids_paths:
             found = self._search(path)
             if isinstance(found, list) and found:
-                _log_trace("resolved .ids from %r (%d items)", path, len(found))
+                log_trace(log, "resolved .ids from %r (%d items)", path, len(found))
                 return [str(item) for item in found if item is not None]
-        _log_trace(".ids: no ids_paths matched")
+        log_trace(log, ".ids: no ids_paths matched")
         return []
 
     @property
@@ -544,15 +541,15 @@ class RapiResponse:
         """
         extracted_count = _extracted_get(self.extracted, "count")
         if isinstance(extracted_count, int) and not isinstance(extracted_count, bool):
-            _log_trace("resolved .count from extract: directive -> %d", extracted_count)
+            log_trace(log, "resolved .count from extract: directive -> %d", extracted_count)
             return extracted_count
         if isinstance(self.data, dict):
             for key in self.extraction_keys.count_keys:
                 value = self.data.get(key)
                 if isinstance(value, int) and not isinstance(value, bool):
-                    _log_trace("resolved .count from field %r -> %d", key, value)
+                    log_trace(log, "resolved .count from field %r -> %d", key, value)
                     return value
-        _log_trace(".count: no count_keys field matched")
+        log_trace(log, ".count: no count_keys field matched")
         return None
 
     @property
@@ -564,11 +561,11 @@ class RapiResponse:
         """
         extracted_next = _extracted_get(self.extracted, "next_url")
         if isinstance(extracted_next, str):
-            _log_trace("resolved .next_url from extract: directive")
+            log_trace(log, "resolved .next_url from extract: directive")
             return extracted_next
         found = self._search("links[?rel=='next'].href | [0]")
         if isinstance(found, str):
-            _log_trace("resolved .next_url from JMESPath links[?rel=='next'].href")
+            log_trace(log, "resolved .next_url from JMESPath links[?rel=='next'].href")
             return found
         return None
 
@@ -837,7 +834,7 @@ class RapiClient:
 
         # Resolve endpoint
         api_config, endpoint_config = self._config_manager.resolve(endpoint_ref)
-        _log_trace("Resolved to: %s", endpoint_config.full_ref)
+        log_trace(log, "Resolved to: %s", endpoint_config.full_ref)
 
         # Resolve effective server profile (cascade: runtime > endpoint > file > None)
         effective_server = self._config_manager.resolve_effective_server(
@@ -846,7 +843,7 @@ class RapiClient:
             runtime_server=server,
         )
         if effective_server is not None:
-            _log_trace("Effective server profile: %s", effective_server.name)
+            log_trace(log, "Effective server profile: %s", effective_server.name)
 
         # Validate safeguard before proceeding
         _validate_safeguard(endpoint_config, args, kwargs, confirm)
@@ -915,7 +912,7 @@ class RapiClient:
 
         # Resolve endpoint
         api_config, endpoint_config = self._config_manager.resolve(endpoint_ref)
-        _log_trace("Resolved to: %s", endpoint_config.full_ref)
+        log_trace(log, "Resolved to: %s", endpoint_config.full_ref)
 
         # Resolve effective server profile (cascade: runtime > endpoint > file > None)
         effective_server = self._config_manager.resolve_effective_server(
@@ -924,7 +921,7 @@ class RapiClient:
             runtime_server=server,
         )
         if effective_server is not None:
-            _log_trace("Effective server profile: %s", effective_server.name)
+            log_trace(log, "Effective server profile: %s", effective_server.name)
 
         # Validate safeguard before proceeding
         _validate_safeguard(endpoint_config, args, kwargs, confirm)
@@ -996,13 +993,13 @@ class RapiClient:
             content = body
 
         if content:
-            _log_trace("Request body size: %d bytes", len(content))
+            log_trace(log, "Request body size: %d bytes", len(content))
             # Log body content (truncate if too large)
             body_preview = content.decode("utf-8", errors="replace")
             if len(body_preview) > 1000:
-                _log_trace(">>> Body: %s... [truncated]", body_preview[:1000])
+                log_trace(log, ">>> Body: %s... [truncated]", body_preview[:1000])
             else:
-                _log_trace(">>> Body: %s", body_preview)
+                log_trace(log, ">>> Body: %s", body_preview)
 
         return content
 
@@ -1030,7 +1027,8 @@ class RapiClient:
         mp_config = endpoint_config.multipart or MultipartConfig()
 
         if isinstance(body, FilePayload):
-            _log_trace(
+            log_trace(
+                log,
                 "Multipart upload (FilePayload): field=%s, file=%s, type=%s, size=%d",
                 body.field_name,
                 body.filename,
@@ -1071,7 +1069,8 @@ class RapiClient:
 
         field_name = mp_config.field_name
 
-        _log_trace(
+        log_trace(
+            log,
             "Multipart upload: field=%s, file=%s, type=%s, size=%d bytes",
             field_name,
             filename,
@@ -1112,11 +1111,11 @@ class RapiClient:
 
         """
         # Build URL with path parameter substitution
-        _log_trace("Path template: %s", endpoint_config.path)
+        log_trace(log, "Path template: %s", endpoint_config.path)
         if args:
-            _log_trace("Path args (positional): %s", args)
+            log_trace(log, "Path args (positional): %s", args)
         if kwargs:
-            _log_trace("Path/query kwargs: %s", kwargs)
+            log_trace(log, "Path/query kwargs: %s", kwargs)
         path = endpoint_config.build_path(*args, **kwargs)
 
         # Server profile (when present) overrides the static api_config base_url
@@ -1134,9 +1133,9 @@ class RapiClient:
         # Extract query params from kwargs
         query_params = self._extract_query_params(endpoint_config, kwargs)
 
-        _log_trace("Final URL: %s", url)
+        log_trace(log, "Final URL: %s", url)
         if query_params:
-            _log_trace("Query params: %s", query_params)
+            log_trace(log, "Query params: %s", query_params)
 
         # Merge headers - cascade: service < server < endpoint < runtime
         merged_headers = self._merge_headers(
@@ -1150,7 +1149,7 @@ class RapiClient:
         is_multipart = "multipart/form-data" in merged_headers.get("Content-Type", "").lower()
 
         if is_multipart:
-            _log_trace("Multipart mode detected from Content-Type header")
+            log_trace(log, "Multipart mode detected from Content-Type header")
             # Multipart file upload: use httpx files= parameter
             files_param = self._prepare_multipart(body, endpoint_config)
 
@@ -1180,9 +1179,10 @@ class RapiClient:
 
             # Log multipart request structure at TRACE level
             generated_ct = request.headers.get("content-type", "")
-            _log_trace("Multipart Content-Type (generated): %s", generated_ct)
+            log_trace(log, "Multipart Content-Type (generated): %s", generated_ct)
             for field_name, (filename, data, ct) in files_param:
-                _log_trace(
+                log_trace(
+                    log,
                     "Multipart part: field=%s, filename=%s, content_type=%s, size=%d bytes",
                     field_name,
                     filename,
@@ -1253,7 +1253,8 @@ class RapiClient:
         merged.update(endpoint_headers)
         merged.update(runtime_headers)
 
-        _log_trace(
+        log_trace(
+            log,
             "Headers merged: service=%d, server=%d, endpoint=%d, runtime=%d -> total=%d",
             len(service_headers),
             len(server_headers or {}),
@@ -1323,15 +1324,15 @@ class RapiClient:
 
         if auth_type == "bearer":
             headers["Authorization"] = f"Bearer {cred.value}"
-            _log_trace("Applied Bearer auth")
+            log_trace(log, "Applied Bearer auth")
         elif auth_type == "basic":
             auth_str = f"{cred.value}:{cred.secret}" if cred.secret else f"{cred.value}:"
             encoded = base64.b64encode(auth_str.encode()).decode()
             headers["Authorization"] = f"Basic {encoded}"
-            _log_trace("Applied Basic auth")
+            log_trace(log, "Applied Basic auth")
         elif auth_type == "api_key":
             headers["X-API-Key"] = cred.value
-            _log_trace("Applied API Key auth")
+            log_trace(log, "Applied API Key auth")
         elif auth_type == "hmac":
             self._apply_hmac_auth(
                 headers,
@@ -1407,7 +1408,8 @@ class RapiClient:
         if hmac_cfg.key_header:
             headers[hmac_cfg.key_header] = cred.value
 
-        _log_trace(
+        log_trace(
+            log,
             "Applied HMAC auth (algorithm=%s, format=%s)",
             hmac_cfg.algorithm,
             hmac_cfg.signature_format,
@@ -1415,29 +1417,29 @@ class RapiClient:
 
     def _log_request(self, request: httpx.Request) -> None:
         """Log request details at TRACE level."""
-        _log_trace(">>> %s %s", request.method, request.url)
+        log_trace(log, ">>> %s %s", request.method, request.url)
 
         # Log headers (redact sensitive ones)
         for name, value in request.headers.items():
             if name.lower() in ("authorization", "x-api-key", "cookie"):
-                _log_trace(">>> %s: [REDACTED]", name)
+                log_trace(log, ">>> %s: [REDACTED]", name)
             else:
-                _log_trace(">>> %s: %s", name, value)
+                log_trace(log, ">>> %s: %s", name, value)
 
     def _log_response(self, response: httpx.Response, elapsed: float) -> None:
         """Log response details at TRACE level."""
-        _log_trace("<<< %d %s (%.3fs)", response.status_code, response.reason_phrase, elapsed)
-        _log_trace("<<< Content-Type: %s", response.headers.get("content-type", "unknown"))
-        _log_trace("<<< Content-Length: %s", response.headers.get("content-length", "unknown"))
+        log_trace(log, "<<< %d %s (%.3fs)", response.status_code, response.reason_phrase, elapsed)
+        log_trace(log, "<<< Content-Type: %s", response.headers.get("content-type", "unknown"))
+        log_trace(log, "<<< Content-Length: %s", response.headers.get("content-length", "unknown"))
         # Log response body (truncate if too large)
         try:
             body_text = response.text
             if len(body_text) > 2000:
-                _log_trace("<<< Body: %s... [truncated, %d bytes total]", body_text[:2000], len(body_text))
+                log_trace(log, "<<< Body: %s... [truncated, %d bytes total]", body_text[:2000], len(body_text))
             else:
-                _log_trace("<<< Body: %s", body_text)
+                log_trace(log, "<<< Body: %s", body_text)
         except Exception:
-            _log_trace("<<< Body: [unable to decode]")
+            log_trace(log, "<<< Body: [unable to decode]")
 
     def _check_response_size(self, response: httpx.Response) -> None:
         """Validate response size against configured limits.
@@ -1524,11 +1526,11 @@ class RapiClient:
         for attempt in range(self._limits.max_retries + 1):
             if attempt > 0:
                 log.debug("Retry %d/%d after %.1fs", attempt, self._limits.max_retries, delay)
-                _log_trace("Waiting %.1fs before retry...", delay)
+                log_trace(log, "Waiting %.1fs before retry...", delay)
                 time.sleep(delay)
                 delay *= self._limits.retry_backoff
 
-            _log_trace("Attempt %d/%d", attempt + 1, self._limits.max_retries + 1)
+            log_trace(log, "Attempt %d/%d", attempt + 1, self._limits.max_retries + 1)
 
             try:
                 start_time = time.monotonic()
@@ -1596,11 +1598,11 @@ class RapiClient:
         for attempt in range(self._limits.max_retries + 1):
             if attempt > 0:
                 log.debug("Retry %d/%d after %.1fs", attempt, self._limits.max_retries, delay)
-                _log_trace("Waiting %.1fs before retry...", delay)
+                log_trace(log, "Waiting %.1fs before retry...", delay)
                 await asyncio.sleep(delay)
                 delay *= self._limits.retry_backoff
 
-            _log_trace("Attempt %d/%d", attempt + 1, self._limits.max_retries + 1)
+            log_trace(log, "Attempt %d/%d", attempt + 1, self._limits.max_retries + 1)
 
             try:
                 start_time = time.monotonic()

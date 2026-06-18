@@ -29,17 +29,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
+from kstlib._shared.logging_helpers import log_trace
 from kstlib.limits import CacheLimits, get_cache_limits
 from kstlib.utils.formatting import format_bytes
 
 logger = logging.getLogger(__name__)
-
-
-def _log_trace(msg: str, *args: object) -> None:
-    """Log at TRACE level (custom level 5, below DEBUG)."""
-    from kstlib.logging import TRACE_LEVEL
-
-    logger.log(TRACE_LEVEL, msg, *args)
 
 
 _CACHE_FORMAT_VERSION = "kstlib:file-cache:v1"
@@ -190,7 +184,7 @@ class TTLCacheStrategy(CacheStrategy):
         if key not in self._cache:
             # The key is the SHA256 hash from make_key; logging it is safe
             # by construction (never the function args themselves).
-            _log_trace("[CACHE] TTL miss: key=%s", key)
+            log_trace(logger, "[CACHE] TTL miss: key=%s", key)
             return None
 
         value, expiry = self._cache[key]
@@ -198,10 +192,10 @@ class TTLCacheStrategy(CacheStrategy):
         # Check expiration
         if time.time() > expiry:
             del self._cache[key]
-            _log_trace("[CACHE] TTL miss (expired): key=%s", key)
+            log_trace(logger, "[CACHE] TTL miss (expired): key=%s", key)
             return None
 
-        _log_trace("[CACHE] TTL hit: key=%s", key)
+        log_trace(logger, "[CACHE] TTL hit: key=%s", key)
         return value
 
     def set(self, key: str, value: Any) -> None:

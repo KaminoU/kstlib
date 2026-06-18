@@ -202,6 +202,7 @@ logger:
       level: DEBUG
       show_path: true
       tracebacks_show_locals: true
+      stream: stdout  # stdout (default) | stderr
     file:
       level: DEBUG
       log_path: "./"
@@ -218,6 +219,32 @@ log = LogManager(config={
     "icons": {"show": False},
 })
 ```
+
+### Console stream: stdout vs stderr
+
+By default the console handler writes to **stdout**. Set `console.stream` to
+`stderr` to route log output to standard error instead:
+
+```python
+log = LogManager(config={"console": {"stream": "stderr"}})
+```
+
+```yaml
+logger:
+  defaults:
+    console:
+      stream: stderr  # stdout (default) | stderr
+```
+
+**When to use `stderr`.** A CLI that emits machine-readable data on stdout
+(JSON, CSV, a raw payload meant to be piped) is corrupted when log lines land
+on the same stream. Routing the console to stderr preserves the Unix separation
+between **data** (stdout) and **diagnostics** (stderr), so `mycli export | jq .`
+stays clean while logs stay visible in the terminal.
+
+The default (`stdout`) is unchanged and backward compatible. An invalid value
+raises `ConfigError` at startup rather than silently falling back to stdout,
+which would otherwise re-introduce the stream corruption you are trying to avoid.
 
 ### Theme customization
 

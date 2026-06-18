@@ -28,6 +28,7 @@ import subprocess
 from collections import OrderedDict
 from typing import Any
 
+from kstlib._shared.logging_helpers import log_trace
 from kstlib.config.exceptions import ConfigSopsError, ConfigSopsNotAvailableError
 from kstlib.limits import (
     DEFAULT_MAX_SOPS_CACHE_ENTRIES,
@@ -35,17 +36,6 @@ from kstlib.limits import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _log_trace(msg: str, *args: object) -> None:
-    """Log at TRACE level (custom level 5, below DEBUG).
-
-    Uses a lazy import to avoid the circular import chain
-    ``kstlib.logging.manager -> kstlib.config -> kstlib.config.sops``.
-    """
-    from kstlib.logging import TRACE_LEVEL
-
-    logger.log(TRACE_LEVEL, msg, *args)
 
 
 SOPS_FILE_PATTERNS: tuple[str, ...] = (
@@ -217,7 +207,7 @@ class SopsDecryptor:
         cached = self._cache.get(resolved)
         if cached and cached[0] == mtime:
             self._cache.move_to_end(resolved)
-            _log_trace("SOPS cache hit for: %s", path.name)
+            log_trace(logger, "SOPS cache hit for: %s", path.name)
             return cached[1]
 
         # Security: reject absolute/relative paths to prevent binary override via config
@@ -269,7 +259,7 @@ class SopsDecryptor:
         else:
             removed = self._cache.pop(path.resolve(), None)
             if removed:
-                _log_trace("SOPS cache entry removed: %s", path.name)
+                log_trace(logger, "SOPS cache entry removed: %s", path.name)
 
     @property
     def cache_size(self) -> int:

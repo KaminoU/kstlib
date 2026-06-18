@@ -6,6 +6,7 @@ including presets, configuration, output modes, and structured logging.
 
 import asyncio
 import logging
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ import pytest
 from box import Box
 from pytest import MonkeyPatch
 
+from kstlib.config import ConfigError
 from kstlib.logging import LogManager
 from kstlib.logging import manager as logging_manager_module
 from kstlib.logging.manager import TRACE_LEVEL
@@ -169,6 +171,51 @@ def test_logmanager_console_only() -> None:
 
     # Should have at least one handler (console)
     assert len(logger.handlers) > 0
+
+
+def test_logmanager_console_stream_default_stdout() -> None:
+    """Console routes to stdout when stream is unset (backward compatible default)."""
+    logger = LogManager(name="test_stream_default", config={"output": "console"})
+
+    assert logger.console.stderr is False
+    assert logger.console.file is sys.stdout
+
+
+def test_logmanager_console_stream_explicit_stdout() -> None:
+    """Explicit stream 'stdout' routes the console to stdout."""
+    config = {"output": "console", "console": {"stream": "stdout"}}
+
+    logger = LogManager(name="test_stream_stdout", config=config)
+
+    assert logger.console.stderr is False
+    assert logger.console.file is sys.stdout
+
+
+def test_logmanager_console_stream_stderr() -> None:
+    """Stream 'stderr' routes the console to stderr, keeping stdout clean for data."""
+    config = {"output": "console", "console": {"stream": "stderr"}}
+
+    logger = LogManager(name="test_stream_stderr", config=config)
+
+    assert logger.console.stderr is True
+    assert logger.console.file is sys.stderr
+
+
+def test_logmanager_console_stream_invalid_raises() -> None:
+    """An invalid stream fails fast with ConfigError (no silent stdout fallback)."""
+    config = {"output": "console", "console": {"stream": "stdrr"}}
+
+    with pytest.raises(ConfigError):
+        LogManager(name="test_stream_invalid", config=config)
+
+
+def test_logmanager_console_stream_config_overrides_preset() -> None:
+    """A config-level stream wins over the preset/default in the cascade."""
+    config = {"console": {"stream": "stderr"}}
+
+    logger = LogManager(name="test_stream_cascade", preset="dev", config=config)
+
+    assert logger.console.stderr is True
 
 
 def test_logmanager_both_outputs(tmp_path: Path) -> None:

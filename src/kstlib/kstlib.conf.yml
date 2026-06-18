@@ -175,6 +175,10 @@ logger:
       format: "::: PID %(process)d / TID %(thread)d ::: %(message)s"
       show_path: true
       tracebacks_show_locals: true
+      # Console routing: stdout (default) | stderr. Route to stderr when the CLI
+      # emits data/JSON on stdout, so logs do not corrupt the piped output
+      # (Unix data vs diagnostics separation). Invalid values raise ConfigError.
+      stream: stdout
 
     # File handler settings
     # Two configuration styles are supported:

@@ -19,6 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.3.0] - 2026-06-18
+
+### Added
+
+- **NEW `console.stream` config key** (`kstlib.logging`): route the Rich console
+  log output to `stdout` (default) or `stderr` via `kstlib.logging.console.stream`.
+  Routing logs to `stderr` keeps `stdout` clean for data/JSON in CLI pipelines
+  (Unix data/diagnostics separation). Backward compatible (absent key = `stdout`);
+  invalid values raise `ConfigError` (fail-fast).
+- **`--show-extracted` accepts multiple keys** on `kstlib rapi`:
+  `--show-extracted v1,v2` or `--show-extracted "v1 v2"` (comma/space separated)
+  prints a JSON object of the requested extracted keys. A single key still prints
+  its bare value; the bare flag still prints all keys.
+
 ## [3.2.0] - 2026-06-12
 
 ### Added
@@ -1476,7 +1490,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.2.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.3.0...HEAD
+[3.3.0]: https://github.com/KaminoU/kstlib/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/KaminoU/kstlib/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/KaminoU/kstlib/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/KaminoU/kstlib/compare/v2.7.1...v3.0.0

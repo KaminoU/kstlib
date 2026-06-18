@@ -20,6 +20,7 @@ from xml.etree.ElementTree import Element
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+from kstlib._shared.logging_helpers import log_trace
 from kstlib.transform.config import (
     ComposedPatchConfig,
     FilterConfig,
@@ -54,13 +55,6 @@ from kstlib.transform.validators import (
 _DEFAULT_XML_PRIM: PrimitiveConfig = PrimitiveConfig(name="xml")
 
 log = logging.getLogger(__name__)
-
-
-def _log_trace(msg: str, *args: object) -> None:
-    """Log at TRACE level (custom level 5, below DEBUG)."""
-    from kstlib.logging import TRACE_LEVEL
-
-    log.log(TRACE_LEVEL, msg, *args)
 
 
 #: Modules that are ALWAYS rejected by callable patches, regardless of
@@ -582,7 +576,8 @@ class TransformChain:
             # are intentionally not measured here : data may be a non-sized
             # object (Element tree) and computing len() defensively across
             # types would add complexity for little diagnostic value.
-            _log_trace(
+            log_trace(
+                log,
                 "Chain '%s' forward[%d]: %s",
                 self._config.name,
                 i,
@@ -627,7 +622,8 @@ class TransformChain:
         current = data
 
         for i, prim in enumerate(self._backward):
-            _log_trace(
+            log_trace(
+                log,
                 "Chain '%s' backward[%d]: %s",
                 self._config.name,
                 i,

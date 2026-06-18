@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
 import threading
-import time
 
 import pytest
 
@@ -80,11 +80,16 @@ class TestMetricsDecorator:
 class TestMetricsContextManager:
     """Tests for the metrics_context context manager."""
 
-    def test_measures_elapsed_time(self) -> None:
-        """Measure elapsed time in context."""
+    def test_measures_elapsed_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Context manager records the clock-reported elapsed time (clock mocked)."""
+        clock = itertools.count(1.0, 0.25)
+        monkeypatch.setattr(
+            "kstlib.metrics.decorators.time_module.perf_counter",
+            lambda: next(clock),
+        )
         with metrics_context("test", print_result=False) as m:
-            time.sleep(0.02)
-        assert m.elapsed_seconds >= 0.01
+            pass
+        assert m.elapsed_seconds == 0.25
 
     def test_result_has_formatted_time(self) -> None:
         """Result has formatted elapsed time."""
@@ -180,18 +185,22 @@ class TestStepTracking:
         assert len(records) == 3
         assert [r.number for r in records] == [1, 2, 3]
 
-    def test_step_tracks_elapsed_time(self) -> None:
-        """Step tracks elapsed time."""
+    def test_step_tracks_elapsed_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Step records the clock-reported elapsed time (clock mocked, no real sleep)."""
+        clock = itertools.count(1.0, 0.25)
+        monkeypatch.setattr(
+            "kstlib.metrics.decorators.time_module.perf_counter",
+            lambda: next(clock),
+        )
 
         @metrics(step=True, print_result=False)
-        def slow_step() -> None:
-            time.sleep(0.05)
+        def tracked_step() -> None:
+            pass
 
-        slow_step()
+        tracked_step()
 
         records = get_metrics()
-        # Allow 10% tolerance for timing variance (especially on Windows)
-        assert records[0].elapsed_seconds >= 0.045
+        assert records[0].elapsed_seconds == 0.25
 
     def test_clear_metrics_resets_counter(self) -> None:
         """clear_metrics resets the step counter."""
@@ -329,36 +338,47 @@ class TestMetricsRecord:
 class TestStopwatch:
     """Tests for the Stopwatch class."""
 
-    def test_start_and_stop(self) -> None:
-        """Start and stop the stopwatch."""
+    def test_start_and_stop(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Stopwatch returns the clock-reported elapsed on stop (clock mocked)."""
+        clock = itertools.count(1.0, 0.25)
+        monkeypatch.setattr(
+            "kstlib.metrics.decorators.time_module.perf_counter",
+            lambda: next(clock),
+        )
         sw = Stopwatch("Test")
         sw.start()
-        time.sleep(0.05)
         elapsed = sw.stop()
-        # Use tolerance for timing variations on Windows
-        assert elapsed >= 0.04
+        assert elapsed == 0.25
 
-    def test_lap_recording(self) -> None:
-        """Record laps."""
+    def test_lap_recording(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Laps record the clock-reported interval between calls (clock mocked)."""
+        clock = itertools.count(1.0, 0.25)
+        monkeypatch.setattr(
+            "kstlib.metrics.decorators.time_module.perf_counter",
+            lambda: next(clock),
+        )
         sw = Stopwatch("Test")
         sw.start()
-        time.sleep(0.01)
         sw.lap("First", print_result=False)
-        time.sleep(0.01)
         sw.lap("Second", print_result=False)
 
         laps = sw.laps
         assert len(laps) == 2
         assert laps[0][0] == "First"
+        assert laps[0][1] == 0.25
         assert laps[1][0] == "Second"
+        assert laps[1][1] == 0.25
 
-    def test_total_elapsed(self) -> None:
-        """Get total elapsed time."""
+    def test_total_elapsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """total_elapsed returns the clock delta since start (clock mocked)."""
+        clock = itertools.count(1.0, 0.25)
+        monkeypatch.setattr(
+            "kstlib.metrics.decorators.time_module.perf_counter",
+            lambda: next(clock),
+        )
         sw = Stopwatch("Test")
         sw.start()
-        time.sleep(0.05)
-        # Use tolerance for timing variations on Windows
-        assert sw.total_elapsed >= 0.04
+        assert sw.total_elapsed == 0.25
 
     def test_reset(self) -> None:
         """Reset the stopwatch."""
@@ -621,13 +641,20 @@ class TestStopwatchExtended:
         captured = capsys.readouterr()
         assert "No laps" in captured.err
 
-    def test_summary_with_laps(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Summary prints lap information."""
+    def test_summary_with_laps(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Summary prints lap information (clock mocked, no real sleep)."""
+        clock = itertools.count(1.0, 0.25)
+        monkeypatch.setattr(
+            "kstlib.metrics.decorators.time_module.perf_counter",
+            lambda: next(clock),
+        )
         sw = Stopwatch("Pipeline")
         sw.start()
-        time.sleep(0.01)
         sw.lap("Step 1", print_result=False)
-        time.sleep(0.01)
         sw.lap("Step 2", print_result=False)
         sw.stop()
         sw.summary(show_percentages=True)

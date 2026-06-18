@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from typing_extensions import Self
 
+from kstlib._shared.logging_helpers import log_trace
 from kstlib.db.exceptions import TransactionError
 from kstlib.db.pool import ConnectionPool, PoolStats
 
@@ -33,13 +34,6 @@ log = logging.getLogger(__name__)
 # to avoid noise without losing the leading clause that tells you which
 # table / operation is involved. Parameters are NEVER logged regardless.
 _SQL_TRACE_TRUNCATE = 200
-
-
-def _log_trace(msg: str, *args: object) -> None:
-    """Log at TRACE level (custom level 5, below DEBUG)."""
-    from kstlib.logging import TRACE_LEVEL
-
-    log.log(TRACE_LEVEL, msg, *args)
 
 
 def _truncate_sql(sql: str, limit: int = _SQL_TRACE_TRUNCATE) -> str:
@@ -254,7 +248,7 @@ class AsyncDatabase:
         # Sanitization invariant : log the truncated SQL only, NEVER the
         # parameters tuple (would leak PII / credentials in WHERE/INSERT
         # values). Truncation prevents giant DDL from drowning the trace.
-        _log_trace("[DB] Execute: %s (params=%s)", _truncate_sql(sql), "yes" if parameters else "no")
+        log_trace(log, "[DB] Execute: %s (params=%s)", _truncate_sql(sql), "yes" if parameters else "no")
         pool = self._ensure_pool()
         async with pool.connection() as conn:
             if parameters:

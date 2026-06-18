@@ -774,7 +774,7 @@ exclusive (at most one per call):
 | `--show-ids` | heuristic | You want every id from a collection, one per line for piping. Empty result is OK (exit 0). |
 | `--pick <jmespath>` | ad-hoc | You know the exact path and want one value. You spell out the JMESPath. Exits 1 if empty. |
 | `--extract key=<jmespath>` | ad-hoc, named | You want several named values at once (repeatable). Empty result is OK (exit 0). |
-| `--show-extracted [key]` | declared | The endpoint declares an `extract:` map and you want a declared key by its business name, without re-typing the JMESPath. The bare flag prints all declared keys as a JSON dict. Exits 1 when the key (or the whole directive) is missing or the expression matched nothing; an empty collection is OK (exit 0). |
+| `--show-extracted [key[,key...]]` | declared | The endpoint declares an `extract:` map and you want declared keys by their business names, without re-typing the JMESPath. **One key** prints that value and exits 1 if it is missing or its expression matched nothing (like `--pick`); an empty collection is OK (exit 0). **Several keys** (comma or space separated) print a JSON object subset (exit 0): a key whose expression matched nothing appears as `null`, only an unknown key fails. **The bare flag** prints all declared keys as a JSON dict. A missing `extract:` directive always fails. Quote keys with spaces (`"v1 v2"`) or join with commas (`v1,v2`). |
 
 ```bash
 # Heuristic: id of a single resource (pipeable, exit 1 if missing)
@@ -791,6 +791,9 @@ kstlib rapi github.user --extract login=login --extract id=id
 
 # Declared: a key from the endpoint extract: map above, by business name
 kstlib rapi jobs.job-status abc --show-extracted state
+
+# Declared: a subset of keys, as a JSON object (comma or quoted spaces)
+kstlib rapi jobs.job-status abc --show-extracted state,progress
 
 # Declared: every key from the extract: map, as a JSON dict
 kstlib rapi jobs.job-status abc --show-extracted
