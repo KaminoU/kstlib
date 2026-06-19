@@ -77,7 +77,7 @@ class TestOpsAttach:
         with patch.object(attach_mod, "get_session_manager", return_value=mock_manager):
             result = runner.invoke(app, ["ops", "attach", "ghost"])
         assert result.exit_code == 1
-        assert "not found" in result.stdout.lower()
+        assert "not found" in result.stderr.lower()
         mock_manager.attach.assert_not_called()
 
     def test_attach_session_not_running(self) -> None:
@@ -86,7 +86,7 @@ class TestOpsAttach:
         with patch.object(attach_mod, "get_session_manager", return_value=mock_manager):
             result = runner.invoke(app, ["ops", "attach", "stopped"])
         assert result.exit_code == 1
-        assert "not running" in result.stdout.lower()
+        assert "not running" in result.stderr.lower()
         mock_manager.attach.assert_not_called()
 
     def test_attach_raises_session_not_found_error(self) -> None:
@@ -96,7 +96,7 @@ class TestOpsAttach:
         with patch.object(attach_mod, "get_session_manager", return_value=mock_manager):
             result = runner.invoke(app, ["ops", "attach", "dev"])
         assert result.exit_code == 1
-        assert "not found" in result.stdout.lower()
+        assert "not found" in result.stderr.lower()
 
     def test_attach_raises_ops_error(self) -> None:
         """Attach handles OpsError raised during attach()."""
@@ -105,7 +105,7 @@ class TestOpsAttach:
         with patch.object(attach_mod, "get_session_manager", return_value=mock_manager):
             result = runner.invoke(app, ["ops", "attach", "dev"])
         assert result.exit_code == 1
-        assert "terminal not interactive" in result.stdout.lower()
+        assert "terminal not interactive" in result.stderr.lower()
 
     def test_attach_help(self) -> None:
         """Attach --help displays usage information."""
@@ -164,4 +164,4 @@ class TestOpsAttachSocketDiscovery:
         ):
             result = runner.invoke(app, ["ops", "attach", "ghost"])
         assert result.exit_code == 1
-        assert "not found" in result.stdout.lower()
+        assert "not found" in result.stderr.lower()

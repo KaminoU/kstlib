@@ -462,6 +462,32 @@ class MinifyRequiresRawError(RapiError):
         super().__init__(message or self.DEFAULT_MESSAGE)
 
 
+class PathParameterError(RapiError, ValueError):
+    """Raised when a path parameter is missing or contains an invalid value.
+
+    Covers both failure modes of :meth:`EndpointConfig.build_path`: a required
+    ``{name}`` / ``{0}`` placeholder has no supplied value, or a supplied value
+    is rejected by validation (null bytes, control characters, path traversal).
+
+    Subclasses :class:`ValueError` as well as :class:`RapiError` so callers that
+    catch ``ValueError`` keep working while the CLI routes it through the typed
+    RAPI error chain for a clean message instead of a raw traceback.
+
+    Attributes:
+        message: Human-readable error message.
+        details: Additional context (e.g. the offending parameter name).
+
+    Examples:
+        >>> raise PathParameterError("invalid path parameter")
+        Traceback (most recent call last):
+        ...
+        kstlib.rapi.exceptions.PathParameterError: invalid path parameter
+        >>> isinstance(PathParameterError("x"), ValueError)
+        True
+
+    """
+
+
 __all__ = [
     "ConfirmationRequiredError",
     "CredentialError",
@@ -470,6 +496,7 @@ __all__ = [
     "EndpointNotFoundError",
     "EnvVarError",
     "MinifyRequiresRawError",
+    "PathParameterError",
     "RapiError",
     "RequestError",
     "ResponseTooLargeError",

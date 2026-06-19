@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.pretty import Pretty
 
 console = Console()
+err_console = Console(stderr=True)
 
 
 class CommandStatus(str, Enum):
@@ -39,17 +40,23 @@ STYLE_MAP = {
 
 
 def render_result(result: CommandResult) -> None:
-    """Render a command result using Rich components."""
+    """Render a command result using Rich components.
+
+    ERROR results render to stderr (keeping stdout clean for shell capture);
+    OK and WARNING results render to stdout.
+    """
     style = STYLE_MAP[result.status]
-    console.print(Panel(result.message, title=result.status.value.upper(), style=style, border_style=style))
+    target = err_console if result.status is CommandStatus.ERROR else console
+    target.print(Panel(result.message, title=result.status.value.upper(), style=style, border_style=style))
     if result.payload is not None:
-        console.print(Pretty(result.payload))
+        target.print(Pretty(result.payload))
 
 
 def emit_result(result: CommandResult, quiet: bool) -> None:
     """Output a command result honoring the quiet flag."""
     if quiet:
-        console.print(result.message, style=STYLE_MAP[result.status])
+        target = err_console if result.status is CommandStatus.ERROR else console
+        target.print(result.message, style=STYLE_MAP[result.status])
     else:
         render_result(result)
 
@@ -80,6 +87,7 @@ __all__ = [
     "CommandStatus",
     "console",
     "emit_result",
+    "err_console",
     "exit_error",
     "exit_with_result",
     "render_result",

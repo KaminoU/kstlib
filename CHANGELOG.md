@@ -19,6 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.3.1] - 2026-06-20
+
+### Changed
+
+- **CLI error output now goes to stderr** (previously stdout). Command errors,
+  validation failures and tracebacks render to stderr across all `kstlib` CLI
+  commands, so stdout stays clean for data/JSON in shell pipelines (Unix
+  data/diagnostics separation).
+- Locked `cryptography` to 49.0.0 (CI now tests the version users already
+  resolve via the open `>=46.0.7` floor; pulls the newer bundled OpenSSL). The
+  `pyproject.toml` floor is unchanged.
+
+### Fixed
+
+- **`kstlib rapi` no longer prints a raw traceback** on a missing or invalid
+  path parameter: a clear error (exit code 1) is rendered instead
+  (`httpx.InvalidURL` and missing-parameter errors are caught). Path parameters
+  now reject control characters (e.g. newline) in addition to null bytes and
+  path traversal.
+
 ## [3.3.0] - 2026-06-18
 
 ### Added
@@ -1490,7 +1510,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.3.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.3.1...HEAD
+[3.3.1]: https://github.com/KaminoU/kstlib/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/KaminoU/kstlib/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/KaminoU/kstlib/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/KaminoU/kstlib/compare/v3.0.0...v3.1.0

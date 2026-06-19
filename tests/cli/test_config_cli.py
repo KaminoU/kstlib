@@ -61,7 +61,7 @@ def test_export_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
     result = runner.invoke(app, ["config", "export", "--out", str(target_dir)])
 
     assert result.exit_code == 1
-    assert "Use --force to overwrite" in result.stdout
+    assert "Use --force to overwrite" in result.stderr
     assert destination.read_text(encoding="utf-8") == "placeholder"
 
 
@@ -109,7 +109,7 @@ def test_export_section_missing_fails() -> None:
     result = runner.invoke(app, ["config", "export", "--section", "does.not.exist"])
 
     assert result.exit_code == 1
-    assert "Section" in result.stdout
+    assert "Section" in result.stderr
 
 
 def test_export_section_expanduser(tmp_path: Path) -> None:
@@ -170,7 +170,7 @@ def test_stdout_and_out_cannot_be_combined(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 1
-    assert "Cannot combine --stdout" in result.stdout
+    assert "Cannot combine --stdout" in result.stderr
 
 
 def test_export_stdout_empty_content_reports_error(monkeypatch: MonkeyPatch) -> None:
@@ -184,7 +184,7 @@ def test_export_stdout_empty_content_reports_error(monkeypatch: MonkeyPatch) -> 
     result = runner.invoke(app, ["config", "export", "--stdout"])
 
     assert result.exit_code == 1
-    assert "empty content" in result.stdout
+    assert "empty content" in result.stderr
 
 
 def test_export_missing_destination_reports_error(monkeypatch: MonkeyPatch) -> None:
@@ -198,4 +198,4 @@ def test_export_missing_destination_reports_error(monkeypatch: MonkeyPatch) -> N
     result = runner.invoke(app, ["config", "export"])
 
     assert result.exit_code == 1
-    assert "missing destination file" in result.stdout
+    assert "missing destination file" in result.stderr

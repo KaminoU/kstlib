@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Annotated
 import typer
 from rich.table import Table
 
-from kstlib.cli.common import console
+from kstlib.cli.common import console, err_console
 
 if TYPE_CHECKING:
     from kstlib.rapi.config import ApiConfig, EndpointConfig
@@ -228,8 +228,8 @@ def list_endpoints(
     # Filter by API name if specified
     if api:
         if api not in apis:
-            console.print(f"[red]API '{api}' not found.[/]")
-            console.print(f"[dim]Available APIs: {', '.join(apis.keys())}[/]")
+            err_console.print(f"[red]API '{api}' not found.[/]")
+            err_console.print(f"[dim]Available APIs: {', '.join(apis.keys())}[/]")
             raise typer.Exit(code=1)
         apis = {api: apis[api]}
 

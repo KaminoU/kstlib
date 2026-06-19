@@ -470,7 +470,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show"])
 
         assert result.exit_code == 1
-        assert "not authenticated" in result.stdout.lower() or "login" in result.stdout.lower()
+        assert "not authenticated" in result.stderr.lower() or "login" in result.stderr.lower()
 
     # ── --header flag ─────────────────────────────────────────────────────────
 
@@ -550,7 +550,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--show-refresh"])
 
         assert result.exit_code == 1
-        assert "refresh" in result.stdout.lower()
+        assert "refresh" in result.stderr.lower()
 
     def test_token_header_with_show_refresh_incompatible(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with error when --header and --show-refresh used together."""
@@ -569,7 +569,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--header", "--show-refresh"])
 
         assert result.exit_code == 1
-        assert "header" in result.stdout.lower() or "refresh" in result.stdout.lower()
+        assert "header" in result.stderr.lower() or "refresh" in result.stderr.lower()
 
     # ── --refresh flag ────────────────────────────────────────────────────────
 
@@ -611,7 +611,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--refresh"])
 
         assert result.exit_code == 1
-        assert "not authenticated" in result.stdout.lower() or "login" in result.stdout.lower()
+        assert "not authenticated" in result.stderr.lower() or "login" in result.stderr.lower()
 
     def test_token_refresh_flag_no_refresh_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with error when --refresh used but token has no refresh_token."""
@@ -630,7 +630,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--refresh"])
 
         assert result.exit_code == 1
-        assert "refresh" in result.stdout.lower()
+        assert "refresh" in result.stderr.lower()
 
     def test_token_refresh_flag_refresh_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with error when provider.refresh() raises an exception."""
@@ -650,7 +650,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--refresh"])
 
         assert result.exit_code == 1
-        assert "refresh failed" in result.stdout.lower() or "refresh" in result.stdout.lower()
+        assert "refresh failed" in result.stderr.lower() or "refresh" in result.stderr.lower()
 
     # ── --copy flag ───────────────────────────────────────────────────────────
 
@@ -702,7 +702,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--copy"])
 
         assert result.exit_code == 1
-        assert "pyperclip" in result.stdout.lower() or "clipboard" in result.stdout.lower()
+        assert "pyperclip" in result.stderr.lower() or "clipboard" in result.stderr.lower()
 
     def test_token_copy_clipboard_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with error when clipboard operation itself fails."""
@@ -726,7 +726,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--copy"])
 
         assert result.exit_code == 1
-        assert "clipboard" in result.stdout.lower() or "failed" in result.stdout.lower()
+        assert "clipboard" in result.stderr.lower() or "failed" in result.stderr.lower()
 
     # ── --decode flag ─────────────────────────────────────────────────────────
 
@@ -773,7 +773,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--decode"])
 
         assert result.exit_code == 1
-        assert "jwt" in result.stdout.lower() or "format" in result.stdout.lower()
+        assert "jwt" in result.stderr.lower() or "format" in result.stderr.lower()
 
     # ── --json flag ───────────────────────────────────────────────────────────
 
@@ -821,7 +821,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--json"])
 
         assert result.exit_code == 1
-        assert "decode" in result.stdout.lower() or "json" in result.stdout.lower()
+        assert "decode" in result.stderr.lower() or "json" in result.stderr.lower()
 
     # ── incompatible flag combinations ────────────────────────────────────────
 
@@ -849,7 +849,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--decode", "--header"])
 
         assert result.exit_code == 1
-        assert "decode" in result.stdout.lower() or "header" in result.stdout.lower()
+        assert "decode" in result.stderr.lower() or "header" in result.stderr.lower()
 
     def test_token_decode_and_copy_incompatible(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exits with error when --decode and --copy used together."""
@@ -879,7 +879,7 @@ class TestAuthToken:
         result = runner.invoke(auth_app, ["token", "show", "--decode", "--copy"])
 
         assert result.exit_code == 1
-        assert "decode" in result.stdout.lower() or "copy" in result.stdout.lower()
+        assert "decode" in result.stderr.lower() or "copy" in result.stderr.lower()
 
 
 class TestExtractCodeFromInput:
@@ -1156,7 +1156,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login", "--manual"])
 
         assert result.exit_code != 0
-        assert "no input" in result.stdout.lower()
+        assert "no input" in result.stderr.lower()
 
     def test_login_manual_invalid_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Manual mode exits with error when code cannot be extracted."""
@@ -1180,7 +1180,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login", "--manual"])
 
         assert result.exit_code != 0
-        assert "authorization code" in result.stdout.lower() or "could not extract" in result.stdout.lower()
+        assert "authorization code" in result.stderr.lower() or "could not extract" in result.stderr.lower()
 
     def test_login_manual_state_mismatch(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Manual mode exits with error when state parameter does not match."""
@@ -1204,7 +1204,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login", "--manual"])
 
         assert result.exit_code != 0
-        assert "state mismatch" in result.stdout.lower() or "csrf" in result.stdout.lower()
+        assert "state mismatch" in result.stderr.lower() or "csrf" in result.stderr.lower()
 
     def test_login_manual_token_exchange_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Manual mode exits with error when token exchange fails."""
@@ -1230,7 +1230,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login", "--manual"])
 
         assert result.exit_code != 0
-        assert "token exchange failed" in result.stdout.lower()
+        assert "token exchange failed" in result.stderr.lower()
 
     def test_login_manual_quiet_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Manual mode with --quiet suppresses verbose output."""
@@ -1427,7 +1427,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login"])
 
         assert result.exit_code != 0
-        assert "authorization failed" in result.stdout.lower() or "user denied" in result.stdout.lower()
+        assert "authorization failed" in result.stderr.lower() or "user denied" in result.stderr.lower()
 
     def test_login_callback_no_code_received(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Callback mode exits with error when no authorization code is received."""
@@ -1459,7 +1459,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login"])
 
         assert result.exit_code != 0
-        assert "no authorization code" in result.stdout.lower()
+        assert "no authorization code" in result.stderr.lower()
 
     def test_login_callback_state_mismatch(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Callback mode exits with error when returned state does not match."""
@@ -1490,7 +1490,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login"])
 
         assert result.exit_code != 0
-        assert "state mismatch" in result.stdout.lower() or "csrf" in result.stdout.lower()
+        assert "state mismatch" in result.stderr.lower() or "csrf" in result.stderr.lower()
 
     def test_login_callback_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Callback mode exits with error when waiting for callback times out."""
@@ -1516,7 +1516,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login"])
 
         assert result.exit_code != 0
-        assert "timed out" in result.stdout.lower()
+        assert "timed out" in result.stderr.lower()
 
     def test_login_callback_quiet_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Callback mode with --quiet suppresses progress messages."""
@@ -1650,7 +1650,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login"])
 
         assert result.exit_code != 0
-        assert "token exchange failed" in result.stdout.lower()
+        assert "token exchange failed" in result.stderr.lower()
 
     def test_login_auth_error_at_top_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """AuthError raised during login is caught and displayed."""
@@ -1673,7 +1673,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login"])
 
         assert result.exit_code != 0
-        assert "authentication failed" in result.stdout.lower()
+        assert "authentication failed" in result.stderr.lower()
 
     def test_login_keyboard_interrupt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """KeyboardInterrupt during login is caught and shows cancellation message."""
@@ -1699,7 +1699,7 @@ class TestAuthLogin:
         result = runner.invoke(auth_app, ["login"])
 
         assert result.exit_code != 0
-        assert "cancelled" in result.stdout.lower()
+        assert "cancelled" in result.stderr.lower()
 
 
 class TestAuthCheck:
@@ -1727,7 +1727,7 @@ class TestAuthCheck:
         result = runner.invoke(auth_app, ["check"])
 
         assert result.exit_code == 1
-        assert "not authenticated" in result.stdout.lower() or "login" in result.stdout.lower()
+        assert "not authenticated" in result.stderr.lower() or "login" in result.stderr.lower()
 
     def test_check_with_explicit_token_invalid(self) -> None:
         """Check with invalid --token exits with code 1."""

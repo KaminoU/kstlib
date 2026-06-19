@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 from rich.panel import Panel
 
-from kstlib.cli.common import console
+from kstlib.cli.common import console, err_console
 from kstlib.config.export import (
     ConfigExportError,
     ConfigExportOptions,
@@ -59,18 +59,18 @@ def export_command(
     try:
         result = export_configuration(options)
     except ConfigExportError as exc:
-        console.print(f"[bold red]{exc}[/bold red]")
+        err_console.print(f"[bold red]{exc}[/bold red]")
         raise typer.Exit(code=1) from exc
 
     if stdout:
         if result.content is None:
-            console.print("[bold red]Export failed: empty content.[/bold red]")
+            err_console.print("[bold red]Export failed: empty content.[/bold red]")
             raise typer.Exit(code=1)
         console.print(result.content)
         return
 
     if result.destination is None:
-        console.print("[bold red]Export failed: missing destination file.[/bold red]")
+        err_console.print("[bold red]Export failed: missing destination file.[/bold red]")
         raise typer.Exit(code=1)
     console.print(
         Panel.fit(

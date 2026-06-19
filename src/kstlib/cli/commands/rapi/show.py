@@ -11,7 +11,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
-from kstlib.cli.common import console
+from kstlib.cli.common import console, err_console
 from kstlib.limits import HARD_MAX_DISPLAY_VALUE_LENGTH, HARD_MAX_ENDPOINT_REF_LENGTH
 from kstlib.rapi import EndpointNotFoundError
 from kstlib.rapi.config import _PATH_PARAM_PATTERN
@@ -33,12 +33,12 @@ def _truncate(value: str, max_length: int = HARD_MAX_DISPLAY_VALUE_LENGTH) -> st
 def _validate_endpoint_ref(endpoint_ref: str) -> None:
     """Validate endpoint reference for security (deep defense)."""
     if len(endpoint_ref) > HARD_MAX_ENDPOINT_REF_LENGTH:
-        console.print(f"[red]Endpoint reference too long: {len(endpoint_ref)} > {HARD_MAX_ENDPOINT_REF_LENGTH}[/]")
+        err_console.print(f"[red]Endpoint reference too long: {len(endpoint_ref)} > {HARD_MAX_ENDPOINT_REF_LENGTH}[/]")
         raise typer.Exit(code=1)
 
     if not _ENDPOINT_REF_PATTERN.match(endpoint_ref):
-        console.print("[red]Endpoint reference contains invalid characters.[/]")
-        console.print("[dim]Allowed: alphanumeric, underscore, dot, hyphen[/]")
+        err_console.print("[red]Endpoint reference contains invalid characters.[/]")
+        err_console.print("[dim]Allowed: alphanumeric, underscore, dot, hyphen[/]")
         raise typer.Exit(code=1)
 
 
@@ -183,8 +183,8 @@ def show_endpoint(
     try:
         api_config, ep_config = config_manager.resolve(endpoint_ref)
     except EndpointNotFoundError as e:
-        console.print(f"[red]Endpoint not found: {endpoint_ref}[/]")
-        console.print(f"[dim]Available APIs: {', '.join(e.searched_apis)}[/]")
+        err_console.print(f"[red]Endpoint not found: {endpoint_ref}[/]")
+        err_console.print(f"[dim]Available APIs: {', '.join(e.searched_apis)}[/]")
         raise typer.Exit(code=1) from e
 
     path_params = _PATH_PARAM_PATTERN.findall(ep_config.path)

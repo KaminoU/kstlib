@@ -17,6 +17,7 @@ from kstlib.rapi.exceptions import (
     EndpointAmbiguousError,
     EndpointNotFoundError,
     EnvVarError,
+    PathParameterError,
     SafeguardMissingError,
 )
 
@@ -159,6 +160,66 @@ class TestEndpointConfig:
         )
         with pytest.raises(ValueError, match="Path traversal"):
             config.build_path("../secret")
+
+    @pytest.mark.parametrize("control_char", ["\n", "\r", "\t", "\x01", "\x1f", "\x7f"])
+    def test_build_path_rejects_control_chars(self, control_char: str) -> None:
+        """Reject C0 control characters and DEL in parameter values."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/users/{id}",
+        )
+        with pytest.raises(PathParameterError, match="Control characters"):
+            config.build_path(id=f"abc{control_char}def")
+
+    def test_build_path_rejects_newline(self) -> None:
+        """Reject a newline in a parameter value (regression for the embedded-newline URL crash)."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/users/{id}",
+        )
+        with pytest.raises(PathParameterError, match="Control characters"):
+            config.build_path(id="123\n456")
+
+    def test_build_path_rejects_control_char_positional(self) -> None:
+        """Reject control characters in positional parameter values."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/items/{0}",
+        )
+        with pytest.raises(PathParameterError, match="Control characters"):
+            config.build_path("a\nb")
+
+    def test_build_path_accepts_space_boundary(self) -> None:
+        """Accept a space (0x20): proves the control-char floor is < 0x20, not <=."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/search/{q}",
+        )
+        assert config.build_path(q="a b") == "/search/a b"
+
+    def test_build_path_missing_param_raises_path_parameter_error(self) -> None:
+        """A missing required parameter raises PathParameterError."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/users/{id}",
+        )
+        with pytest.raises(PathParameterError, match="Missing parameter"):
+            config.build_path()
+
+    def test_path_parameter_error_is_value_error(self) -> None:
+        """PathParameterError subclasses ValueError for backward compatibility."""
+        config = EndpointConfig(
+            name="test",
+            api_name="api",
+            path="/users/{id}",
+        )
+        with pytest.raises(ValueError, match="Control characters"):
+            config.build_path(id="x\ny")
 
     def test_safeguard_none_by_default(self) -> None:
         """Safeguard is None by default."""

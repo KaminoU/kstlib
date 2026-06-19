@@ -6,6 +6,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
+import httpx
 import typer
 from typer.core import TyperCommand
 
@@ -16,7 +17,9 @@ from kstlib.rapi import (
     CredentialError,
     EndpointAmbiguousError,
     EndpointNotFoundError,
+    PathParameterError,
     RapiClient,
+    RapiError,
     RapiResponse,
     RequestError,
     ResponseTooLargeError,
@@ -739,6 +742,44 @@ def _render_response(
         _format_output(response, fmt, quiet, out, raw=raw, minify=minify)
 
 
+def _payload(key: str, value: object) -> dict[str, Any] | None:
+    """Build a single-key error payload, or None when the value is empty."""
+    return {key: value} if value else None
+
+
+def _build_call_error_result(e: RapiError | httpx.InvalidURL) -> CommandResult:
+    """Map a failed rapi call error to its ERROR CommandResult.
+
+    Handles every exception caught by the ``call`` command except
+    ``AuthExpiredError`` (which keeps its dedicated exit-code-4 handling).
+    Each branch preserves the exact message and payload of the original
+    per-type handler.
+    """
+    payload: dict[str, Any] | None = None
+    if isinstance(e, EndpointNotFoundError):
+        message = f"Endpoint not found: {e.endpoint_ref}"
+        payload = _payload("searched_apis", e.searched_apis)
+    elif isinstance(e, EndpointAmbiguousError):
+        message = f"Ambiguous endpoint: '{e.endpoint_name}' exists in multiple APIs"
+        payload = {"matching_apis": e.matching_apis}
+    elif isinstance(e, ServerNotFoundError):
+        message = f"Server profile not found: '{e.server_name}'. Available: {e.available or '(none configured)'}"
+        payload = _payload("available_servers", e.available)
+    elif isinstance(e, CredentialError):
+        message = f"Credential error: {e}"
+        payload = _payload("credential_name", e.credential_name)
+    elif isinstance(e, RequestError):
+        message = f"Request failed: {e}"
+        payload = {"status_code": e.status_code, "retryable": e.retryable}
+    elif isinstance(e, ResponseTooLargeError):
+        message = f"Response too large: {e.response_size} bytes (max: {e.max_size})"
+    elif isinstance(e, PathParameterError):
+        message = f"Path parameter error: {e}"
+    else:
+        message = f"Invalid URL: {e}"
+    return CommandResult(status=CommandStatus.ERROR, message=message, payload=payload)
+
+
 def call(
     endpoint: Annotated[
         str,
@@ -965,78 +1006,19 @@ def call(
         if not response.ok:
             raise typer.Exit(code=1)
 
-    except EndpointNotFoundError as e:
-        exit_with_result(
-            CommandResult(
-                status=CommandStatus.ERROR,
-                message=f"Endpoint not found: {e.endpoint_ref}",
-                payload={"searched_apis": e.searched_apis} if e.searched_apis else None,
-            ),
-            quiet=quiet,
-            exit_code=1,
-            cause=e,
-        )
-    except EndpointAmbiguousError as e:
-        exit_with_result(
-            CommandResult(
-                status=CommandStatus.ERROR,
-                message=f"Ambiguous endpoint: '{e.endpoint_name}' exists in multiple APIs",
-                payload={"matching_apis": e.matching_apis},
-            ),
-            quiet=quiet,
-            exit_code=1,
-            cause=e,
-        )
-    except ServerNotFoundError as e:
-        exit_with_result(
-            CommandResult(
-                status=CommandStatus.ERROR,
-                message=(
-                    f"Server profile not found: '{e.server_name}'. Available: {e.available or '(none configured)'}"
-                ),
-                payload={"available_servers": e.available} if e.available else None,
-            ),
-            quiet=quiet,
-            exit_code=1,
-            cause=e,
-        )
-    except CredentialError as e:
-        exit_with_result(
-            CommandResult(
-                status=CommandStatus.ERROR,
-                message=f"Credential error: {e}",
-                payload={"credential_name": e.credential_name} if e.credential_name else None,
-            ),
-            quiet=quiet,
-            exit_code=1,
-            cause=e,
-        )
     except AuthExpiredError as e:
         _handle_auth_expired_error(e, quiet=quiet)
-    except RequestError as e:
-        exit_with_result(
-            CommandResult(
-                status=CommandStatus.ERROR,
-                message=f"Request failed: {e}",
-                payload={
-                    "status_code": e.status_code,
-                    "retryable": e.retryable,
-                },
-            ),
-            quiet=quiet,
-            exit_code=1,
-            cause=e,
-        )
-    except ResponseTooLargeError as e:
-        exit_with_result(
-            CommandResult(
-                status=CommandStatus.ERROR,
-                message=f"Response too large: {e.response_size} bytes (max: {e.max_size})",
-            ),
-            quiet=quiet,
-            exit_code=1,
-            cause=e,
-        )
+    except (
+        EndpointNotFoundError,
+        EndpointAmbiguousError,
+        ServerNotFoundError,
+        CredentialError,
+        RequestError,
+        ResponseTooLargeError,
+        PathParameterError,
+        httpx.InvalidURL,
+    ) as e:
+        exit_with_result(_build_call_error_result(e), quiet=quiet, exit_code=1, cause=e)
 
 
 __all__ = ["call"]

@@ -164,7 +164,7 @@ def test_doctor_fails_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runner:
     result = runner.invoke(secrets_app, ["doctor"])
 
     assert result.exit_code == 1
-    assert "Executable" in result.stdout
+    assert "Executable" in result.stderr
 
 
 def test_encrypt_writes_to_stdout(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
@@ -197,7 +197,7 @@ def test_encrypt_errors_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runne
     result = runner.invoke(secrets_app, ["encrypt", str(cleartext)])
 
     assert result.exit_code == 1
-    assert "SOPS binary" in result.stdout
+    assert "SOPS binary" in result.stderr
 
 
 def test_decrypt_writes_to_stdout(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
@@ -229,7 +229,7 @@ def test_decrypt_errors_when_sops_missing(monkeypatch: pytest.MonkeyPatch, runne
     result = runner.invoke(secrets_app, ["decrypt", str(encrypted)])
 
     assert result.exit_code == 1
-    assert "SOPS binary" in result.stdout
+    assert "SOPS binary" in result.stderr
 
 
 def test_doctor_warns_when_config_missing(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
@@ -328,7 +328,7 @@ def test_encrypt_refuses_to_overwrite_without_force(
     result = runner.invoke(secrets_app, ["encrypt", str(cleartext), "--out", str(output)])
 
     assert result.exit_code == 1
-    assert "Refuse to overwrite" in result.stdout
+    assert "Refuse to overwrite" in result.stderr
 
 
 def test_encrypt_reports_non_zero_exit(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
@@ -342,7 +342,7 @@ def test_encrypt_reports_non_zero_exit(monkeypatch: pytest.MonkeyPatch, runner: 
     result = runner.invoke(secrets_app, ["encrypt", str(cleartext)])
 
     assert result.exit_code == 1
-    assert "boom" in result.stdout
+    assert "boom" in result.stderr
 
 
 def test_decrypt_refuses_to_overwrite_without_force(
@@ -365,7 +365,7 @@ def test_decrypt_refuses_to_overwrite_without_force(
     result = runner.invoke(secrets_app, ["decrypt", str(encrypted), "--out", str(output)])
 
     assert result.exit_code == 1
-    assert "Refuse to overwrite" in result.stdout
+    assert "Refuse to overwrite" in result.stderr
 
 
 def test_decrypt_reports_non_zero_exit(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
@@ -379,7 +379,7 @@ def test_decrypt_reports_non_zero_exit(monkeypatch: pytest.MonkeyPatch, runner: 
     result = runner.invoke(secrets_app, ["decrypt", str(encrypted)])
 
     assert result.exit_code == 1
-    assert "bad decrypt" in result.stdout
+    assert "bad decrypt" in result.stderr
 
 
 def test_encrypt_quiet_suppresses_output(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
@@ -468,7 +468,7 @@ def test_shred_command_reports_failure(monkeypatch: pytest.MonkeyPatch, runner: 
     result = runner.invoke(secrets_app, ["shred", str(target), "--force"])
 
     assert result.exit_code == 1
-    assert "Failed intentionally" in result.stdout
+    assert "Failed intentionally" in result.stderr
 
 
 def test_encrypt_shred_failure_aborts(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
@@ -493,7 +493,7 @@ def test_encrypt_shred_failure_aborts(monkeypatch: pytest.MonkeyPatch, runner: C
     result = runner.invoke(secrets_app, ["encrypt", str(cleartext), "--shred"])
 
     assert result.exit_code == 1
-    assert "Failed to remove cleartext source" in result.stdout
+    assert "Failed to remove cleartext source" in result.stderr
 
 
 def test_encrypt_shred_passes_options(monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
@@ -822,7 +822,7 @@ def test_encrypt_quiet_error_uses_plain_output(
     )
 
     assert result.exit_code == 1
-    assert "Refuse to overwrite" in result.stdout
+    assert "Refuse to overwrite" in result.stderr
 
 
 def test_decrypt_quiet_mode_suppresses_rendering(
@@ -1326,7 +1326,7 @@ class TestInitCommand:
         result = runner.invoke(secrets_app, ["init"])
 
         assert result.exit_code == 1
-        assert "no encryption backend" in result.stdout.lower()
+        assert "no encryption backend" in result.stderr.lower()
 
     def test_init_auto_detects_gpg_when_age_missing(
         self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any
@@ -1426,7 +1426,7 @@ class TestInitCommand:
         result = runner.invoke(secrets_app, ["init", "--local"])
 
         assert result.exit_code == 1
-        assert "gpg --gen-key" in result.stdout.lower()
+        assert "gpg --gen-key" in result.stderr.lower()
 
     def test_init_local_creates_files(self, monkeypatch: pytest.MonkeyPatch, runner: CliRunner, tmp_path: Any) -> None:
         """Init --local creates files in current directory."""

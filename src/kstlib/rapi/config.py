@@ -28,6 +28,7 @@ from kstlib.rapi.exceptions import (
     EndpointCollisionError,
     EndpointNotFoundError,
     EnvVarError,
+    PathParameterError,
     SafeguardMissingError,
     ServerNotFoundError,
 )
@@ -53,13 +54,16 @@ def _validate_path_param(name: str, value: str) -> None:
         value: Substituted value to check.
 
     Raises:
-        ValueError: If the value contains path traversal or null bytes.
+        PathParameterError: If the value contains null bytes, control
+            characters, or path traversal segments.
 
     """
     if "\x00" in value:
-        raise ValueError(f"Null bytes not allowed in path parameter '{name}'")
+        raise PathParameterError(f"Null bytes not allowed in path parameter '{name}'")
+    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in value):
+        raise PathParameterError(f"Control characters not allowed in path parameter '{name}'")
     if any(seg in value for seg in _DANGEROUS_PATH_SEGMENTS):
-        raise ValueError(f"Path traversal not allowed in parameter '{name}': {value!r}")
+        raise PathParameterError(f"Path traversal not allowed in parameter '{name}': {value!r}")
 
 
 # Deep defense: allowed values for HMAC config (hardcoded limits)
@@ -788,7 +792,7 @@ class EndpointConfig:
             Formatted path string.
 
         Raises:
-            ValueError: If required parameters are missing.
+            PathParameterError: If required parameters are missing or invalid.
 
         Examples:
             >>> config = EndpointConfig(
@@ -816,7 +820,7 @@ class EndpointConfig:
                     _validate_path_param(placeholder, value)
                     path = path.replace(f"{{{placeholder}}}", value)
                 else:
-                    raise ValueError(f"Missing positional argument {idx} for path {self.path}")
+                    raise PathParameterError(f"Missing positional argument {idx} for path {self.path}")
             elif placeholder in kwargs:
                 # Named: {name}
                 value = str(kwargs[placeholder])
@@ -829,7 +833,7 @@ class EndpointConfig:
                 path = path.replace(f"{{{placeholder}}}", value)
                 args = args[1:]
             else:
-                raise ValueError(f"Missing parameter '{placeholder}' for path {self.path}")
+                raise PathParameterError(f"Missing parameter '{placeholder}' for path {self.path}")
 
         return path
 

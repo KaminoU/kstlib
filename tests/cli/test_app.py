@@ -134,8 +134,8 @@ def test_invalid_log_level() -> None:
     result = runner.invoke(app, ["--log-level", "INVALID", "info"])
 
     assert result.exit_code == 1
-    assert "Invalid log level" in result.stdout
-    assert "Valid levels" in result.stdout
+    assert "Invalid log level" in result.stderr
+    assert "Valid levels" in result.stderr
 
 
 def test_valid_log_level_debug() -> None:

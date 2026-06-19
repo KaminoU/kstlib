@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import typer
 from typer.core import TyperGroup
 
-from kstlib.cli.common import console
+from kstlib.cli.common import err_console
 from kstlib.rapi import load_rapi_config
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ def _load_config_or_exit() -> RapiConfigManager:
     try:
         return load_rapi_config()
     except Exception as exc:  # pylint: disable=broad-exception-caught
-        console.print(f"[red]Failed to load rapi config: {exc}[/]")
+        err_console.print(f"[red]Failed to load rapi config: {exc}[/]")
         raise typer.Exit(code=1) from exc
 
 

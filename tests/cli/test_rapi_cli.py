@@ -7,6 +7,7 @@ import json
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from box import Box
 from typer.testing import CliRunner
@@ -16,6 +17,7 @@ from kstlib.rapi import (
     CredentialError,
     EndpointAmbiguousError,
     EndpointNotFoundError,
+    PathParameterError,
     RapiConfigManager,
     RapiResponse,
     RequestError,
@@ -206,7 +208,7 @@ class TestRapiList:
             result = runner.invoke(app, ["rapi", "list", "unknown"])
 
             assert result.exit_code == 1
-            assert "not found" in result.stdout
+            assert "not found" in result.stderr
 
     def test_list_verbose(self) -> None:
         """Verbose output shows method, query, body, and description columns."""
@@ -430,7 +432,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "httpbin.post_data", "--body", "not-json"])
 
             assert result.exit_code == 1
-            assert "Invalid JSON" in result.stdout
+            assert "Invalid JSON" in result.stderr
 
     def test_call_invalid_header_format(self) -> None:
         """Invalid header format fails."""
@@ -440,7 +442,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip", "-H", "bad-format"])
 
             assert result.exit_code == 1
-            assert "Invalid header" in result.stdout
+            assert "Invalid header" in result.stderr
 
     def test_call_endpoint_not_found(self) -> None:
         """Unknown endpoint fails with error."""
@@ -456,7 +458,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "unknown.endpoint"])
 
             assert result.exit_code == 1
-            assert "not found" in result.stdout
+            assert "not found" in result.stderr
 
     def test_call_endpoint_ambiguous(self) -> None:
         """Ambiguous endpoint fails with error."""
@@ -473,7 +475,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "users"])
 
             assert result.exit_code == 1
-            assert "Ambiguous" in result.stdout
+            assert "Ambiguous" in result.stderr
 
     def test_call_request_error(self) -> None:
         """Request error shows status and retryable flag."""
@@ -489,7 +491,39 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip"])
 
             assert result.exit_code == 1
-            assert "Request failed" in result.stdout
+            assert "Request failed" in result.stderr
+
+    def test_call_path_parameter_error(self) -> None:
+        """A path-parameter error exits 1 with a clean message on stderr (no traceback)."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.side_effect = PathParameterError("Missing parameter 'id' for path /users/{id}")
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip"])
+
+            assert result.exit_code == 1
+            assert "Path parameter error" in result.stderr
+
+    def test_call_invalid_url_error(self) -> None:
+        """An invalid URL (e.g. embedded control char) exits 1 with a clean message on stderr."""
+        with (
+            patch.object(rapi_pkg, "_load_config_or_exit") as mock_load,
+            patch.object(call_module, "RapiClient") as mock_client_cls,
+        ):
+            mock_load.return_value = _mock_config_manager()
+            mock_client = MagicMock()
+            mock_client.call.side_effect = httpx.InvalidURL("Invalid non-printable ASCII character in URL")
+            mock_client_cls.return_value = mock_client
+
+            result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip"])
+
+            assert result.exit_code == 1
+            assert "Invalid URL" in result.stderr
 
     def test_call_output_text(self) -> None:
         """Output as raw text."""
@@ -647,7 +681,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "httpbin.post_data", "--body", "@nonexistent.json"])
 
             assert result.exit_code == 1
-            assert "not found" in result.stdout
+            assert "not found" in result.stderr
 
     def test_call_invalid_format(self) -> None:
         """Invalid format option fails."""
@@ -657,7 +691,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip", "--format", "invalid"])
 
             assert result.exit_code == 1
-            assert "Invalid output format" in result.stdout
+            assert "Invalid output format" in result.stderr
 
     def test_call_minify_without_raw_errors(self) -> None:
         """--minify without --raw rejected with hint pointing to --raw --minify."""
@@ -733,7 +767,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "github.user"])
 
             assert result.exit_code == 1
-            assert "Credential error" in result.stdout
+            assert "Credential error" in result.stderr
 
     def test_call_response_too_large(self) -> None:
         """Response too large shows sizes."""
@@ -749,7 +783,7 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "httpbin.get_ip"])
 
             assert result.exit_code == 1
-            assert "too large" in result.stdout
+            assert "too large" in result.stderr
 
     def test_call_auth_expired_exit_4(self) -> None:
         """AuthExpiredError triggers distinct exit code 4 with hint in output."""
@@ -902,11 +936,11 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "-s", "ghost", "github.user"])
 
             assert result.exit_code == 1
-            assert "Server profile not found" in result.stdout
-            assert "ghost" in result.stdout
+            assert "Server profile not found" in result.stderr
+            assert "ghost" in result.stderr
             # Available servers listed for the user
-            assert "github" in result.stdout
-            assert "jira" in result.stdout
+            assert "github" in result.stderr
+            assert "jira" in result.stderr
 
     def test_call_server_not_found_no_servers_configured(self) -> None:
         """Unknown server with no servers configured shows '(none configured)'."""
@@ -922,8 +956,8 @@ class TestRapiCall:
             result = runner.invoke(app, ["rapi", "call", "-s", "ghost", "github.user"])
 
             assert result.exit_code == 1
-            assert "Server profile not found" in result.stdout
-            assert "(none configured)" in result.stdout
+            assert "Server profile not found" in result.stderr
+            assert "(none configured)" in result.stderr
 
 
 class TestRapiCallExtraction:
@@ -1196,7 +1230,7 @@ class TestRapiShow:
             result = runner.invoke(app, ["rapi", "show", "unknown.endpoint"])
 
             assert result.exit_code == 1
-            assert "not found" in result.stdout
+            assert "not found" in result.stderr
 
     def test_show_endpoint_with_path_params(self) -> None:
         """Show endpoint with path parameters."""
@@ -1251,7 +1285,7 @@ class TestRapiShow:
         result = runner.invoke(app, ["rapi", "show", long_ref])
 
         assert result.exit_code == 1
-        assert "too long" in result.stdout
+        assert "too long" in result.stderr
 
     def test_show_endpoint_ref_invalid_chars(self) -> None:
         """Hardening: reject endpoint reference with invalid characters."""
@@ -1266,7 +1300,7 @@ class TestRapiShow:
             result = runner.invoke(app, ["rapi", "show", ref])
 
             assert result.exit_code == 1, f"Should reject: {ref}"
-            assert "invalid characters" in result.stdout
+            assert "invalid characters" in result.stderr
 
     def test_show_endpoint_examples_section(self) -> None:
         """Show endpoint includes usage examples."""

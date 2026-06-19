@@ -24,7 +24,7 @@ from kstlib.cli.commands.ops import register_cli as register_ops_cli
 from kstlib.cli.commands.rapi import register_cli as register_rapi_cli
 from kstlib.cli.commands.secrets import register_cli as register_secrets_cli
 from kstlib.cli.commands.secrets import shred as secrets_shred
-from kstlib.cli.common import console
+from kstlib.cli.common import console, err_console
 from kstlib.logging import LogManager, get_logger, init_logging
 
 app = typer.Typer(add_completion=False, name=meta.__app_name__)
@@ -223,8 +223,8 @@ def main(  # pylint: disable=unused-argument
         # Explicit --log-level takes precedence
         level = log_level.upper()
         if level not in LOG_LEVELS:
-            console.print(f"[red]Invalid log level: {log_level}[/]")
-            console.print(f"[dim]Valid levels: {', '.join(LOG_LEVELS)}[/]")
+            err_console.print(f"[red]Invalid log level: {log_level}[/]")
+            err_console.print(f"[dim]Valid levels: {', '.join(LOG_LEVELS)}[/]")
             raise typer.Exit(1)
     elif verbose > 0:
         # -v/-vv/-vvv flags

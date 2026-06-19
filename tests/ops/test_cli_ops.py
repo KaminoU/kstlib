@@ -163,7 +163,7 @@ class TestOpsStop:
         mock_session_manager.exists.return_value = False
         result = runner.invoke(app, ["ops", "stop", "nonexistent"])
         assert result.exit_code == 1
-        assert "not found" in result.stdout.lower()
+        assert "not found" in result.stderr.lower()
 
 
 # ============================================================================
@@ -377,7 +377,7 @@ class TestOpsStatusConfigFallback:
             mock_cls.from_config.side_effect = OpsError("Not found")
             result = runner.invoke(app, ["ops", "status", "ghost"])
         assert result.exit_code == 1
-        assert "not found" in result.stdout.lower()
+        assert "not found" in result.stderr.lower()
 
 
 # ============================================================================
