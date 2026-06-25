@@ -682,6 +682,228 @@ def bytes_encode(data: str, config: PrimitiveConfig) -> bytes:
 
 
 # ============================================================================
+# string extractors (forward-only)
+# ============================================================================
+
+
+def _validate_string_input(data: object, *, primitive_name: str) -> str:
+    """Validate and harden a string input for the string primitives.
+
+    Shared by the forward-only string extractors (split, and future tr /
+    removeprefix / removesuffix). Rejects non-string input, oversized
+    input, and embedded null bytes before any processing (fail fast).
+
+    Args:
+        data: Candidate input. Must be a string.
+        primitive_name: Name of the calling primitive, used in errors.
+
+    Returns:
+        The validated string (unchanged).
+
+    Raises:
+        ParseError: If data is not a string, exceeds the input size
+            limit, or contains a null byte.
+
+    """
+    if not isinstance(data, str):
+        raise ParseError(
+            f"Expected str, got {type(data).__name__}",
+            primitive_name=primitive_name,
+        )
+    if len(data) > MAX_INPUT_SIZE:
+        log.warning(
+            "[SECURITY] %s input exceeds limit (%d > %d bytes), rejected",
+            primitive_name,
+            len(data),
+            MAX_INPUT_SIZE,
+        )
+        raise ParseError(
+            f"Input exceeds limit ({len(data):,} > {MAX_INPUT_SIZE:,})",
+            primitive_name=primitive_name,
+        )
+    if "\x00" in data:
+        log.warning("[SECURITY] %s input contains a null byte, rejected", primitive_name)
+        raise ParseError("Input contains a null byte", primitive_name=primitive_name)
+    return data
+
+
+def split_extract(data: str, config: PrimitiveConfig) -> str | list[str]:
+    r"""Split a string by a literal separator and extract segment(s).
+
+    Forward-only string extractor. The separator is treated literally
+    (no regex). Options are read from ``config.options``:
+
+    - ``sep`` (str, required): the literal separator. Validated at config
+      time (must be a non-empty string).
+    - ``index`` (int | None): which segment to return. ``None`` (default)
+      returns the full list of segments; an integer returns that single
+      segment (0-based, negatives count from the end: ``-1`` is the last).
+    - ``maxsplit`` (int): forwarded to ``str.split``. Default ``-1`` (no
+      limit).
+    - ``keep_empty`` (bool): when ``False`` (default), empty segments are
+      filtered out *before* indexing, which is path-friendly (a leading
+      separator does not produce an empty first segment). This
+      **diverges from** ``str.split``, which keeps empty segments. Set to
+      ``True`` to keep them.
+
+    Args:
+        data: Input string to split.
+        config: Primitive config carrying the options described above.
+
+    Returns:
+        The selected segment (``str``) when ``index`` is set, otherwise
+        the list of segments (``list[str]``).
+
+    Raises:
+        ParseError: If the input is not a string, exceeds the size limit,
+            contains a null byte, or ``index`` is out of range.
+
+    Examples:
+        >>> cfg = PrimitiveConfig(name="split", options={"sep": "/", "index": -1})
+        >>> split_extract("/reports/reports/abc", cfg)
+        'abc'
+        >>> split_extract("a/b/c", PrimitiveConfig(name="split", options={"sep": "/"}))
+        ['a', 'b', 'c']
+
+    """
+    text = _validate_string_input(data, primitive_name="split")
+
+    sep: str = config.options["sep"]
+    maxsplit: int = config.options.get("maxsplit", -1)
+    keep_empty: bool = config.options.get("keep_empty", False)
+    index: int | None = config.options.get("index")
+
+    segments = text.split(sep, maxsplit)
+    if not keep_empty:
+        segments = [segment for segment in segments if segment]
+
+    if index is None:
+        return segments
+
+    try:
+        return segments[index]
+    except IndexError:
+        raise ParseError(
+            f"split index {index} out of range ({len(segments)} segment(s))",
+            primitive_name="split",
+        ) from None
+
+
+def tr_translate(data: str, config: PrimitiveConfig) -> str:
+    r"""Translate or delete characters in a string (character level).
+
+    Forward-only string transformer operating character by character,
+    like the Unix ``tr`` command. This is distinct from the substring
+    ``replace`` of the patch stage: ``tr`` works on individual
+    characters. Exactly one of the following options must be set (enforced
+    at config time by :class:`~kstlib.transform.config.PrimitiveConfig`):
+
+    - ``delete`` (str): every character in this set is removed from the
+      input.
+    - ``map`` (dict[str, str]): a single-character to single-character
+      translation table applied to the input.
+
+    Args:
+        data: Input string to translate.
+        config: Primitive config carrying the ``delete`` or ``map`` option.
+
+    Returns:
+        The translated string.
+
+    Raises:
+        ParseError: If the input is not a string, exceeds the input size
+            limit, or contains a null byte.
+
+    Examples:
+        >>> tr_translate("a\nb\n", PrimitiveConfig(name="tr", options={"delete": "\n"}))
+        'ab'
+        >>> tr_translate("aaa", PrimitiveConfig(name="tr", options={"map": {"a": "b"}}))
+        'bbb'
+
+    """
+    text = _validate_string_input(data, primitive_name="tr")
+
+    delete: str | None = config.options.get("delete")
+    if delete is not None:
+        return text.translate(str.maketrans("", "", delete))
+
+    mapping: dict[str, str | int | None] = config.options["map"]
+    return text.translate(str.maketrans(mapping))
+
+
+def remove_prefix(data: str, config: PrimitiveConfig) -> str:
+    """Strip a known literal prefix from the start of a string.
+
+    Forward-only string extractor wrapping :meth:`str.removeprefix`. The
+    ``prefix`` option (required, validated at config time) is removed from
+    the input only when the input starts with it; otherwise the string is
+    returned unchanged (no error). This mirrors the standard-library
+    semantics and lets the same chain handle mixed inputs that sometimes
+    carry the prefix.
+
+    Args:
+        data: Input string to strip.
+        config: Primitive config carrying the required ``prefix`` option.
+
+    Returns:
+        The input with ``prefix`` removed from its start, or the input
+        unchanged when it does not start with ``prefix``.
+
+    Raises:
+        ParseError: If the input is not a string, exceeds the input size
+            limit, or contains a null byte.
+
+    Examples:
+        >>> cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "reports/"})
+        >>> remove_prefix("reports/xxx", cfg)
+        'xxx'
+        >>> # No-op when the input does not start with the prefix
+        >>> remove_prefix("other/xxx", cfg)
+        'other/xxx'
+
+    """
+    text = _validate_string_input(data, primitive_name="removeprefix")
+    prefix: str = config.options["prefix"]
+    return text.removeprefix(prefix)
+
+
+def remove_suffix(data: str, config: PrimitiveConfig) -> str:
+    """Strip a known literal suffix from the end of a string.
+
+    Forward-only string extractor wrapping :meth:`str.removesuffix`. The
+    ``suffix`` option (required, validated at config time) is removed from
+    the input only when the input ends with it; otherwise the string is
+    returned unchanged (no error). This mirrors the standard-library
+    semantics and lets the same chain handle mixed inputs that sometimes
+    carry the suffix.
+
+    Args:
+        data: Input string to strip.
+        config: Primitive config carrying the required ``suffix`` option.
+
+    Returns:
+        The input with ``suffix`` removed from its end, or the input
+        unchanged when it does not end with ``suffix``.
+
+    Raises:
+        ParseError: If the input is not a string, exceeds the input size
+            limit, or contains a null byte.
+
+    Examples:
+        >>> cfg = PrimitiveConfig(name="removesuffix", options={"suffix": ".json"})
+        >>> remove_suffix("data.json", cfg)
+        'data'
+        >>> # No-op when the input does not end with the suffix
+        >>> remove_suffix("data.yml", cfg)
+        'data.yml'
+
+    """
+    text = _validate_string_input(data, primitive_name="removesuffix")
+    suffix: str = config.options["suffix"]
+    return text.removesuffix(suffix)
+
+
+# ============================================================================
 # Registry
 # ============================================================================
 
@@ -692,6 +914,10 @@ FORWARD_DISPATCH: dict[str, Any] = {
     "json": json_parse,
     "xml": xml_parse,
     "bytes": bytes_decode,
+    "split": split_extract,
+    "tr": tr_translate,
+    "removeprefix": remove_prefix,
+    "removesuffix": remove_suffix,
 }
 
 #: Backward primitive dispatch table.
@@ -713,6 +939,10 @@ __all__ = [
     "bytes_encode",
     "json_parse",
     "json_serialize",
+    "remove_prefix",
+    "remove_suffix",
+    "split_extract",
+    "tr_translate",
     "xml_parse",
     "xml_serialize",
     "zlib_compress",

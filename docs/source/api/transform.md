@@ -59,6 +59,20 @@ bidirectional (forward + backward) and can be chained in any order.
 | `json` | str -> dict | dict -> str | `extract`, `wrap` (dot-notation) |
 | `xml` | str -> Element | Element -> str | `encoding` |
 
+The engine also ships **4 forward-only string extractors** for slicing
+and cleaning decoded text. They have no backward path (the extraction is
+terminal), so a chain that uses one declares only `forward:`.
+
+| Primitive | Forward | Common options |
+|-----------|---------|----------------|
+| `split` | str -> str \| list[str] | `sep` (required), `index`, `maxsplit`, `keep_empty` |
+| `tr` | str -> str | `delete` or `map` (mutually exclusive) |
+| `removeprefix` | str -> str | `prefix` (required) |
+| `removesuffix` | str -> str | `suffix` (required) |
+
+See {doc}`../features/transform/index` for the decision guide ("when to
+use which") and the `keep_empty` divergence from `str.split`.
+
 ### zlib special options
 
 The `zlib` primitive supports two options to handle SAS-style proprietary
@@ -268,7 +282,7 @@ result = transform(blob_b64, "patch_report")
 result = transform(
     blob_b64,
     "patch_report_composed",
-    metadata={"content_type": "report", "name": "R220_ASTRO"},
+    metadata={"content_type": "report", "name": "R220_SALES"},
 )
 ```
 
@@ -294,7 +308,7 @@ patched = chain.transform(blob_b64)
 # With composed_patch metadata
 patched = chain.transform(
     blob_b64,
-    metadata={"content_type": "report", "name": "R220_ASTRO"},
+    metadata={"content_type": "report", "name": "R220_SALES"},
 )
 ```
 
@@ -479,6 +493,14 @@ pipelines:
 .. autofunction:: kstlib.transform.xml_parse
 
 .. autofunction:: kstlib.transform.xml_serialize
+
+.. autofunction:: kstlib.transform.split_extract
+
+.. autofunction:: kstlib.transform.tr_translate
+
+.. autofunction:: kstlib.transform.remove_prefix
+
+.. autofunction:: kstlib.transform.remove_suffix
 ```
 
 ### Exceptions

@@ -46,6 +46,7 @@ from kstlib.transform.primitives import (
 )
 from kstlib.transform.validators import (
     CALLABLE_TIMEOUT,
+    FORWARD_ONLY_PRIMITIVES,
     MAX_VARIABLE_REFS,
     VARIABLE_PATTERN,
 )
@@ -331,6 +332,24 @@ def _auto_reverse(forward: tuple[PrimitiveConfig, ...]) -> tuple[PrimitiveConfig
     return tuple(backward)
 
 
+def _has_forward_only(forward: tuple[PrimitiveConfig, ...]) -> bool:
+    """Return True if any forward primitive is forward-only (lossy extractor).
+
+    Forward-only primitives (see
+    :data:`~kstlib.transform.validators.FORWARD_ONLY_PRIMITIVES`) have no
+    backward implementation, so a chain that contains one cannot be
+    auto-reversed and is treated as forward-only.
+
+    Args:
+        forward: Forward primitive chain.
+
+    Returns:
+        True if at least one primitive is forward-only.
+
+    """
+    return any(prim.name in FORWARD_ONLY_PRIMITIVES for prim in forward)
+
+
 def _resolve_preset(
     chain_config: TransformChainConfig,
     all_chains: dict[str, TransformChainConfig],
@@ -496,19 +515,28 @@ class TransformChain:
                 f"to resolve chain references. Use TransformChain.from_config()."
             )
 
-        # Resolve backward if not explicit
+        # Resolve backward if not explicit. Forward-only chains (lossy
+        # extractors like split) have no backward path: the extraction is
+        # terminal, so auto-reverse is skipped and backward is rejected.
+        self._forward_only = False
+        self._backward: tuple[PrimitiveConfig, ...]
         if config.backward is None:
-            self._backward = _auto_reverse(config.forward)
+            if _has_forward_only(config.forward):
+                self._forward_only = True
+                self._backward = ()
+            else:
+                self._backward = _auto_reverse(config.forward)
         else:
             self._backward = config.backward
 
         log.debug(
-            "TransformChain '%s': %d forward, %d backward, patch=%s, composed=%s",
+            "TransformChain '%s': %d forward, %d backward, patch=%s, composed=%s, forward_only=%s",
             config.name,
             len(config.forward),
             len(self._backward),
             "yes" if config.patch else "no",
             "yes" if config.composed_patch else "no",
+            self._forward_only,
         )
 
     @classmethod
@@ -616,9 +644,16 @@ class TransformChain:
             Re-encoded data (same format as original input).
 
         Raises:
+            TransformConfigError: If the chain is forward-only (lossy
+                extractor) and therefore has no backward path.
             TransformChainError: If any primitive fails.
 
         """
+        if self._forward_only:
+            raise TransformConfigError(
+                f"Chain '{self._config.name}' is forward-only (lossy extractor); backward is not available"
+            )
+
         current = data
 
         for i, prim in enumerate(self._backward):
@@ -692,7 +727,9 @@ class TransformChain:
     ) -> Any:
         """Full round-trip: forward -> patch -> backward.
 
-        This is the main entry point for most use cases.
+        This is the main entry point for most use cases. Forward-only
+        chains (lossy extractors like split) skip the backward leg: the
+        patched, extracted value is returned as-is.
 
         Args:
             data: Raw input data.
@@ -712,7 +749,10 @@ class TransformChain:
         start = time.monotonic()
         decoded = self.forward(data)
         patched = self.patch(decoded, metadata=metadata)
-        result = self.backward(patched)
+        # Forward-only chains have no backward leg: the patched (extracted)
+        # value is terminal. patch still applies, so a declared patch is
+        # never silently dropped.
+        result = patched if self._forward_only else self.backward(patched)
         log.debug(
             "Chain '%s': transform complete (took=%.3fs)",
             self._config.name,

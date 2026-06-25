@@ -807,3 +807,212 @@ class TestParseChainComposed:
                     "targeted_patches": [{"patches": [42]}],
                 },
             )
+
+
+# ============================================================================
+# split primitive options (config-time validation)
+# ============================================================================
+
+
+class TestSplitPrimitiveConfig:
+    """Tests for split primitive option validation (config-time)."""
+
+    def test_valid_split(self) -> None:
+        """Valid split primitive with all options."""
+        cfg = PrimitiveConfig(
+            name="split",
+            options={"sep": "/", "index": -1, "maxsplit": 2, "keep_empty": True},
+        )
+        assert cfg.options["sep"] == "/"
+
+    def test_sep_required(self) -> None:
+        """Missing sep raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="split requires"):
+            PrimitiveConfig(name="split")
+
+    def test_sep_empty_rejected(self) -> None:
+        """Empty sep raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="sep must not be empty"):
+            PrimitiveConfig(name="split", options={"sep": ""})
+
+    def test_sep_not_string(self) -> None:
+        """Non-string sep raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="sep must be string"):
+            PrimitiveConfig(name="split", options={"sep": 5})
+
+    def test_index_not_int(self) -> None:
+        """Non-int index raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="index must be int"):
+            PrimitiveConfig(name="split", options={"sep": "/", "index": "x"})
+
+    def test_index_bool_rejected(self) -> None:
+        """Bool index raises TransformConfigError (bool is an int subclass)."""
+        with pytest.raises(TransformConfigError, match="index must be int"):
+            PrimitiveConfig(name="split", options={"sep": "/", "index": True})
+
+    def test_maxsplit_not_int(self) -> None:
+        """Non-int maxsplit raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="maxsplit must be int"):
+            PrimitiveConfig(name="split", options={"sep": "/", "maxsplit": "x"})
+
+    def test_keep_empty_not_bool(self) -> None:
+        """Non-bool keep_empty raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="keep_empty must be bool"):
+            PrimitiveConfig(name="split", options={"sep": "/", "keep_empty": "yes"})
+
+
+# ============================================================================
+# Forward-only primitives in explicit backward chains
+# ============================================================================
+
+
+class TestForwardOnlyBackwardGuard:
+    """Forward-only primitives must be rejected in explicit backward chains."""
+
+    def test_split_in_backward_rejected(self) -> None:
+        """split declared in an explicit backward chain raises."""
+        with pytest.raises(TransformConfigError, match="forward-only"):
+            TransformChainConfig(
+                name="bad",
+                forward=(PrimitiveConfig(name="base64"),),
+                backward=(PrimitiveConfig(name="split", options={"sep": "/"}),),
+            )
+
+    def test_split_forward_with_empty_backward_ok(self) -> None:
+        """split in forward with an explicit empty backward is valid."""
+        cfg = TransformChainConfig(
+            name="ok",
+            forward=(PrimitiveConfig(name="split", options={"sep": "/"}),),
+            backward=(),
+        )
+        assert cfg.backward == ()
+
+    def test_regular_backward_unaffected(self) -> None:
+        """An explicit backward of regular primitives passes the guard."""
+        cfg = TransformChainConfig(
+            name="rt",
+            forward=(PrimitiveConfig(name="base64"),),
+            backward=(PrimitiveConfig(name="base64"),),
+        )
+        assert cfg.backward is not None
+        assert len(cfg.backward) == 1
+
+
+class TestParseChainForwardOnly:
+    """Tests for _parse_chain with forward-only primitives (no backward)."""
+
+    def test_forward_only_chain_parses_backward_none(self) -> None:
+        """A forward-only chain in YAML parses with backward=None (auto-reverse deferred to construction)."""
+        raw = {"forward": [{"split": {"sep": "/", "index": -1}}]}
+        chain = _parse_chain("extract", raw)
+        assert chain.forward[0].name == "split"
+        assert chain.backward is None
+
+
+class TestPrimitiveConfigTr:
+    """Tests for tr primitive option validation."""
+
+    def test_valid_delete(self) -> None:
+        """A delete-only tr config is valid."""
+        cfg = PrimitiveConfig(name="tr", options={"delete": "\n"})
+        assert cfg.options["delete"] == "\n"
+
+    def test_valid_map(self) -> None:
+        """A map-only tr config is valid."""
+        cfg = PrimitiveConfig(name="tr", options={"map": {"a": "b"}})
+        assert cfg.options["map"] == {"a": "b"}
+
+    def test_delete_and_map_mutually_exclusive(self) -> None:
+        """delete and map together raise TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="mutually exclusive"):
+            PrimitiveConfig(name="tr", options={"delete": "\n", "map": {"a": "b"}})
+
+    def test_neither_delete_nor_map(self) -> None:
+        """Neither delete nor map raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="requires either"):
+            PrimitiveConfig(name="tr", options={})
+
+    def test_delete_not_str(self) -> None:
+        """A non-string delete raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="delete must be string"):
+            PrimitiveConfig(name="tr", options={"delete": 42})
+
+    def test_map_not_dict(self) -> None:
+        """A non-dict map raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="map must be dict"):
+            PrimitiveConfig(name="tr", options={"map": "ab"})
+
+    def test_map_key_multichar(self) -> None:
+        """A multi-character map key raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="map keys must be single"):
+            PrimitiveConfig(name="tr", options={"map": {"ab": "c"}})
+
+    def test_map_value_multichar(self) -> None:
+        """A multi-character map value raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="map values must be single"):
+            PrimitiveConfig(name="tr", options={"map": {"a": "bc"}})
+
+    def test_delete_too_long(self) -> None:
+        """A delete string over the length cap raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="delete too long"):
+            PrimitiveConfig(name="tr", options={"delete": "x" * 5000})
+
+    def test_map_too_many_entries(self) -> None:
+        """A map over the entry cap raises TransformConfigError."""
+        big = {chr(0x41 + i): "x" for i in range(150)}
+        with pytest.raises(TransformConfigError, match="too many entries"):
+            PrimitiveConfig(name="tr", options={"map": big})
+
+
+class TestRemovePrefixSuffixPrimitiveConfig:
+    """Tests for removeprefix/removesuffix primitive option validation."""
+
+    def test_valid_removeprefix(self) -> None:
+        """A removeprefix config with a prefix is valid."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "reports/"})
+        assert cfg.options["prefix"] == "reports/"
+
+    def test_valid_removesuffix(self) -> None:
+        """A removesuffix config with a suffix is valid."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": ".json"})
+        assert cfg.options["suffix"] == ".json"
+
+    def test_empty_prefix_valid(self) -> None:
+        """An empty prefix is valid (no-op), only absence is rejected."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": ""})
+        assert cfg.options["prefix"] == ""
+
+    def test_empty_suffix_valid(self) -> None:
+        """An empty suffix is valid (no-op), only absence is rejected."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": ""})
+        assert cfg.options["suffix"] == ""
+
+    def test_removeprefix_requires_prefix(self) -> None:
+        """Missing prefix raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="removeprefix requires"):
+            PrimitiveConfig(name="removeprefix")
+
+    def test_removesuffix_requires_suffix(self) -> None:
+        """Missing suffix raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="removesuffix requires"):
+            PrimitiveConfig(name="removesuffix")
+
+    def test_prefix_not_str(self) -> None:
+        """A non-string prefix raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="prefix must be string"):
+            PrimitiveConfig(name="removeprefix", options={"prefix": 42})
+
+    def test_suffix_not_str(self) -> None:
+        """A non-string suffix raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="suffix must be string"):
+            PrimitiveConfig(name="removesuffix", options={"suffix": 42})
+
+    def test_prefix_too_long(self) -> None:
+        """A prefix over the length cap raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="prefix too long"):
+            PrimitiveConfig(name="removeprefix", options={"prefix": "x" * 5000})
+
+    def test_suffix_too_long(self) -> None:
+        """A suffix over the length cap raises TransformConfigError."""
+        with pytest.raises(TransformConfigError, match="suffix too long"):
+            PrimitiveConfig(name="removesuffix", options={"suffix": "x" * 5000})

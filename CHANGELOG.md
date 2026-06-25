@@ -19,6 +19,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.4.0] - 2026-06-25
+
+### Added
+
+- **NEW string primitives in `kstlib.transform`**: `split`, `tr`,
+  `removeprefix`, and `removesuffix` slice and clean already-decoded text
+  (literal separators only, no regex). `split` extracts a delimited field
+  by index (or returns the full list), `tr` translates/deletes characters
+  (Unix `tr` style), and `removeprefix`/`removesuffix` strip a known
+  affix. They are forward-only extractors and can be driven entirely from
+  a `transforms:` chain in YAML config (a chain with only `forward:` and
+  no `backward:`); calling `.backward()` on such a chain raises a clear
+  `TransformConfigError`. `split.keep_empty` defaults to `false`, which
+  intentionally diverges from `str.split` (path-friendly). A regex
+  primitive is deliberately deferred (ReDoS hardening).
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- `kstlib.transform` is now reachable via lazy top-level attribute access
+  on the `kstlib` package (e.g. `import kstlib; kstlib.transform.transform(...)`),
+  consistent with the other submodules.
+
+### Security
+
 ## [3.3.1] - 2026-06-20
 
 ### Changed
@@ -1510,7 +1540,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.3.1...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.4.0...HEAD
+[3.4.0]: https://github.com/KaminoU/kstlib/compare/v3.3.1...v3.4.0
 [3.3.1]: https://github.com/KaminoU/kstlib/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/KaminoU/kstlib/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/KaminoU/kstlib/compare/v3.1.0...v3.2.0

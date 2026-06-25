@@ -5,7 +5,7 @@ objects in a multi-object workflow. Three synthetic objects are
 processed by the same chain:
 
   - R220_foo    (matches the R220_* targeted filter)
-  - ORION_bar  (matches only the wildcard fallback)
+  - REPORT_bar  (matches only the wildcard fallback)
   - OTHER_baz   (matches only the wildcard fallback)
 
 The chain `patch_production` (defined in kstlib.conf.yml) applies:
@@ -144,7 +144,7 @@ def main() -> None:
     # different metadata -> different patches applied.
     objects = [
         ("R220_foo", {"content_type": "report", "name": "R220_foo"}),
-        ("ORION_bar", {"content_type": "report", "name": "ORION_bar"}),
+        ("REPORT_bar", {"content_type": "report", "name": "REPORT_bar"}),
         ("OTHER_baz", {"content_type": "report", "name": "OTHER_baz"}),
     ]
 
@@ -187,7 +187,7 @@ def main() -> None:
     print("  - connectors[].hints.orig-uri: CASUSER -> PUBLIC")
     print("  - connectors[].hints.xpath:    PROTECTED, never modified")
     print()
-    print("ORION_bar and OTHER_baz only matched the wildcard fallback")
+    print("REPORT_bar and OTHER_baz only matched the wildcard fallback")
     print("(patch_report, scope: blob), so their outer wrappers are intact.")
     print()
     print("Important nuance: with replace-based patches, 'last applied wins'")

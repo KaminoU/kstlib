@@ -232,6 +232,139 @@ billion-laughs expansion.
 The patch stage operates directly on the XML string before re-parsing,
 which is faster and more flexible than walking the Element tree.
 
+## String primitives (forward-only extractors)
+
+Beyond the 5 bidirectional codecs above, the engine ships **4 string
+primitives** that slice and clean already-decoded text. They are
+**forward-only**: the transformation is terminal (a value is extracted
+or rewritten and the original cannot be rebuilt), so they have no
+`backward` implementation.
+
+In a YAML chain this means you declare only `forward:` (no `backward:`),
+and the chain is usable end-to-end via `transform()` / `from_config()`.
+The engine skips auto-reverse for such a chain; calling `.backward()` on
+it raises `TransformConfigError` with a clear message.
+
+```yaml
+transforms:
+  chains:
+    last_path_segment:        # forward-only: no backward block
+      forward:
+        - split:
+            sep: "/"
+            index: -1
+```
+
+```python
+from kstlib.transform import transform
+
+transform("/reports/reports/abc", "last_path_segment")   # -> "abc"
+```
+
+Every string primitive hardens its input before processing: non-string
+input, payloads over 100 MB, and embedded null bytes are rejected with
+a `ParseError` (a `[SECURITY]` warning is logged first). They operate on
+`str` only.
+
+### split
+
+Split a string on a **literal** separator (no regex) and either return
+the full list of segments or extract one by index.
+
+| Option | Default | Purpose |
+|---|---|---|
+| `sep` | **required** | Literal separator (validated non-empty at config-load time). |
+| `index` | `null` | Segment to return. `null` returns the full `list[str]`; an integer returns one segment (0-based, negatives count from the end, `-1` is the last). Out of range raises `ParseError`. |
+| `maxsplit` | `-1` | Forwarded to `str.split` (`-1` means no limit). |
+| `keep_empty` | `false` | When `false`, empty segments are dropped **before** indexing (path-friendly: a leading separator does not create an empty first segment). |
+
+```yaml
+# Extract the last non-empty path segment
+- split:
+    sep: "/"
+    index: -1          # "/reports/reports/abc" -> "abc"
+
+# Return every segment as a list
+- split:
+    sep: ","           # "a,b,c" -> ["a", "b", "c"]
+```
+
+```{warning}
+`keep_empty` defaults to `false`, which **diverges from `str.split`**.
+Python's `"/a/b".split("/")` returns `["", "a", "b"]`, whereas the
+kstlib `split` primitive returns `["a", "b"]` by default. The divergence
+is intentional (path-friendly extraction: a leading separator should not
+yield a phantom empty field). Set `keep_empty: true` to match the stdlib
+behavior and reach a leading empty segment.
+```
+
+### tr
+
+Translate or delete characters, like the Unix `tr` command. This works
+**character by character**, which is distinct from the substring
+`replace` of the patch stage. Exactly one of `delete` or `map` must be
+set (mutually exclusive, enforced at config-load time).
+
+| Option | Purpose |
+|---|---|
+| `delete` | String of characters to remove from the input. |
+| `map` | Single-character to single-character translation table. |
+
+```yaml
+# Strip newlines from a value
+- tr:
+    delete: "\n"        # "a\nb\n" -> "ab"
+
+# Translate characters one-to-one
+- tr:
+    map:
+      "a": "x"
+      "b": "y"          # "abab" -> "xyxy"
+```
+
+### removeprefix / removesuffix
+
+Strip a **known** literal affix from the start (`removeprefix`) or end
+(`removesuffix`) of a string. These are thin wrappers over
+`str.removeprefix` / `str.removesuffix`: if the input does not carry the
+affix, it is returned unchanged (no error), so the same chain handles
+mixed inputs that sometimes carry the affix and sometimes do not.
+
+| Option | Default | Purpose |
+|---|---|---|
+| `prefix` (removeprefix) | **required** | Literal prefix stripped from the start. An empty string is a no-op. |
+| `suffix` (removesuffix) | **required** | Literal suffix stripped from the end. An empty string is a no-op. |
+
+```yaml
+- removeprefix:
+    prefix: "reports/"   # "reports/abc" -> "abc"; "other/abc" unchanged
+
+- removesuffix:
+    suffix: ".json"      # "data.json" -> "data"; "data.yml" unchanged
+```
+
+Only the single leading or trailing occurrence is removed: `removeprefix`
+with `prefix: "reports/"` turns `reports/reports/abc` into
+`reports/abc`, not `abc`.
+
+### When to use which
+
+| Need | Use |
+|---|---|
+| Pull one field out of a delimited string (path segment, CSV column) | `split` with `index` |
+| Get every segment of a delimited string as a list | `split` without `index` |
+| Remove or remap individual characters (strip `\n`, `\t`) | `tr` |
+| Strip a known fixed prefix or suffix (`reports/`, `.json`) | `removeprefix` / `removesuffix` |
+| Replace a substring anywhere in the value | the patch `replace:` stage (not a primitive) |
+
+```{note}
+There is deliberately **no regex primitive**. A regex applied to
+attacker-influenced input is a ReDoS risk that an input-size cap alone
+does not neutralize, so regex is intentionally deferred until a concrete
+need justifies the extra hardening work. For substring replacement use
+the patch `replace:` stage; for character-level edits use `tr`.
+```
+
 ## SAS Viya blob formats
 
 SAS Viya transfer packages use **two distinct blob formats** depending
@@ -624,17 +757,17 @@ from kstlib.transform import transform
 result_r220 = transform(
     blob_b64,
     "patch_report_composed",
-    metadata={"content_type": "report", "name": "R220_ASTRO"},
+    metadata={"content_type": "report", "name": "R220_SALES"},
 )
 # Apply order: remap_host -> remap_caslib_r220 -> remap_caslib_global
 # Final caslib: PROD_GLOBAL_LIB (the wildcard fallback wins because
 # it is declared LAST in targeted_patches)
 
 # Object 2: matches only the "*" fallback
-result_orion = transform(
+result_other = transform(
     blob_b64,
     "patch_report_composed",
-    metadata={"content_type": "report", "name": "ORION_FOO"},
+    metadata={"content_type": "report", "name": "REPORT_FOO"},
 )
 # Apply order: remap_host -> remap_caslib_global
 # Final caslib: PROD_GLOBAL_LIB
@@ -835,7 +968,7 @@ result = transform(blob_b64, "patch_report")
 result = transform(
     blob_b64,
     "patch_report_composed",
-    metadata={"content_type": "report", "name": "R220_ASTRO"},
+    metadata={"content_type": "report", "name": "R220_SALES"},
 )
 ```
 
@@ -922,7 +1055,7 @@ See `examples/transform/` for runnable demos:
   data, full forward + patch + backward, integrity verification
 - **`02_config_driven.py`** : load a chain from `kstlib.conf.yml` and
   apply it via `TransformChain.from_config()`
-- **`03_composed_patch.py`** : 3 synthetic objects (R220_foo, ORION_bar,
+- **`03_composed_patch.py`** : 3 synthetic objects (R220_foo, REPORT_bar,
   OTHER_baz) demonstrating the global + targeted cascade with explicit
   before/after output, and `scope: all` mutating the outer wrapper for
   the R220 case

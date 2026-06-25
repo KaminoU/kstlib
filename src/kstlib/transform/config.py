@@ -60,6 +60,7 @@ from typing import Any, Literal
 
 from kstlib.transform.exceptions import TransformConfigError
 from kstlib.transform.validators import (
+    FORWARD_ONLY_PRIMITIVES,
     MAX_ARG_KEY_LENGTH,
     MAX_CALLABLE_ARGS,
     MAX_CHAIN_PRIMITIVES,
@@ -132,6 +133,14 @@ class PrimitiveConfig:
             self._validate_json_options()
         elif self.name in ("base64", "bytes"):
             self._validate_encoding_option()
+        elif self.name == "split":
+            self._validate_split_options()
+        elif self.name == "tr":
+            self._validate_tr_options()
+        elif self.name == "removeprefix":
+            self._validate_required_affix_option("prefix")
+        elif self.name == "removesuffix":
+            self._validate_required_affix_option("suffix")
 
     def _validate_bool_option(self, key: str) -> None:
         """Validate that an option, if present, is a strict bool.
@@ -158,6 +167,21 @@ class PrimitiveConfig:
             raise TransformConfigError(f"{self.name} {key} must be string, got: {type(value).__name__}")
         if len(value) > max_length:
             raise TransformConfigError(f"{self.name} {key} too long: {len(value)} > {max_length}")
+
+    def _validate_required_affix_option(self, key: str) -> None:
+        """Validate a required affix option (removeprefix/removesuffix).
+
+        The option must be present (absence raises), a string, and within
+        ``MAX_MAPPING_STRING_LENGTH``. An empty string is accepted (no-op),
+        only absence is rejected.
+        """
+        value = self.options.get(key)
+        if value is None:
+            raise TransformConfigError(f"{self.name} requires a {key!r} option")
+        if not isinstance(value, str):
+            raise TransformConfigError(f"{self.name} {key} must be string, got: {type(value).__name__}")
+        if len(value) > MAX_MAPPING_STRING_LENGTH:
+            raise TransformConfigError(f"{self.name} {key} too long: {len(value)} > {MAX_MAPPING_STRING_LENGTH}")
 
     def _validate_zlib_options(self) -> None:
         """Validate zlib-specific options."""
@@ -212,6 +236,60 @@ class PrimitiveConfig:
             self._validate_bool_option("strict")
             self._validate_string_option_with_max_length("strip_prefix", MAX_PREFIX_LENGTH)
             self._validate_string_option_with_max_length("prefix", MAX_PREFIX_LENGTH)
+
+    def _validate_split_options(self) -> None:
+        """Validate split-specific options (sep required, index/maxsplit int)."""
+        sep = self.options.get("sep")
+        if sep is None:
+            raise TransformConfigError("split requires a 'sep' option")
+        if not isinstance(sep, str):
+            raise TransformConfigError(f"split sep must be string, got: {type(sep).__name__}")
+        if not sep:
+            raise TransformConfigError("split sep must not be empty")
+
+        index = self.options.get("index")
+        if index is not None and (not isinstance(index, int) or isinstance(index, bool)):
+            raise TransformConfigError(f"split index must be int, got: {type(index).__name__}")
+
+        maxsplit = self.options.get("maxsplit")
+        if maxsplit is not None and (not isinstance(maxsplit, int) or isinstance(maxsplit, bool)):
+            raise TransformConfigError(f"split maxsplit must be int, got: {type(maxsplit).__name__}")
+
+        self._validate_bool_option("keep_empty")
+
+    def _validate_tr_options(self) -> None:
+        """Validate tr-specific options (delete XOR map, mutually exclusive)."""
+        delete = self.options.get("delete")
+        mapping = self.options.get("map")
+
+        if delete is not None and mapping is not None:
+            raise TransformConfigError("tr options 'delete' and 'map' are mutually exclusive")
+        if delete is None and mapping is None:
+            raise TransformConfigError("tr requires either a 'delete' or a 'map' option")
+
+        if delete is not None:
+            self._validate_tr_delete(delete)
+        else:
+            self._validate_tr_map(mapping)
+
+    def _validate_tr_delete(self, delete: object) -> None:
+        """Validate the tr 'delete' option (string within the length cap)."""
+        if not isinstance(delete, str):
+            raise TransformConfigError(f"tr delete must be string, got: {type(delete).__name__}")
+        if len(delete) > MAX_MAPPING_STRING_LENGTH:
+            raise TransformConfigError(f"tr delete too long: {len(delete)} > {MAX_MAPPING_STRING_LENGTH}")
+
+    def _validate_tr_map(self, mapping: object) -> None:
+        """Validate the tr 'map' option (bounded dict of single-character entries)."""
+        if not isinstance(mapping, dict):
+            raise TransformConfigError(f"tr map must be dict, got: {type(mapping).__name__}")
+        if len(mapping) > MAX_MAPPING_ENTRIES:
+            raise TransformConfigError(f"tr map has too many entries: {len(mapping)} > {MAX_MAPPING_ENTRIES}")
+        for key, value in mapping.items():
+            if not isinstance(key, str) or len(key) != 1:
+                raise TransformConfigError(f"tr map keys must be single characters, got: {key!r}")
+            if not isinstance(value, str) or len(value) != 1:
+                raise TransformConfigError(f"tr map values must be single characters, got: {value!r}")
 
 
 #: Allowed values for PatchConfig.scope.
@@ -542,6 +620,16 @@ class TransformChainConfig:
             raise TransformConfigError(
                 f"Chain '{self.name}': backward chain too long: {len(self.backward)} > {MAX_CHAIN_PRIMITIVES}"
             )
+
+        # Forward-only primitives (lossy extractors) have no backward
+        # implementation: reject them in an explicit backward chain.
+        if self.backward is not None:
+            for prim in self.backward:
+                if prim.name in FORWARD_ONLY_PRIMITIVES:
+                    raise TransformConfigError(
+                        f"Chain '{self.name}': primitive '{prim.name}' is forward-only "
+                        f"and cannot appear in a backward chain"
+                    )
 
 
 @dataclass(frozen=True, slots=True)

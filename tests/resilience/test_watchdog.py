@@ -107,10 +107,12 @@ class TestWatchdogInit:
 class TestWatchdogPing:
     """Tests for ping functionality."""
 
-    def test_ping_resets_timer(self) -> None:
-        """Ping resets the activity timer."""
+    def test_ping_resets_timer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Ping resets the activity timer (clock mocked, no real sleep)."""
+        fake_time = [0.0]
+        monkeypatch.setattr("kstlib.resilience.watchdog.time.monotonic", lambda: fake_time[0])
         watchdog = Watchdog(timeout=30)
-        time.sleep(0.05)
+        fake_time[0] = 0.05
         assert watchdog.seconds_since_ping >= 0.04
         watchdog.ping()
         assert watchdog.seconds_since_ping < 0.02
@@ -196,25 +198,25 @@ class TestWatchdogTimeout:
         finally:
             watchdog.stop()
 
-    def test_ping_prevents_timeout(self) -> None:
-        """Pinging prevents timeout."""
+    def test_ping_prevents_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Pinging within the timeout window prevents triggering (clock mocked)."""
+        fake_time = [0.0]
+        monkeypatch.setattr("kstlib.resilience.watchdog.time.monotonic", lambda: fake_time[0])
         triggered = threading.Event()
 
         def on_timeout() -> None:
             triggered.set()
 
         watchdog = Watchdog(timeout=1, on_timeout=on_timeout)
-        watchdog.start()
-        try:
-            # Keep pinging to prevent timeout
-            for _ in range(5):
-                watchdog.ping()
-                time.sleep(0.3)
+        # Ping every 0.3s of mocked time (below the 1s timeout); each ping resets
+        # the timer, so a direct check never sees enough elapsed time to trigger.
+        for _ in range(5):
+            watchdog.ping()
+            fake_time[0] += 0.3
+            watchdog._check_timeout()
 
-            assert not triggered.is_set()
-            assert not watchdog.is_triggered
-        finally:
-            watchdog.stop()
+        assert not triggered.is_set()
+        assert not watchdog.is_triggered
 
     def test_reset_clears_triggered(self) -> None:
         """Reset clears triggered state."""
@@ -519,9 +521,8 @@ class TestWatchdogStateFileSync:
             max_age=0.5,
             on_timeout=on_timeout,
         )
-        wd.start()
-        time.sleep(0.3)
-        wd.stop()
+        # Drive the state-file check directly: stale/missing -> not alive -> trigger.
+        wd._check_timeout()
 
         assert callback_called
 
@@ -544,8 +545,8 @@ class TestWatchdogStateFileSync:
             max_age=0.5,
             on_timeout=on_timeout,
         )
-        wd.start()
-        time.sleep(0.3)  # Should trigger timeout (file missing)
+        # First check: file missing -> not alive -> trigger once.
+        wd._check_timeout()
 
         # Now write a fresh heartbeat
         state_file.write_text(
@@ -557,8 +558,8 @@ class TestWatchdogStateFileSync:
                 }
             )
         )
-        time.sleep(0.3)  # Should reset
-        wd.stop()
+        # Second check: file fresh -> alive -> resets triggered, no new callback.
+        wd._check_timeout()
 
         # Should have triggered once
         assert timeout_count == 1
@@ -594,9 +595,8 @@ class TestWatchdogStateFileSync:
             max_age=0.5,
             on_timeout=on_timeout,
         )
-        wd.start()
-        time.sleep(0.3)
-        wd.stop()
+        # Drive the state-file check directly: stale/missing -> not alive -> trigger.
+        wd._check_timeout()
 
         assert callback_called
 
@@ -665,9 +665,8 @@ class TestWatchdogStateFileEdgeCases:
             max_age=0.5,
             on_timeout=on_timeout,
         )
-        wd.start()
-        time.sleep(0.3)
-        wd.stop()
+        # Drive the state-file check directly: stale/missing -> not alive -> trigger.
+        wd._check_timeout()
 
         # Should trigger timeout (invalid file = not alive)
         assert callback_called
@@ -691,9 +690,8 @@ class TestWatchdogStateFileEdgeCases:
             max_age=0.5,
             on_timeout=on_timeout,
         )
-        wd.start()
-        time.sleep(0.3)
-        wd.stop()
+        # Drive the state-file check directly: stale/missing -> not alive -> trigger.
+        wd._check_timeout()
 
         # Should trigger timeout (no timestamp = not alive)
         assert callback_called

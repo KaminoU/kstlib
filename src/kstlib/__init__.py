@@ -80,6 +80,7 @@ __all__ = [
     "resilience",
     "secrets",
     "secure",
+    "transform",
     "ui",
     "utils",
     "websocket",
@@ -102,6 +103,7 @@ _SUBMODULES: frozenset[str] = frozenset(
         "resilience",
         "secrets",
         "secure",
+        "transform",
         "ui",
         "utils",
         "websocket",
@@ -219,6 +221,7 @@ if TYPE_CHECKING:
     from kstlib import resilience as resilience
     from kstlib import secrets as secrets
     from kstlib import secure as secure
+    from kstlib import transform as transform
     from kstlib import ui as ui
     from kstlib import utils as utils
     from kstlib import websocket as websocket

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64 as b64_module
 import json
+import logging
 import zlib
 
 import pytest
@@ -24,6 +25,10 @@ from kstlib.transform.primitives import (
     bytes_encode,
     json_parse,
     json_serialize,
+    remove_prefix,
+    remove_suffix,
+    split_extract,
+    tr_translate,
     xml_parse,
     xml_serialize,
     zlib_compress,
@@ -611,3 +616,248 @@ class TestPrimitivesCoverageGaps:
         cfg = PrimitiveConfig(name="xml", options={"encoding": "nonexistent"})
         with pytest.raises(SerializeError, match="serialization failed"):
             xml_serialize(root, cfg)
+
+
+# ============================================================================
+# split (forward-only string extractor)
+# ============================================================================
+
+
+class TestSplitExtract:
+    """Tests for split_extract."""
+
+    def test_index_last_segment(self) -> None:
+        """index=-1 returns the last non-empty segment (driving use case)."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "index": -1})
+        assert split_extract("/reports/reports/xxx", cfg) == "xxx"
+
+    def test_index_first_segment(self) -> None:
+        """index=0 returns the first non-empty segment."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "index": 0})
+        assert split_extract("/reports/reports/xxx", cfg) == "reports"
+
+    def test_no_index_returns_list(self) -> None:
+        """Omitting index returns the full list of non-empty segments."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/"})
+        assert split_extract("/reports/reports/xxx", cfg) == ["reports", "reports", "xxx"]
+
+    def test_keep_empty_true_list(self) -> None:
+        """keep_empty=True preserves empty segments (matches str.split)."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "keep_empty": True})
+        assert split_extract("/a/b", cfg) == ["", "a", "b"]
+
+    def test_keep_empty_true_index(self) -> None:
+        """keep_empty=True with index reaches the empty leading segment."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "keep_empty": True, "index": 0})
+        assert split_extract("/a/b", cfg) == ""
+
+    def test_sep_absent_single_segment(self) -> None:
+        """Separator absent from input yields a single-segment list."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/"})
+        assert split_extract("noslash", cfg) == ["noslash"]
+
+    def test_sep_absent_index_zero(self) -> None:
+        """Separator absent, index=0 returns the whole string."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "index": 0})
+        assert split_extract("noslash", cfg) == "noslash"
+
+    def test_maxsplit(self) -> None:
+        """maxsplit limits the number of splits."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "maxsplit": 1})
+        assert split_extract("a/b/c/d", cfg) == ["a", "b/c/d"]
+
+    def test_negative_index_middle(self) -> None:
+        """Negative index addresses segments from the end."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "index": -2})
+        assert split_extract("a/b/c", cfg) == "b"
+
+    def test_multichar_separator(self) -> None:
+        """A multi-character separator is treated literally."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "::", "index": -1})
+        assert split_extract("a::b::c", cfg) == "c"
+
+    def test_empty_input_no_index(self) -> None:
+        """Empty input without index returns an empty list."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/"})
+        assert split_extract("", cfg) == []
+
+    def test_empty_input_with_index_raises(self) -> None:
+        """Empty input with index raises ParseError (out of range)."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "index": 0})
+        with pytest.raises(ParseError, match="out of range"):
+            split_extract("", cfg)
+
+    def test_index_out_of_range_raises(self) -> None:
+        """Index beyond the segment count raises ParseError."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/", "index": 5})
+        with pytest.raises(ParseError, match="out of range"):
+            split_extract("a/b", cfg)
+
+    def test_wrong_type_raises(self) -> None:
+        """Non-string input raises ParseError."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/"})
+        with pytest.raises(ParseError, match="Expected str"):
+            split_extract(42, cfg)  # type: ignore[arg-type]
+
+    def test_null_byte_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Null byte in input raises ParseError with a [SECURITY] log."""
+        cfg = PrimitiveConfig(name="split", options={"sep": "/"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="null byte"):
+                split_extract("a/b\x00c", cfg)
+        assert "[SECURITY]" in caplog.text
+
+    def test_oversized_input_rejected(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+        """Input exceeding the size cap raises ParseError with a [SECURITY] log."""
+        monkeypatch.setattr("kstlib.transform.primitives.MAX_INPUT_SIZE", 8)
+        cfg = PrimitiveConfig(name="split", options={"sep": "/"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="exceeds limit"):
+                split_extract("123456789", cfg)
+        assert "[SECURITY]" in caplog.text
+
+
+class TestTrTranslate:
+    """Tests for tr_translate (character-level translate/delete)."""
+
+    def test_delete_chars(self) -> None:
+        """delete removes every listed character."""
+        cfg = PrimitiveConfig(name="tr", options={"delete": "\n"})
+        assert tr_translate("a\nb\n", cfg) == "ab"
+
+    def test_delete_multiple_chars(self) -> None:
+        """delete removes all characters in the set."""
+        cfg = PrimitiveConfig(name="tr", options={"delete": "\r\n\t"})
+        assert tr_translate("a\rb\nc\td", cfg) == "abcd"
+
+    def test_delete_absent_chars_noop(self) -> None:
+        """delete leaves the string unchanged when no listed char is present."""
+        cfg = PrimitiveConfig(name="tr", options={"delete": "z"})
+        assert tr_translate("abc", cfg) == "abc"
+
+    def test_map_translates(self) -> None:
+        """map translates each character via the table."""
+        cfg = PrimitiveConfig(name="tr", options={"map": {"a": "b"}})
+        assert tr_translate("aaa", cfg) == "bbb"
+
+    def test_map_multiple_entries(self) -> None:
+        """map applies a multi-entry single-character table."""
+        cfg = PrimitiveConfig(name="tr", options={"map": {"a": "x", "b": "y"}})
+        assert tr_translate("abab", cfg) == "xyxy"
+
+    def test_wrong_type_raises(self) -> None:
+        """Non-string input raises ParseError."""
+        cfg = PrimitiveConfig(name="tr", options={"delete": "\n"})
+        with pytest.raises(ParseError, match="Expected str"):
+            tr_translate(42, cfg)  # type: ignore[arg-type]
+
+    def test_null_byte_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Null byte in input raises ParseError with a [SECURITY] log."""
+        cfg = PrimitiveConfig(name="tr", options={"delete": "x"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="null byte"):
+                tr_translate("a\x00b", cfg)
+        assert "[SECURITY]" in caplog.text
+
+    def test_oversized_input_rejected(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+        """Input exceeding the size cap raises ParseError with a [SECURITY] log."""
+        monkeypatch.setattr("kstlib.transform.primitives.MAX_INPUT_SIZE", 8)
+        cfg = PrimitiveConfig(name="tr", options={"delete": "x"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="exceeds limit"):
+                tr_translate("123456789", cfg)
+        assert "[SECURITY]" in caplog.text
+
+
+class TestRemovePrefix:
+    """Tests for remove_prefix (strip a known leading affix)."""
+
+    def test_strips_known_prefix(self) -> None:
+        """A leading prefix present in the input is removed (driving use case)."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "reports/"})
+        assert remove_prefix("reports/xxx", cfg) == "xxx"
+
+    def test_prefix_absent_unchanged(self) -> None:
+        """Input not starting with the prefix is returned unchanged (str.removeprefix)."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "reports/"})
+        assert remove_prefix("other/xxx", cfg) == "other/xxx"
+
+    def test_only_leading_occurrence_removed(self) -> None:
+        """Only the single leading occurrence is stripped, not later ones."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "reports/"})
+        assert remove_prefix("reports/reports/xxx", cfg) == "reports/xxx"
+
+    def test_empty_prefix_noop(self) -> None:
+        """An empty prefix is a no-op and leaves the string unchanged."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": ""})
+        assert remove_prefix("abc", cfg) == "abc"
+
+    def test_wrong_type_raises(self) -> None:
+        """Non-string input raises ParseError."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "x"})
+        with pytest.raises(ParseError, match="Expected str"):
+            remove_prefix(42, cfg)  # type: ignore[arg-type]
+
+    def test_null_byte_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Null byte in input raises ParseError with a [SECURITY] log."""
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "x"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="null byte"):
+                remove_prefix("a\x00b", cfg)
+        assert "[SECURITY]" in caplog.text
+
+    def test_oversized_input_rejected(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+        """Input exceeding the size cap raises ParseError with a [SECURITY] log."""
+        monkeypatch.setattr("kstlib.transform.primitives.MAX_INPUT_SIZE", 8)
+        cfg = PrimitiveConfig(name="removeprefix", options={"prefix": "x"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="exceeds limit"):
+                remove_prefix("123456789", cfg)
+        assert "[SECURITY]" in caplog.text
+
+
+class TestRemoveSuffix:
+    """Tests for remove_suffix (strip a known trailing affix)."""
+
+    def test_strips_known_suffix(self) -> None:
+        """A trailing suffix present in the input is removed (driving use case)."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": ".json"})
+        assert remove_suffix("data.json", cfg) == "data"
+
+    def test_suffix_absent_unchanged(self) -> None:
+        """Input not ending with the suffix is returned unchanged (str.removesuffix)."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": ".json"})
+        assert remove_suffix("data.yml", cfg) == "data.yml"
+
+    def test_only_trailing_occurrence_removed(self) -> None:
+        """Only the single trailing occurrence is stripped, not earlier ones."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": ".json"})
+        assert remove_suffix("a.json.json", cfg) == "a.json"
+
+    def test_empty_suffix_noop(self) -> None:
+        """An empty suffix is a no-op and leaves the string unchanged."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": ""})
+        assert remove_suffix("abc", cfg) == "abc"
+
+    def test_wrong_type_raises(self) -> None:
+        """Non-string input raises ParseError."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": "x"})
+        with pytest.raises(ParseError, match="Expected str"):
+            remove_suffix(42, cfg)  # type: ignore[arg-type]
+
+    def test_null_byte_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Null byte in input raises ParseError with a [SECURITY] log."""
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": "x"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="null byte"):
+                remove_suffix("a\x00b", cfg)
+        assert "[SECURITY]" in caplog.text
+
+    def test_oversized_input_rejected(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+        """Input exceeding the size cap raises ParseError with a [SECURITY] log."""
+        monkeypatch.setattr("kstlib.transform.primitives.MAX_INPUT_SIZE", 8)
+        cfg = PrimitiveConfig(name="removesuffix", options={"suffix": "x"})
+        with caplog.at_level(logging.WARNING, logger="kstlib.transform.primitives"):
+            with pytest.raises(ParseError, match="exceeds limit"):
+                remove_suffix("123456789", cfg)
+        assert "[SECURITY]" in caplog.text

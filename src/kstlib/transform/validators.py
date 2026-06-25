@@ -119,6 +119,22 @@ ALLOWED_PRIMITIVES: frozenset[str] = frozenset(
         "json",
         "xml",
         "bytes",
+        "split",
+        "tr",
+        "removeprefix",
+        "removesuffix",
+    }
+)
+
+#: Primitives that only support the forward direction (lossy extractors).
+#: They have no backward implementation: they are rejected when declared
+#: in an explicit ``backward`` chain and cannot be auto-reversed.
+FORWARD_ONLY_PRIMITIVES: frozenset[str] = frozenset(
+    {
+        "split",
+        "tr",
+        "removeprefix",
+        "removesuffix",
     }
 )
 
@@ -343,6 +359,7 @@ __all__ = [
     "CALLABLE_TIMEOUT",
     "CHAIN_NAME_PATTERN",
     "DOT_PATH_PATTERN",
+    "FORWARD_ONLY_PRIMITIVES",
     "MAX_ARG_KEY_LENGTH",
     "MAX_CALLABLE_ARGS",
     "MAX_CALLABLE_TARGET_LENGTH",

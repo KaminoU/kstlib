@@ -392,14 +392,14 @@ class TestMatchesFilter:
         assert _matches_filter({}, FilterConfig())
 
     def test_glob_match(self) -> None:
-        """Glob name='R220_*' matches 'R220_ASTRO'."""
+        """Glob name='R220_*' matches 'R220_SALES'."""
         flt = FilterConfig(name="R220_*")
-        assert _matches_filter({"name": "R220_ASTRO"}, flt)
+        assert _matches_filter({"name": "R220_SALES"}, flt)
 
     def test_glob_no_match(self) -> None:
-        """Glob name='R220_*' does not match 'ORION_foo'."""
+        """Glob name='R220_*' does not match 'REPORT_foo'."""
         flt = FilterConfig(name="R220_*")
-        assert not _matches_filter({"name": "ORION_foo"}, flt)
+        assert not _matches_filter({"name": "REPORT_foo"}, flt)
 
     def test_content_type_filter_blocks_other_type(self) -> None:
         """content_type='report' rejects folder objects."""
@@ -421,7 +421,7 @@ class TestMatchesFilter:
         # Type mismatch
         assert not _matches_filter({"content_type": "folder", "name": "R220_X"}, flt)
         # Name mismatch
-        assert not _matches_filter({"content_type": "report", "name": "ORION_X"}, flt)
+        assert not _matches_filter({"content_type": "report", "name": "REPORT_X"}, flt)
 
     def test_missing_metadata_keys(self) -> None:
         """Missing metadata keys default to empty string."""
@@ -520,11 +520,11 @@ class TestComposedPatch:
         data = '<CasResource library="CASUSER"/>'
 
         # Filter matches → patch applied
-        result = chain.patch(data, metadata={"name": "R220_ASTRO"})
+        result = chain.patch(data, metadata={"name": "R220_SALES"})
         assert 'library="R220_LIB"' in result
 
         # Filter does not match → unchanged
-        result2 = chain.patch(data, metadata={"name": "ORION_foo"})
+        result2 = chain.patch(data, metadata={"name": "REPORT_foo"})
         assert result2 == data
 
     def test_targeted_no_match_yields_no_change(self) -> None:
@@ -575,7 +575,7 @@ class TestComposedPatch:
         chain = TransformChain.from_config("orchestrator", config)
 
         data = 'url="https://source/" library="CASUSER"'
-        result = chain.patch(data, metadata={"name": "R220_ASTRO"})
+        result = chain.patch(data, metadata={"name": "R220_SALES"})
         assert "https://target/" in result
         assert 'library="R220_LIB"' in result
 
@@ -613,8 +613,8 @@ class TestComposedPatch:
         result = chain.patch(data, metadata={"name": "R220_FOO"})
         assert 'library="R220_LIB"' in result
 
-        # For ORION_FOO, only the wildcard filter matches → GLOBAL_LIB
-        result2 = chain.patch(data, metadata={"name": "ORION_FOO"})
+        # For REPORT_FOO, only the wildcard filter matches → GLOBAL_LIB
+        result2 = chain.patch(data, metadata={"name": "REPORT_FOO"})
         assert 'library="GLOBAL_LIB"' in result2
 
     def test_last_wins_on_conflict(self) -> None:
@@ -647,7 +647,7 @@ class TestComposedPatch:
         assert chain.patch("PLACEHOLDER") == "VALUE_C"
 
     def test_glob_pattern_match_r220(self) -> None:
-        """Glob 'R220_*' matches 'R220_ASTRO' → patch applied."""
+        """Glob 'R220_*' matches 'R220_SALES' → patch applied."""
         config = TransformConfig(
             chains={
                 "set_x": TransformChainConfig(
@@ -669,10 +669,10 @@ class TestComposedPatch:
             }
         )
         chain = TransformChain.from_config("orchestrator", config)
-        assert chain.patch("X", metadata={"name": "R220_ASTRO"}) == "Y"
+        assert chain.patch("X", metadata={"name": "R220_SALES"}) == "Y"
 
     def test_glob_pattern_no_match(self) -> None:
-        """Glob 'R220_*' does not match 'ORION_foo' → patch skipped."""
+        """Glob 'R220_*' does not match 'REPORT_foo' → patch skipped."""
         config = TransformConfig(
             chains={
                 "set_x": TransformChainConfig(
@@ -694,7 +694,7 @@ class TestComposedPatch:
             }
         )
         chain = TransformChain.from_config("orchestrator", config)
-        assert chain.patch("X", metadata={"name": "ORION_foo"}) == "X"
+        assert chain.patch("X", metadata={"name": "REPORT_foo"}) == "X"
 
     def test_content_type_filter_blocks_folder(self) -> None:
         """content_type='report' rejects a folder object."""
@@ -881,7 +881,7 @@ class TestComposedPatch:
         # R220 object → host remapped + R220_LIB caslib
         result_r220 = chain.transform(
             sas_report_blob,
-            metadata={"content_type": "report", "name": "R220_ASTRO"},
+            metadata={"content_type": "report", "name": "R220_SALES"},
         )
         raw = base64.b64decode(result_r220)
         envelope = json.loads(zlib.decompress(raw[3:]))
@@ -889,12 +889,12 @@ class TestComposedPatch:
         assert "https://new-host.example.com/" in xml
         assert 'library="R220_LIB"' in xml
 
-        # ORION object → host remapped + DEFAULT_LIB caslib
-        result_orion = chain.transform(
+        # REPORT object → host remapped + DEFAULT_LIB caslib
+        result_other = chain.transform(
             sas_report_blob,
-            metadata={"content_type": "report", "name": "ORION_FOO"},
+            metadata={"content_type": "report", "name": "REPORT_FOO"},
         )
-        raw = base64.b64decode(result_orion)
+        raw = base64.b64decode(result_other)
         envelope = json.loads(zlib.decompress(raw[3:]))
         xml = envelope["transferableContent"]["content"]
         assert "https://new-host.example.com/" in xml
@@ -1280,3 +1280,123 @@ class TestAdditionalProtectedPaths:
         assert n == 2  # uri + extra.secret both patched
         assert obj["extra"]["secret"] == "PUBLIC"
         assert obj["connectors"][0]["hints"]["xpath"] == "/CASUSER"  # still protected
+
+
+# ============================================================================
+# split (forward-only extractor)
+# ============================================================================
+
+
+class TestSplitForwardOnly:
+    """Tests for the forward-only split primitive in a chain."""
+
+    def test_auto_reverse_raises(self) -> None:
+        """A split forward primitive cannot be auto-reversed."""
+        fwd = (PrimitiveConfig(name="split", options={"sep": "/", "index": -1}),)
+        with pytest.raises(TransformConfigError, match="auto-reverse"):
+            _auto_reverse(fwd)
+
+    def test_construct_without_backward_succeeds(self) -> None:
+        """A forward-only chain builds without backward (auto-reverse skipped)."""
+        config = TransformChainConfig(
+            name="extract",
+            forward=(PrimitiveConfig(name="split", options={"sep": "/", "index": -1}),),
+        )
+        chain = TransformChain(config)
+        assert chain.forward("/reports/reports/xxx") == "xxx"
+
+    def test_forward_with_empty_backward(self) -> None:
+        """split runs in forward when an explicit empty backward opts out."""
+        config = TransformChainConfig(
+            name="extract",
+            forward=(PrimitiveConfig(name="split", options={"sep": "/", "index": -1}),),
+            backward=(),
+        )
+        chain = TransformChain(config)
+        assert chain.forward("/reports/reports/xxx") == "xxx"
+
+    def test_backward_on_forward_only_raises(self) -> None:
+        """Calling backward on a forward-only chain raises a clear error."""
+        config = TransformChainConfig(
+            name="extract",
+            forward=(PrimitiveConfig(name="split", options={"sep": "/", "index": -1}),),
+        )
+        chain = TransformChain(config)
+        with pytest.raises(TransformConfigError, match="forward-only"):
+            chain.backward("xxx")
+
+    def test_transform_extracts_from_config(self) -> None:
+        """A forward-only chain is usable end-to-end via from_config/transform."""
+        config = TransformConfig(
+            chains={
+                "extract": TransformChainConfig(
+                    name="extract",
+                    forward=(PrimitiveConfig(name="split", options={"sep": "/", "index": -1}),),
+                )
+            }
+        )
+        assert transform("/reports/reports/xxx", "extract", config) == "xxx"
+
+    def test_transform_applies_patch_to_extracted_value(self) -> None:
+        """A patch on a forward-only chain applies to the extracted value (no silent drop)."""
+        config = TransformChainConfig(
+            name="extract",
+            forward=(PrimitiveConfig(name="split", options={"sep": "/", "index": -1}),),
+            patch=PatchConfig(replace={"xxx": "yyy"}),
+        )
+        chain = TransformChain(config)
+        assert chain.transform("/reports/reports/xxx") == "yyy"
+
+    def test_non_forward_only_still_eager_auto_reverse(self) -> None:
+        """Non-forward-only chains keep eager auto-reverse (zlib skip_bytes raises at construction)."""
+        config = TransformChainConfig(
+            name="roundtrip",
+            forward=(PrimitiveConfig(name="zlib", options={"skip_bytes": 2}),),
+        )
+        with pytest.raises(TransformConfigError, match="skip_bytes requires explicit backward"):
+            TransformChain(config)
+
+
+class TestTrForwardOnly:
+    """tr inherits the forward-only chain mechanism (C1.5), no chain.py change."""
+
+    def test_forward_only_from_config(self) -> None:
+        """A tr chain builds without backward, forward works, backward raises."""
+        config = TransformChainConfig(
+            name="strip",
+            forward=(PrimitiveConfig(name="tr", options={"delete": "\n"}),),
+        )
+        chain = TransformChain(config)
+        assert chain.forward("a\nb\n") == "ab"
+        with pytest.raises(TransformConfigError, match="forward-only"):
+            chain.backward("ab")
+
+
+class TestRemovePrefixForwardOnly:
+    """removeprefix inherits the forward-only chain mechanism (C1.5), no chain.py change."""
+
+    def test_forward_only_from_config(self) -> None:
+        """A removeprefix chain builds without backward, forward works, backward raises."""
+        config = TransformChainConfig(
+            name="strip",
+            forward=(PrimitiveConfig(name="removeprefix", options={"prefix": "reports/"}),),
+        )
+        chain = TransformChain(config)
+        assert chain.forward("reports/abc") == "abc"
+        with pytest.raises(TransformConfigError, match="forward-only"):
+            chain.backward("abc")
+
+
+class TestRemoveSuffixForwardOnly:
+    """removesuffix inherits the forward-only chain mechanism (C1.5), no chain.py change."""
+
+    def test_forward_only_from_config(self) -> None:
+        """A removesuffix chain builds without backward, forward works, backward raises."""
+        config = TransformChainConfig(
+            name="strip",
+            forward=(PrimitiveConfig(name="removesuffix", options={"suffix": ".json"}),),
+        )
+        chain = TransformChain(config)
+        assert chain.forward("data.json") == "data"
+        with pytest.raises(TransformConfigError, match="forward-only"):
+            chain.backward("data")
