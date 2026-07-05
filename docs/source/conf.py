@@ -110,7 +110,7 @@ html_static_path = ["_static"]
 html_title = __app_name__
 html_logo = "../../assets/kstlib.svg"
 
-# Furo theme options - Lokaal color palette
+# Furo theme options - custom color palette
 html_theme_options = {
     # GitHub integration - adds "Edit on GitHub" and source links
     "source_repository": "https://github.com/KaminoU/kstlib",
@@ -155,17 +155,17 @@ html_theme_options = {
         # Brand
         "color-brand-primary": "#4A90E2",
         "color-brand-content": "#4A90E2",
-        # Backgrounds - Lokaal dark theme
+        # Backgrounds - custom dark theme
         "color-background-primary": "#0D1117",
         "color-background-secondary": "#161B22",
         "color-background-hover": "#21262D",
         "color-background-hover--transparent": "rgba(33, 38, 45, 0.5)",
         "color-background-border": "#30363D",
-        # Text - Lokaal
+        # Text
         "color-foreground-primary": "#E6EDF3",
         "color-foreground-secondary": "#8B949E",
         "color-foreground-muted": "#6E7681",
-        # Admonitions - Lokaal semantic colors
+        # Admonitions - semantic colors
         "color-admonition-title-background--note": "rgba(167, 139, 250, 0.15)",
         "color-admonition-title-background--tip": "rgba(22, 160, 133, 0.15)",
         "color-admonition-title-background--warning": "rgba(241, 196, 15, 0.15)",
@@ -250,7 +250,7 @@ def setup(app: Any) -> None:
     """
     # Ensure the default color scheme starts in dark mode before Furo loads.
     app.add_js_file("set-default-dark-mode.js", priority=150)
-    # Lokaal color palette and custom styling
+    # Custom color palette and styling
     app.add_css_file("custom.css", priority=150)
     app.connect("autodoc-process-signature", _autodoc_clean_signature)
 

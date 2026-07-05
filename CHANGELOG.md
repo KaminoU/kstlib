@@ -19,6 +19,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.4.1] - 2026-07-05
+
+### Added
+
+### Changed
+
+- **Docs theme naming**: Sphinx/Furo custom CSS properties renamed from a
+  legacy prefix to the `--kstlib-*` prefix already used by the API reference
+  styling, and theme comments reworded generically. No visual change.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+- Bumped `joserfc` lockfile pin from 1.6.5 to 1.7.2 (transitive dependency via
+  `authlib`), covering GHSA-wphv-vfrh-23q5 / CVE-2026-48990 (medium): RFC 7797
+  `b64=false` JWS payloads could bypass `JWSRegistry` payload-size limits
+  during deserialization.
+
 ## [3.4.0] - 2026-06-25
 
 ### Added
@@ -605,7 +628,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `-vvv` produces < 200 useful lines on typical rapi call), `tests/smoke/test_logging_modules_kill_switch.py`
   (validates YAML mute silences verbose modules).
 - **Furo theme consistency tweaks** : `.sd-card` and `.admonition` background
-  forced to `--lokaal-surface` for visual coherence with code blocks. 3 Furo
+  forced to `--kstlib-surface` for visual coherence with code blocks. 3 Furo
   gotchas inscribed in `development/quality.md` (no `{contents}` directive
   with Furo, card cascade override needs `!important`, build local
   verification).
@@ -1540,7 +1563,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.4.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.4.1...HEAD
+[3.4.1]: https://github.com/KaminoU/kstlib/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/KaminoU/kstlib/compare/v3.3.1...v3.4.0
 [3.3.1]: https://github.com/KaminoU/kstlib/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/KaminoU/kstlib/compare/v3.2.0...v3.3.0

@@ -1,7 +1,6 @@
 /* ============================================================
-   kstlib Sphinx Theme - Lokaal Color Palette
+   kstlib Sphinx Theme - Custom Color Palette
    ============================================================
-   Design System: tmp/_design_demo/widget_library.html
 
    Color Palette:
    - Primary:    #4A90E2 (blue)
@@ -27,35 +26,35 @@
 /* -------------------------------------------------- */
 
 :root {
-    /* Lokaal Brand */
-    --lokaal-primary: #4A90E2;
-    --lokaal-primary-hover: #3A7BC8;
-    --lokaal-primary-10: rgba(74, 144, 226, 0.1);
-    --lokaal-primary-20: rgba(74, 144, 226, 0.2);
+    /* Brand */
+    --kstlib-primary: #4A90E2;
+    --kstlib-primary-hover: #3A7BC8;
+    --kstlib-primary-10: rgba(74, 144, 226, 0.1);
+    --kstlib-primary-20: rgba(74, 144, 226, 0.2);
 
-    /* Lokaal Semantic */
-    --lokaal-success: #16A085;
-    --lokaal-success-10: rgba(22, 160, 133, 0.1);
-    --lokaal-warning: #F1C40F;
-    --lokaal-warning-10: rgba(241, 196, 15, 0.1);
-    --lokaal-error: #E85A4F;
-    --lokaal-error-10: rgba(232, 90, 79, 0.1);
-    --lokaal-info: #A78BFA;
-    --lokaal-info-10: rgba(167, 139, 250, 0.1);
+    /* Semantic */
+    --kstlib-success: #16A085;
+    --kstlib-success-10: rgba(22, 160, 133, 0.1);
+    --kstlib-warning: #F1C40F;
+    --kstlib-warning-10: rgba(241, 196, 15, 0.1);
+    --kstlib-error: #E85A4F;
+    --kstlib-error-10: rgba(232, 90, 79, 0.1);
+    --kstlib-info: #A78BFA;
+    --kstlib-info-10: rgba(167, 139, 250, 0.1);
 
-    /* Lokaal Dark Surfaces */
-    --lokaal-bg: #0D1117;
-    --lokaal-surface: #161B22;
-    --lokaal-surface-variant: #21262D;
-    --lokaal-surface-elevated: #1C2128;
-    --lokaal-border: #30363D;
-    --lokaal-border-subtle: #21262D;
+    /* Dark Surfaces */
+    --kstlib-bg: #0D1117;
+    --kstlib-surface: #161B22;
+    --kstlib-surface-variant: #21262D;
+    --kstlib-surface-elevated: #1C2128;
+    --kstlib-border: #30363D;
+    --kstlib-border-subtle: #21262D;
 
-    /* Lokaal Text */
-    --lokaal-text-primary: #E6EDF3;
-    --lokaal-text-secondary: #8B949E;
-    --lokaal-text-tertiary: #6E7681;
-    --lokaal-text-disabled: #484F58;
+    /* Text */
+    --kstlib-text-primary: #E6EDF3;
+    --kstlib-text-secondary: #8B949E;
+    --kstlib-text-tertiary: #6E7681;
+    --kstlib-text-disabled: #484F58;
 
     /* API Reference Styling */
     --kstlib-api-bg: #161B22;
@@ -80,7 +79,7 @@
      * surface so admonitions, code blocks, and cards share the same
      * tone. Furo's own --color-admonition-background defaults to a
      * lighter shade that floats above the rest of the page. */
-    --color-admonition-background: var(--lokaal-surface);
+    --color-admonition-background: var(--kstlib-surface);
 }
 
 /* -------------------------------------------------- */
@@ -88,22 +87,22 @@
 /* -------------------------------------------------- */
 
 body[data-theme="light"] {
-    /* Lokaal Light Surfaces */
-    --lokaal-bg: #ffffff;
-    --lokaal-surface: #f6f8fa;
-    --lokaal-surface-variant: #eaeef2;
-    --lokaal-surface-elevated: #ffffff;
-    --lokaal-border: #d0d7de;
-    --lokaal-border-subtle: #eaeef2;
+    /* Light Surfaces */
+    --kstlib-bg: #ffffff;
+    --kstlib-surface: #f6f8fa;
+    --kstlib-surface-variant: #eaeef2;
+    --kstlib-surface-elevated: #ffffff;
+    --kstlib-border: #d0d7de;
+    --kstlib-border-subtle: #eaeef2;
 
-    /* Lokaal Light Text */
-    --lokaal-text-primary: #1f2328;
-    --lokaal-text-secondary: #656d76;
-    --lokaal-text-tertiary: #8b949e;
-    --lokaal-text-disabled: #b1bac4;
+    /* Light Text */
+    --kstlib-text-primary: #1f2328;
+    --kstlib-text-secondary: #656d76;
+    --kstlib-text-tertiary: #8b949e;
+    --kstlib-text-disabled: #b1bac4;
 
-    /* Lokaal Semantic - slightly darker for light bg */
-    --lokaal-warning: #9a7b00;
+    /* Semantic - slightly darker for light bg */
+    --kstlib-warning: #9a7b00;
 
     /* API Reference Styling - Light */
     --kstlib-api-bg: #f6f8fa;
@@ -125,7 +124,7 @@ body[data-theme="light"] {
     --kstlib-config-snippet-border: rgba(11, 122, 108, 0.3);
 
     /* Furo admonition surface override (light mode) */
-    --color-admonition-background: var(--lokaal-surface);
+    --color-admonition-background: var(--kstlib-surface);
 }
 
 /* -------------------------------------------------- */
@@ -164,7 +163,7 @@ body[data-theme="light"] {
 /* -------------------------------------------------- */
 
 .sidebar-brand {
-    color: var(--lokaal-primary) !important;
+    color: var(--kstlib-primary) !important;
 }
 
 .sidebar-tree .reference {
@@ -172,12 +171,12 @@ body[data-theme="light"] {
 }
 
 .sidebar-tree .reference:hover {
-    color: var(--lokaal-primary) !important;
+    color: var(--kstlib-primary) !important;
 }
 
 .sidebar-tree .current-page > .reference {
-    background-color: var(--lokaal-primary-10);
-    color: var(--lokaal-primary) !important;
+    background-color: var(--kstlib-primary-10);
+    color: var(--kstlib-primary) !important;
 }
 
 /* -------------------------------------------------- */
@@ -185,11 +184,11 @@ body[data-theme="light"] {
 /* -------------------------------------------------- */
 
 a {
-    color: var(--lokaal-primary);
+    color: var(--kstlib-primary);
 }
 
 a:hover {
-    color: var(--lokaal-primary-hover);
+    color: var(--kstlib-primary-hover);
 }
 
 /* -------------------------------------------------- */
@@ -283,7 +282,7 @@ code.docutils.literal,
 .rst-content code.literal:not(.xref),
 .rst-content code:not([class*="highlight"]) {
     background: var(--kstlib-inline-code-bg);
-    color: var(--lokaal-primary);
+    color: var(--kstlib-primary);
     border: 1px solid var(--kstlib-inline-code-border);
     border-radius: 4px;
     padding: 0.1rem 0.4rem;
@@ -296,7 +295,7 @@ code.docutils.literal span.pre,
 }
 
 /* -------------------------------------------------- */
-/* Admonitions - Lokaal colors                        */
+/* Admonitions - custom palette colors                */
 /* -------------------------------------------------- */
 
 /*
@@ -312,84 +311,84 @@ code.docutils.literal span.pre,
 
 /* Note - Lavender (Info) */
 .admonition.note {
-    border-color: var(--lokaal-info);
+    border-color: var(--kstlib-info);
 }
 
 .admonition.note > .admonition-title {
-    background-color: var(--lokaal-info-10);
+    background-color: var(--kstlib-info-10);
 }
 
 .admonition.note > .admonition-title::before {
-    background-color: var(--lokaal-info);
+    background-color: var(--kstlib-info);
 }
 
 /* Tip/Hint - Success green */
 .admonition.tip,
 .admonition.hint {
-    border-color: var(--lokaal-success);
+    border-color: var(--kstlib-success);
 }
 
 .admonition.tip > .admonition-title,
 .admonition.hint > .admonition-title {
-    background-color: var(--lokaal-success-10);
+    background-color: var(--kstlib-success-10);
 }
 
 .admonition.tip > .admonition-title::before,
 .admonition.hint > .admonition-title::before {
-    background-color: var(--lokaal-success);
+    background-color: var(--kstlib-success);
 }
 
 /* Warning/Caution - Yellow */
 .admonition.warning,
 .admonition.caution,
 .admonition.attention {
-    border-color: var(--lokaal-warning);
+    border-color: var(--kstlib-warning);
 }
 
 .admonition.warning > .admonition-title,
 .admonition.caution > .admonition-title,
 .admonition.attention > .admonition-title {
-    background-color: var(--lokaal-warning-10);
+    background-color: var(--kstlib-warning-10);
 }
 
 .admonition.warning > .admonition-title::before,
 .admonition.caution > .admonition-title::before,
 .admonition.attention > .admonition-title::before {
-    background-color: var(--lokaal-warning);
+    background-color: var(--kstlib-warning);
 }
 
 /* Danger/Error - Coral red */
 .admonition.danger,
 .admonition.error {
-    border-color: var(--lokaal-error);
+    border-color: var(--kstlib-error);
 }
 
 .admonition.danger > .admonition-title,
 .admonition.error > .admonition-title {
-    background-color: var(--lokaal-error-10);
+    background-color: var(--kstlib-error-10);
 }
 
 .admonition.danger > .admonition-title::before,
 .admonition.error > .admonition-title::before {
-    background-color: var(--lokaal-error);
+    background-color: var(--kstlib-error);
 }
 
 /* Important - Primary blue */
 .admonition.important {
-    border-color: var(--lokaal-primary);
+    border-color: var(--kstlib-primary);
 }
 
 .admonition.important > .admonition-title {
-    background-color: var(--lokaal-primary-10);
+    background-color: var(--kstlib-primary-10);
 }
 
 .admonition.important > .admonition-title::before {
-    background-color: var(--lokaal-primary);
+    background-color: var(--kstlib-primary);
 }
 
 /* See Also - Muted */
 .admonition.seealso {
-    border-color: var(--lokaal-text-tertiary);
+    border-color: var(--kstlib-text-tertiary);
 }
 
 .admonition.seealso > .admonition-title {
@@ -399,13 +398,13 @@ code.docutils.literal span.pre,
 /* Example admonitions */
 .admonition-example.admonition,
 .admonition-examples.admonition {
-    border-color: var(--lokaal-info);
+    border-color: var(--kstlib-info);
 }
 
 .admonition-example.admonition > .admonition-title,
 .admonition-examples.admonition > .admonition-title {
-    background-color: var(--lokaal-info-10);
-    color: var(--lokaal-info);
+    background-color: var(--kstlib-info-10);
+    color: var(--kstlib-info);
 }
 
 /* -------------------------------------------------- */
@@ -413,8 +412,8 @@ code.docutils.literal span.pre,
 /* -------------------------------------------------- */
 
 .highlight {
-    background: var(--lokaal-surface) !important;
-    border: 1px solid var(--lokaal-border);
+    background: var(--kstlib-surface) !important;
+    border: 1px solid var(--kstlib-border);
     border-radius: 6px;
 }
 
@@ -424,7 +423,7 @@ code.docutils.literal span.pre,
 
 /* -------------------------------------------------- */
 /* Pygments Syntax Highlighting - Dark Theme          */
-/* Dracula-inspired with Lokaal palette               */
+/* Dracula-inspired with custom palette               */
 /* -------------------------------------------------- */
 
 :root {
@@ -733,21 +732,21 @@ body[data-theme="light"] {
  */
 
 :root {
-    --sd-color-card-background: var(--lokaal-surface);
-    --sd-color-card-border: var(--lokaal-border);
-    --sd-color-card-text: var(--lokaal-text-primary);
-    --color-card-background: var(--lokaal-surface);
-    --color-card-marginals-background: var(--lokaal-surface);
-    --color-card-border: var(--lokaal-border);
+    --sd-color-card-background: var(--kstlib-surface);
+    --sd-color-card-border: var(--kstlib-border);
+    --sd-color-card-text: var(--kstlib-text-primary);
+    --color-card-background: var(--kstlib-surface);
+    --color-card-marginals-background: var(--kstlib-surface);
+    --color-card-border: var(--kstlib-border);
 }
 
 body[data-theme="light"] {
-    --sd-color-card-background: var(--lokaal-surface);
-    --sd-color-card-border: var(--lokaal-border);
-    --sd-color-card-text: var(--lokaal-text-primary);
-    --color-card-background: var(--lokaal-surface);
-    --color-card-marginals-background: var(--lokaal-surface);
-    --color-card-border: var(--lokaal-border);
+    --sd-color-card-background: var(--kstlib-surface);
+    --sd-color-card-border: var(--kstlib-border);
+    --sd-color-card-text: var(--kstlib-text-primary);
+    --color-card-background: var(--kstlib-surface);
+    --color-card-marginals-background: var(--kstlib-surface);
+    --color-card-border: var(--kstlib-border);
 }
 
 /*
@@ -759,24 +758,24 @@ body[data-theme="light"] {
  * do not bleed into the rest of the theme.
  */
 .sd-card {
-    background-color: var(--lokaal-surface) !important;
-    border-color: var(--lokaal-border);
+    background-color: var(--kstlib-surface) !important;
+    border-color: var(--kstlib-border);
 }
 
 .sd-card .sd-card-body {
-    background-color: var(--lokaal-surface) !important;
+    background-color: var(--kstlib-surface) !important;
 }
 
 .sd-card-hover {
-    background-color: var(--lokaal-surface) !important;
+    background-color: var(--kstlib-surface) !important;
 }
 
 .sd-card .sd-card-title {
-    color: var(--lokaal-primary);
+    color: var(--kstlib-primary);
 }
 
 .sd-card-hover:hover {
-    border-color: var(--lokaal-primary);
+    border-color: var(--kstlib-primary);
     box-shadow: 0 2px 8px var(--kstlib-api-shadow);
 }
 
@@ -785,20 +784,20 @@ body[data-theme="light"] {
 /* -------------------------------------------------- */
 
 table.docutils {
-    border-color: var(--lokaal-border);
+    border-color: var(--kstlib-border);
 }
 
 table.docutils th {
-    background-color: var(--lokaal-surface);
-    border-color: var(--lokaal-border);
+    background-color: var(--kstlib-surface);
+    border-color: var(--kstlib-border);
 }
 
 table.docutils td {
-    border-color: var(--lokaal-border);
+    border-color: var(--kstlib-border);
 }
 
 table.docutils tr:hover td {
-    background-color: var(--lokaal-surface-variant);
+    background-color: var(--kstlib-surface-variant);
 }
 
 /* -------------------------------------------------- */
@@ -834,13 +833,13 @@ button {
 }
 
 .btn-primary {
-    background-color: var(--lokaal-primary);
-    border-color: var(--lokaal-primary);
+    background-color: var(--kstlib-primary);
+    border-color: var(--kstlib-primary);
 }
 
 .btn-primary:hover {
-    background-color: var(--lokaal-primary-hover);
-    border-color: var(--lokaal-primary-hover);
+    background-color: var(--kstlib-primary-hover);
+    border-color: var(--kstlib-primary-hover);
 }
 
 /* -------------------------------------------------- */
@@ -848,11 +847,11 @@ button {
 /* -------------------------------------------------- */
 
 .search-button {
-    border-color: var(--lokaal-border);
+    border-color: var(--kstlib-border);
 }
 
 .search-button:hover {
-    border-color: var(--lokaal-primary);
+    border-color: var(--kstlib-primary);
 }
 
 /* -------------------------------------------------- */
@@ -865,16 +864,16 @@ body[data-theme="dark"] ::-webkit-scrollbar {
 }
 
 body[data-theme="dark"] ::-webkit-scrollbar-track {
-    background: var(--lokaal-bg);
+    background: var(--kstlib-bg);
 }
 
 body[data-theme="dark"] ::-webkit-scrollbar-thumb {
-    background: var(--lokaal-border);
+    background: var(--kstlib-border);
     border-radius: 4px;
 }
 
 body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-    background: var(--lokaal-text-tertiary);
+    background: var(--kstlib-text-tertiary);
 }
 
 /* -------------------------------------------------- */
@@ -883,7 +882,7 @@ body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 
 @media (max-width: 67em) {
     .sidebar-drawer {
-        background: var(--lokaal-surface);
+        background: var(--kstlib-surface);
     }
 }
 
