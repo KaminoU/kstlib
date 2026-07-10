@@ -48,7 +48,7 @@ dependencies = [
     # --- Core Async & Runtime Services ---
     "structlog>=25.0,<26",  # Structured logging with async support
     "aiosqlite>=0.21,<1",   # Async SQLite wrapper
-    "aiosmtplib>=4.0,<5",   # Async SMTP client (email sending)
+    "aiosmtplib>=4.0,<6",   # Async SMTP client (email sending)
     "websockets>=15.0,<16", # WebSocket server/client
     "jinja2>=3.1.5,<4",     # Template engine (used for mails, configs, etc.)
 
