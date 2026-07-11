@@ -19,6 +19,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.4.2] - 2026-07-11
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+- Dropped the unused `aiosmtplib` dependency: it was declared but never imported
+  (the SMTP transport uses the standard library `smtplib`). Its removal closes
+  GHSA-v3q9-hj7j-63hq / CVE-2026-53533 (medium): SMTP command injection via CR/LF
+  in sender/recipient addresses, by eliminating the package from the dependency
+  tree.
+
+### Fixed
+
+### Security
+
+- Bumped `soupsieve` lockfile pin from 2.8.3 to 2.8.4 (transitive dependency,
+  docs extra only via `furo` -> `beautifulsoup4`), covering
+  GHSA-2wc2-fm75-p42x / CVE-2026-49476 (high): memory exhaustion when compiling
+  large comma-separated CSS selector lists, and GHSA-836r-79rf-4m37 /
+  CVE-2026-49477 (high): ReDoS via catastrophic backtracking in the selector
+  parser.
+
 ## [3.4.1] - 2026-07-05
 
 ### Added
@@ -1563,7 +1590,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.4.1...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.4.2...HEAD
+[3.4.2]: https://github.com/KaminoU/kstlib/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/KaminoU/kstlib/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/KaminoU/kstlib/compare/v3.3.1...v3.4.0
 [3.3.1]: https://github.com/KaminoU/kstlib/compare/v3.3.0...v3.3.1
