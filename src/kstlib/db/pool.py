@@ -37,6 +37,22 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _silence_driver_debug_logging() -> None:
+    """Cap the aiosqlite driver logger at INFO to keep bound parameters out of logs.
+
+    The aiosqlite worker logs every operation at DEBUG level with a repr
+    that includes the SQL statement AND its bound parameters, so any secret
+    written through a connection leaks into logs the moment DEBUG is active.
+    Capping the driver logger at INFO cuts exactly those records while
+    preserving the driver's own INFO/WARNING/ERROR diagnostics. Levels
+    already at INFO or stricter are left untouched.
+    """
+    driver_logger = logging.getLogger("aiosqlite")
+    if driver_logger.level < logging.INFO:
+        driver_logger.setLevel(logging.INFO)
+        log.debug("aiosqlite driver logger capped at INFO: bound parameters never reach logs")
+
+
 @dataclass
 class PoolStats:
     """Statistics for connection pool monitoring.
@@ -82,6 +98,12 @@ class ConnectionPool:
         retry_delay: Delay between retries.
         cipher_key: Optional encryption key for SQLCipher.
         on_connect: Callback after connection established.
+        driver_debug: Keep aiosqlite driver DEBUG logging enabled. Defaults
+            to False: the pool caps the process-wide ``aiosqlite`` logger at
+            INFO on construction because its DEBUG records include bound
+            parameters (secret values would leak into logs). Pass True to
+            opt out for conscious troubleshooting; kstlib then never touches
+            that logger (it does not restore a previously capped level).
 
     Examples:
         >>> pool = ConnectionPool(":memory:", min_size=1, max_size=5)
@@ -98,6 +120,7 @@ class ConnectionPool:
     retry_delay: float = 0.5
     cipher_key: str | None = field(default=None, repr=False)
     on_connect: Any | None = None  # Callable[[aiosqlite.Connection], Awaitable[None]]
+    driver_debug: bool = False
 
     _pool: asyncio.Queue[aiosqlite.Connection] = field(default_factory=lambda: asyncio.Queue(), repr=False)
     _connections: set[aiosqlite.Connection] = field(default_factory=set, repr=False)
@@ -120,6 +143,11 @@ class ConnectionPool:
         )
         self.max_retries = max(HARD_MIN_DB_MAX_RETRIES, min(HARD_MAX_DB_MAX_RETRIES, self.max_retries))
         self.retry_delay = max(HARD_MIN_DB_RETRY_DELAY, min(HARD_MAX_DB_RETRY_DELAY, self.retry_delay))
+
+        # Secure by default: the aiosqlite driver logs bound parameters at
+        # DEBUG level, so cap its logger before any connection is created.
+        if not self.driver_debug:
+            _silence_driver_debug_logging()
 
     async def _create_connection(self) -> aiosqlite.Connection:
         """Create a new database connection.

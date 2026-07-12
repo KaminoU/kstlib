@@ -13,6 +13,7 @@ Pair this reference with {doc}`../features/auth/index` for the feature guide and
 - `OIDCProvider` - OpenID Connect provider with discovery and PKCE support
 - `OAuth2Provider` - Generic OAuth2 provider for non-OIDC endpoints
 - `AbstractAuthProvider` - Base class for custom provider implementations
+- `AuthProviderConfig` - Provider configuration dataclass (endpoints, scopes, PKCE, `server_side` profile)
 
 **Session management:**
 - `AuthSession` - Context manager wrapping `requests.Session` with automatic token injection and refresh
@@ -63,6 +64,20 @@ Pair this reference with {doc}`../features/auth/index` for the feature guide and
 .. autoclass:: kstlib.auth.providers.base.AbstractAuthProvider
    :members:
    :undoc-members:
+   :show-inheritance:
+   :noindex:
+```
+
+### AuthProviderConfig
+
+Configuration dataclass shared by all providers. Holds endpoints, scopes,
+PKCE and SSL settings. `client_secret` is excluded from `repr()` so it never
+leaks through logs; set `server_side: true` for a server-side consumer
+profile (suppresses the not-localhost `redirect_uri` warning).
+
+```{eval-rst}
+.. autoclass:: kstlib.auth.providers.base.AuthProviderConfig
+   :members:
    :show-inheritance:
    :noindex:
 ```

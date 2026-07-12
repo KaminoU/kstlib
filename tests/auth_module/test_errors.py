@@ -71,6 +71,16 @@ class TestDiscoveryError:
         assert err.issuer == "https://issuer.example.com"
         assert err.reason == "Connection timeout"
 
+    def test_status_code_default_none(self) -> None:
+        """DiscoveryError.status_code defaults to None (no HTTP response received)."""
+        err = DiscoveryError("https://issuer.example.com", "connection refused")
+        assert err.status_code is None
+
+    def test_with_status_code(self) -> None:
+        """DiscoveryError stores the HTTP status answered by the provider."""
+        err = DiscoveryError("https://issuer.example.com", "HTTP 502", status_code=502)
+        assert err.status_code == 502
+
 
 class TestTokenError:
     """Tests for TokenError base class."""
@@ -120,6 +130,26 @@ class TestTokenExchangeError:
         """TokenExchangeError supports error_code."""
         err = TokenExchangeError("Invalid grant", error_code="invalid_grant")
         assert err.error_code == "invalid_grant"
+
+    def test_status_code_default_none(self) -> None:
+        """TokenExchangeError.status_code defaults to None (no HTTP response received)."""
+        err = TokenExchangeError("Network error: timeout")
+        assert err.status_code is None
+
+    def test_with_status_code(self) -> None:
+        """TokenExchangeError stores the HTTP status answered by the provider."""
+        err = TokenExchangeError("Rejected", error_code="not_allowed", status_code=400)
+        assert err.status_code == 400
+
+    def test_retryable_default_false(self) -> None:
+        """TokenExchangeError.retryable defaults to False."""
+        err = TokenExchangeError("Invalid code")
+        assert err.retryable is False
+
+    def test_retryable_flag(self) -> None:
+        """TokenExchangeError supports the retryable flag."""
+        err = TokenExchangeError("Network error: timeout", retryable=True)
+        assert err.retryable is True
 
 
 class TestTokenValidationError:

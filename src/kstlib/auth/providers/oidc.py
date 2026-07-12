@@ -250,6 +250,8 @@ class OIDCProvider(OAuth2Provider):
 
         Raises:
             DiscoveryError: If discovery fails (only in auto/hybrid mode).
+                ``status_code`` carries the HTTP status when the provider
+                answered an error, and stays ``None`` for transport failures.
 
         """
         # Manual mode: no discovery, return empty dict
@@ -292,6 +294,7 @@ class OIDCProvider(OAuth2Provider):
             raise DiscoveryError(
                 self.config.issuer or "unknown",
                 f"HTTP {e.response.status_code}",
+                status_code=e.response.status_code,
             ) from e
         except httpx.RequestError as e:
             raise DiscoveryError(
@@ -406,6 +409,13 @@ class OIDCProvider(OAuth2Provider):
         Returns:
             Tuple of (authorization_url, state).
 
+        Note:
+            A random ``nonce`` is added to the URL, which hardens the
+            provider side against replay. kstlib does not verify the
+            ``nonce`` claim echoed in the returned ID token: consumers whose
+            threat model requires strict OIDC nonce verification must check
+            ``claims["nonce"]`` themselves.
+
         """
         # Ensure discovery is done first
         self.discover()
@@ -483,12 +493,70 @@ class OIDCProvider(OAuth2Provider):
 
         return token
 
+    def exchange_code_stateless(
+        self,
+        code: str,
+        *,
+        code_verifier: str | None = None,
+    ) -> Token:
+        """Exchange an authorization code without instance state, with OIDC checks.
+
+        Ensures discovery ran first (correct token endpoint), enforces the
+        PKCE guard on the explicit ``code_verifier`` argument only (the
+        instance PKCE state is ignored), and validates the ID token when one
+        is returned.
+
+        **The returned token is NOT persisted** (see
+        :meth:`OAuth2Provider.exchange_code_stateless`): the caller owns
+        per-user persistence.
+
+        Args:
+            code: Authorization code from the callback request.
+            code_verifier: PKCE code verifier for this flow. Required when
+                ``config.pkce`` is enabled.
+
+        Returns:
+            Token with access_token, id_token, etc., not saved to the
+            provider token storage.
+
+        Raises:
+            TokenExchangeError: Same structured contract as
+                :meth:`exchange_code`; ``error_code="pkce_missing"`` (local
+                pre-network guard) when PKCE is enabled and no
+                ``code_verifier`` was provided.
+            TokenValidationError: If ID token validation fails.
+
+        Note:
+            Stateless consumers build their own authorization URL, so the
+            ``nonce`` handling is theirs: kstlib validates the ID token
+            signature, issuer, audience and expiry, but does not verify the
+            ``nonce`` claim (see :meth:`get_authorization_url`).
+
+        """
+        if self.config.pkce and not code_verifier:
+            msg = "PKCE is enabled but no code_verifier was provided"
+            raise TokenExchangeError(msg, error_code="pkce_missing")
+
+        # Ensure discovery is done to get the correct token_endpoint
+        self.discover()
+
+        token = super().exchange_code_stateless(code, code_verifier=code_verifier)
+
+        # Validate ID token if present (mandatory for OIDC security)
+        if token.id_token:
+            self._validate_id_token(token.id_token)
+
+        return token
+
     # ─────────────────────────────────────────────────────────────────────────
     # ID Token validation
     # ─────────────────────────────────────────────────────────────────────────
 
     def _validate_id_token(self, id_token: str) -> dict[str, Any]:
         """Validate and decode an ID token.
+
+        Validates the signature (JWKS), issuer, audience and expiry. The
+        ``nonce`` claim is NOT verified (see :meth:`get_authorization_url`).
 
         Args:
             id_token: JWT ID token.

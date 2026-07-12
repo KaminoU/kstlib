@@ -19,6 +19,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.5.0] - 2026-07-12
+
+### Added
+
+- `kstlib.auth`: structural discriminant on authentication errors.
+  `DiscoveryError.status_code` and `TokenExchangeError.status_code` expose the
+  HTTP status answered by the identity provider (`None` when no HTTP response
+  was received), and `TokenExchangeError.retryable` mirrors
+  `TokenRefreshError.retryable` (`True` for transport failures and provider
+  5xx answers, `False` for definitive 4xx rejections and local guards). All
+  additive keyword arguments; existing raise sites and signatures unchanged.
+- `kstlib.auth`: server-side consumption profile. New
+  `exchange_code_stateless()` on `OAuth2Provider` and `OIDCProvider` for
+  multi-user services whose login and callback are separate concurrent
+  requests: the caller owns CSRF state and PKCE, so the method touches no
+  per-flow instance state, emits no spurious `[SECURITY]` warning, and does
+  not persist the returned token (token storage is keyed by provider name,
+  not by end user; per-user persistence belongs to the caller). It raises
+  the same structured `TokenExchangeError` contract as `exchange_code()`.
+  New `server_side` flag on `AuthProviderConfig` (and in provider YAML)
+  suppressing the "redirect_uri host is not localhost" warning when a public
+  callback endpoint is the nominal configuration. Defaults unchanged: CLI
+  flows keep their behavior and warnings.
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- `kstlib.auth`: the "provider answered an error" vs "provider unreachable"
+  discriminant on token exchange was an implicit, undocumented and untested
+  property (`TokenExchangeError.error_code` None vs non-None), silently
+  breakable by any refactor, and did not exist at all on OIDC discovery
+  (`DiscoveryError.reason` is a plain string that would have to be parsed).
+  The contract is now documented on the exception classes, including the two
+  local pre-network guard codes (`state_mismatch`, `pkce_missing`) that carry
+  an `error_code` without any provider response, and locked by regression
+  tests so a consumer can render honest error messages (a provider 4xx
+  rejection is no longer presentable as "provider could not be reached").
+- `kstlib.auth`: the `exchange_code` docstring claimed `code_verifier` was
+  "ignored for basic OAuth2" while the implementation forwards it to the
+  token endpoint; the docstring now matches the behavior. The OIDC `nonce`
+  is now documented as generated for provider-side replay hardening but not
+  verified in the returned ID token claims (strict nonce verification is the
+  consumer's responsibility).
+- Dev Keycloak bench (`infra/`): healthcheck never reached healthy (missing
+  `Connection: close`, the check waited for an EOF that keep-alive never sends),
+  realm import warning (`openid` listed as a client scope in `defaultClientScopes`),
+  and boot crash on some Docker/WSL2 stacks (unpinned container hostname breaking
+  the embedded H2 database resolution).
+
+### Security
+
+- `kstlib.auth`: `AuthProviderConfig.client_secret` is now excluded from the
+  dataclass `repr()` (`field(repr=False)`, same treatment as tokens): the
+  secret no longer leaks in clear text through logs, tracebacks or dumps of
+  the config object.
+- `kstlib.db`: bound parameters no longer leak into logs through the `aiosqlite`
+  driver. The driver logs every operation at DEBUG level with a repr that includes
+  the SQL statement AND its bound values, so any secret stored through
+  `AsyncDatabase` or `ConnectionPool` leaked in plain text as soon as DEBUG logging
+  was active (encryption protects the file at rest, not the logs). The process-wide
+  `aiosqlite` logger is now capped at INFO when a pool is created; its own
+  INFO/WARNING/ERROR diagnostics are preserved, and levels already at INFO or
+  stricter are left untouched. New `driver_debug=True` keyword on both classes
+  opts out for conscious troubleshooting.
+
 ## [3.4.2] - 2026-07-11
 
 ### Added
@@ -1590,7 +1660,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.4.2...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.5.0...HEAD
+[3.5.0]: https://github.com/KaminoU/kstlib/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/KaminoU/kstlib/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/KaminoU/kstlib/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/KaminoU/kstlib/compare/v3.3.1...v3.4.0

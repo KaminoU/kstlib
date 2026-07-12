@@ -286,13 +286,18 @@ class OAuth2Provider(AbstractAuthProvider):
         Args:
             code: Authorization code from callback.
             state: State parameter for validation.
-            code_verifier: PKCE code verifier (ignored for basic OAuth2).
+            code_verifier: PKCE code verifier, forwarded to the token
+                endpoint when provided.
 
         Returns:
             Token with access_token and optionally refresh_token.
 
         Raises:
-            TokenExchangeError: If exchange fails.
+            TokenExchangeError: If exchange fails. ``status_code`` carries the
+                HTTP status when the provider answered an error (``error_code``
+                is then non-None), and stays ``None`` for transport failures
+                and local guard rejections; ``retryable`` is ``True`` for
+                transport failures and provider 5xx answers.
 
         """
         # Validate state (mandatory CSRF protection)
@@ -302,6 +307,64 @@ class OAuth2Provider(AbstractAuthProvider):
             msg = "State mismatch - possible CSRF attack"
             raise TokenExchangeError(msg, error_code="state_mismatch")
 
+        token = self._request_token_exchange(code, code_verifier)
+        self.save_token(token)
+        self._pending_state = None
+        return token
+
+    def exchange_code_stateless(
+        self,
+        code: str,
+        *,
+        code_verifier: str | None = None,
+    ) -> Token:
+        """Exchange an authorization code without touching instance state.
+
+        Designed for server-side, multi-user consumers whose login and
+        callback are separate concurrent requests: the caller generates and
+        validates its own ``state`` (CSRF protection) and PKCE verifier in
+        its own pending store. This method therefore performs no state
+        validation, emits no ``[SECURITY]`` warning, and neither reads nor
+        writes any per-flow instance attribute.
+
+        **The returned token is NOT persisted.** Token storage is keyed by
+        provider name, not by end user, so persisting here would let
+        concurrent users overwrite each other's tokens. The caller owns
+        per-user persistence.
+
+        Args:
+            code: Authorization code from the callback request.
+            code_verifier: PKCE code verifier for this flow, if PKCE was
+                used in the authorization request. Always passed explicitly;
+                the instance PKCE state is ignored.
+
+        Returns:
+            Token with access_token and optionally refresh_token, not saved
+            to the provider token storage.
+
+        Raises:
+            TokenExchangeError: Same structured contract as
+                :meth:`exchange_code` (``status_code``, ``error_code``,
+                ``retryable``).
+
+        Example:
+            >>> token = provider.exchange_code_stateless(  # doctest: +SKIP
+            ...     code=callback_code,
+            ...     code_verifier=pending_flow.code_verifier,
+            ... )
+
+        """
+        logger.debug("Stateless code exchange for provider '%s'", self.name)
+        return self._request_token_exchange(code, code_verifier)
+
+    def _request_token_exchange(self, code: str, code_verifier: str | None) -> Token:
+        """POST the authorization code grant and map errors to the exchange contract.
+
+        Shared by :meth:`exchange_code` (stateful) and
+        :meth:`exchange_code_stateless`: both paths raise
+        :class:`TokenExchangeError` with the same structured discriminants
+        (``status_code``, ``error_code``, ``retryable``).
+        """
         data = {
             "grant_type": "authorization_code",
             "code": code,
@@ -313,7 +376,7 @@ class OAuth2Provider(AbstractAuthProvider):
         if self.config.client_secret:
             data["client_secret"] = self.config.client_secret
 
-        # Add PKCE code_verifier if provided (for subclasses)
+        # Add PKCE code_verifier if provided
         if code_verifier:
             data["code_verifier"] = code_verifier
 
@@ -330,17 +393,17 @@ class OAuth2Provider(AbstractAuthProvider):
             token_data = response.json()
         except httpx.HTTPStatusError as e:
             error_data = self._parse_error_response(e.response)
+            status = e.response.status_code
             raise TokenExchangeError(
                 error_data.get("error_description", str(e)),
                 error_code=error_data.get("error"),
+                status_code=status,
+                retryable=status >= HTTPStatus.INTERNAL_SERVER_ERROR,
             ) from e
         except httpx.RequestError as e:
-            raise TokenExchangeError(f"Network error: {e}") from e
+            raise TokenExchangeError(f"Network error: {e}", retryable=True) from e
 
         token = Token.from_response(token_data)
-        self.save_token(token)
-        self._pending_state = None
-
         logger.info("Token exchange successful for provider '%s'", self.name)
         return token
 

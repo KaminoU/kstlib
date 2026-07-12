@@ -31,13 +31,48 @@ class ProviderNotFoundError(AuthError):
 
 
 class DiscoveryError(AuthError):
-    """Raised when OIDC discovery fails."""
+    """Raised when OIDC discovery fails.
 
-    def __init__(self, issuer: str, reason: str) -> None:
-        """Initialize with the failing issuer URL and the reason for the failure."""
+    ``status_code`` encodes whether the provider answered the discovery
+    request, so consumers can distinguish "the provider answered an error
+    status" from "the provider could not be reached" without parsing
+    ``reason``:
+
+    - ``status_code is not None``: the provider was reached and answered
+      this HTTP error status to the discovery request.
+    - ``status_code is None``: transport-level failure (DNS resolution,
+      connection refused, timeout): no HTTP response was received.
+
+    Attributes:
+        issuer: Issuer URL whose discovery document could not be fetched.
+        reason: Human-readable description of the failure.
+        status_code: HTTP status answered by the provider, or ``None`` when
+            no HTTP response was received.
+
+    Examples:
+        >>> err = DiscoveryError("https://idp.example.com", "HTTP 502", status_code=502)
+        >>> err.status_code
+        502
+        >>> unreachable = DiscoveryError("https://idp.example.com", "connection refused")
+        >>> unreachable.status_code is None
+        True
+
+    """
+
+    def __init__(self, issuer: str, reason: str, *, status_code: int | None = None) -> None:
+        """Initialize with the failing issuer URL, the failure reason and the HTTP status.
+
+        Args:
+            issuer: Issuer URL whose discovery document could not be fetched.
+            reason: Human-readable description of the failure.
+            status_code: HTTP status answered by the provider. ``None``
+                (default) when no HTTP response was received.
+
+        """
         super().__init__(f"Discovery failed for '{issuer}': {reason}")
         self.issuer = issuer
         self.reason = reason
+        self.status_code = status_code
 
 
 class TokenError(AuthError):
@@ -49,7 +84,17 @@ class TokenExpiredError(TokenError):
 
 
 class TokenRefreshError(TokenError):
-    """Raised when token refresh fails."""
+    """Raised when token refresh fails.
+
+    Attributes:
+        reason: Human-readable description of the refresh failure.
+        retryable: ``True`` when retrying the refresh may succeed (transport
+            failure or provider 5xx answer). ``False`` when the rejection is
+            definitive (provider 4xx: invalid, expired or revoked refresh
+            token, or a misconfigured token endpoint). Same semantics as
+            :attr:`TokenExchangeError.retryable`.
+
+    """
 
     def __init__(self, reason: str, *, retryable: bool = False) -> None:
         """Initialize with the reason for the refresh failure and a retryable flag."""
@@ -59,13 +104,73 @@ class TokenRefreshError(TokenError):
 
 
 class TokenExchangeError(TokenError):
-    """Raised when authorization code exchange fails."""
+    """Raised when authorization code exchange fails.
 
-    def __init__(self, reason: str, *, error_code: str | None = None) -> None:
-        """Initialize with the reason for the exchange failure and an optional OAuth error code."""
+    The attributes encode where the exchange failed, so consumers can
+    distinguish "the provider answered an error" from "the provider could
+    not be reached" without parsing messages:
+
+    - ``status_code is not None``: the provider was reached and answered
+      this HTTP error status. ``error_code`` is then guaranteed non-None:
+      the OAuth2 ``error`` code from the response body, or ``"unknown"``
+      when the body is missing or unreadable.
+    - ``status_code is None`` and ``error_code is None``: transport-level
+      failure (DNS resolution, connection refused, timeout): no HTTP
+      response was received from the provider.
+    - ``status_code is None`` and ``error_code is not None``: a local
+      pre-network guard rejected the exchange before any request was sent.
+      Guard codes: ``"state_mismatch"`` (CSRF state validation failed) and
+      ``"pkce_missing"`` (PKCE enabled but no code verifier available).
+
+    Attributes:
+        reason: Human-readable description of the exchange failure.
+        error_code: OAuth2 error code answered by the provider (``"unknown"``
+            when the error body is unreadable), one of the local guard codes
+            listed above, or ``None`` for transport-level failures.
+        status_code: HTTP status answered by the provider, or ``None`` when
+            no HTTP response was received (transport failure or local guard).
+        retryable: ``True`` when retrying the same exchange may succeed
+            (transport failure or provider 5xx answer). ``False`` when the
+            rejection is definitive: provider 4xx (authorization codes are
+            single-use) or local guard (restart the authorization flow
+            instead). Same semantics as :attr:`TokenRefreshError.retryable`.
+
+    Examples:
+        >>> rejected = TokenExchangeError("Rejected", error_code="not_allowed", status_code=400)
+        >>> rejected.status_code is not None  # the provider answered
+        True
+        >>> rejected.retryable
+        False
+        >>> transport = TokenExchangeError("Network error: timeout", retryable=True)
+        >>> transport.status_code is None and transport.error_code is None
+        True
+
+    """
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        error_code: str | None = None,
+        status_code: int | None = None,
+        retryable: bool = False,
+    ) -> None:
+        """Initialize with the exchange failure reason and its structured discriminants.
+
+        Args:
+            reason: Human-readable description of the exchange failure.
+            error_code: OAuth2 error code from the provider response body, or
+                a local guard code. ``None`` (default) for transport failures.
+            status_code: HTTP status answered by the provider. ``None``
+                (default) when no HTTP response was received.
+            retryable: Whether retrying the same exchange may succeed.
+
+        """
         super().__init__(f"Token exchange failed: {reason}")
         self.reason = reason
         self.error_code = error_code
+        self.status_code = status_code
+        self.retryable = retryable
 
 
 class TokenValidationError(TokenError):

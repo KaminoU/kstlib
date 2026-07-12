@@ -70,6 +70,7 @@ providers:
 | `pkce` | No | Enable PKCE (default: `true`, RFC 7636) |
 | `token_storage` | No | Provider-specific storage: `memory`, `file`, or `sops` |
 | `discovery_ttl` | No | Per-provider discovery cache TTL |
+| `server_side` | No | Server-side consumer profile: suppresses the not-localhost `redirect_uri` warning (default: `false`) |
 
 ### OAuth2 Provider (Manual Endpoints)
 
@@ -99,6 +100,7 @@ providers:
 | `redirect_uri` | No | Override callback URL |
 | `pkce` | No | Enable PKCE if supported (default: `true`) |
 | `token_storage` | No | Provider-specific storage: `memory`, `file`, or `sops` |
+| `server_side` | No | Server-side consumer profile: suppresses the not-localhost `redirect_uri` warning (default: `false`) |
 
 ## Endpoint Configuration Reference
 

@@ -423,6 +423,7 @@ def build_provider_config(
         ssl_verify=merged.get("ssl_verify", True),
         ssl_ca_bundle=merged.get("ssl_ca_bundle"),
         extra=merged.get("extra", {}),
+        server_side=merged.get("server_side", False),
     )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -426,3 +427,23 @@ class TestConnectionPool:
                 assert row[0] == 100
         finally:
             await pool2.close()
+
+
+class TestPoolDriverLoggingSilence:
+    """Tests for the driver logging guard on direct pool usage."""
+
+    SENTINEL = "pool-secret-bound-value-77"
+
+    @pytest.mark.asyncio
+    async def test_bound_parameters_never_appear_in_logs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Direct ConnectionPool usage must not leak bound parameters into logs."""
+        with caplog.at_level(logging.DEBUG, logger="aiosqlite"):
+            pool = ConnectionPool(":memory:", min_size=1, max_size=2)
+            try:
+                async with pool.connection() as conn:
+                    await conn.execute("CREATE TABLE vault (value TEXT)")
+                    await conn.execute("INSERT INTO vault (value) VALUES (?)", (self.SENTINEL,))
+            finally:
+                await pool.close()
+        leaked = [record for record in caplog.records if self.SENTINEL in record.getMessage()]
+        assert leaked == []

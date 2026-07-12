@@ -117,6 +117,38 @@ class TestAuthProviderConfig:
         assert security_warnings, "Expected at least one [SECURITY] warning record"
         assert "example.com" in security_warnings[0].getMessage()
 
+    def test_server_side_default_false(self) -> None:
+        """server_side defaults to False (CLI-first profile)."""
+        config = AuthProviderConfig(
+            client_id="my-app",
+            issuer="https://auth.example.com",
+        )
+        assert config.server_side is False
+
+    def test_server_side_suppresses_redirect_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """server_side=True suppresses the not-localhost [SECURITY] warning (server profile)."""
+        with caplog.at_level("WARNING", logger="kstlib.auth.providers.base"):
+            AuthProviderConfig(
+                client_id="my-app",
+                issuer="https://auth.example.com",
+                redirect_uri="https://example.com/callback",
+                server_side=True,
+            )
+        security_warnings = [
+            record for record in caplog.records if record.levelname == "WARNING" and "[SECURITY]" in record.getMessage()
+        ]
+        assert not security_warnings, security_warnings
+
+    def test_client_secret_not_in_repr(self) -> None:
+        """client_secret never appears in the config repr (secret hygiene)."""
+        config = AuthProviderConfig(
+            client_id="my-app",
+            client_secret="s3cr3t-sentinel",
+            issuer="https://auth.example.com",
+        )
+        assert "s3cr3t-sentinel" not in repr(config)
+        assert "s3cr3t-sentinel" not in str(config)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Concrete implementation for testing AbstractAuthProvider

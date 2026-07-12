@@ -11,6 +11,10 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: kstlib-keycloak
+    # Pin the hostname: the dev-mode embedded H2 database resolves the
+    # container hostname at boot, and the default random container id
+    # fails to resolve on some Docker/WSL2 stacks (JDBC boot crash).
+    hostname: keycloak
     command:
       - start-dev
       - --import-realm
@@ -24,7 +28,7 @@ services:
     volumes:
       - ./keycloak:/opt/keycloak/data/import:ro
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
       interval: 10s
       timeout: 5s
       retries: 10

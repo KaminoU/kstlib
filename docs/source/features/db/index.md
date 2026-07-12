@@ -210,6 +210,31 @@ Key Resolution (priority order):
     Encrypted DB
 ```
 
+### Driver Logging and Secrets
+
+The underlying `aiosqlite` driver logs every operation at DEBUG level,
+including the SQL statement AND its bound parameters. Without a guard, any
+secret written through the database (tokens, keys, PII) would appear in
+plain text in the logs as soon as DEBUG logging is active, even for an
+encrypted database: encryption protects the file at rest, not the logs.
+
+kstlib is secure by default. Creating an `AsyncDatabase` (or a
+`ConnectionPool`) caps the process-wide `aiosqlite` logger at INFO, which
+cuts exactly those parameter-carrying records while keeping the driver's
+own INFO/WARNING/ERROR diagnostics. A level already at INFO or stricter is
+left untouched.
+
+To keep driver DEBUG records for conscious troubleshooting:
+
+```python
+db = AsyncDatabase("app.db", driver_debug=True)
+```
+
+With `driver_debug=True`, kstlib never touches the `aiosqlite` logger. The
+cap is one-way: kstlib never restores a previously capped level, so if
+another instance already applied it in the same process, reset it yourself
+with `logging.getLogger("aiosqlite").setLevel(logging.DEBUG)`.
+
 ## Configuration
 
 ### In kstlib.conf.yml

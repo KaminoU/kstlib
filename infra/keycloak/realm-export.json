@@ -38,7 +38,6 @@
         "http://localhost:8400"
       ],
       "defaultClientScopes": [
-        "openid",
         "profile",
         "email"
       ],
@@ -70,7 +69,6 @@
         "http://localhost:8400"
       ],
       "defaultClientScopes": [
-        "openid",
         "profile",
         "email"
       ],

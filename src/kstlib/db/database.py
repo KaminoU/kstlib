@@ -62,6 +62,12 @@ class AsyncDatabase:
         pool_timeout: Acquire timeout in seconds.
         max_retries: Retry attempts on failure.
         retry_delay: Delay between retries.
+        driver_debug: Keep aiosqlite driver DEBUG logging enabled. Defaults
+            to False: the process-wide ``aiosqlite`` logger is capped at
+            INFO when the pool is created, because its DEBUG records include
+            bound parameters (secrets stored through this database would
+            leak into logs). Pass True to opt out for conscious
+            troubleshooting; kstlib then never touches that logger.
 
     Examples:
         Basic usage:
@@ -90,6 +96,7 @@ class AsyncDatabase:
     pool_timeout: float = 30.0
     max_retries: int = 3
     retry_delay: float = 0.5
+    driver_debug: bool = False
 
     _pool: ConnectionPool | None = field(default=None, repr=False)
     _resolved_key: str | None = field(default=None, repr=False)
@@ -140,6 +147,7 @@ class AsyncDatabase:
                 max_retries=self.max_retries,
                 retry_delay=self.retry_delay,
                 cipher_key=self._resolved_key,
+                driver_debug=self.driver_debug,
             )
         return self._pool
 

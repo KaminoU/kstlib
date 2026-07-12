@@ -249,6 +249,7 @@ class TestExchangeCode:
         oauth2_provider._pending_state = "test-state"
 
         mock_response = MagicMock()
+        mock_response.status_code = 400
         mock_response.json.return_value = {"error": "invalid_grant", "error_description": "Code expired"}
         mock_response.text = "Code expired"
 
@@ -269,6 +270,341 @@ class TestExchangeCode:
             pytest.raises(TokenExchangeError, match="Network error"),
         ):
             oauth2_provider.exchange_code(code="code", state="test-state")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test exchange_code error contract (provider-responded vs transport)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestExchangeCodeErrorContract:
+    """Locks the provider-responded vs transport discriminant on exchange_code.
+
+    Contract: ``status_code`` is the HTTP status answered by the provider
+    (``error_code`` is then guaranteed non-None), ``None`` when no HTTP
+    response was received (transport failure or local pre-network guard).
+    """
+
+    def test_provider_error_carries_error_code(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Provider answering 400 with a JSON error body yields its error code."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                400,
+                json={"error": "not_allowed", "error_description": "Client not allowed"},
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+
+            with pytest.raises(TokenExchangeError) as exc_info:
+                provider.exchange_code(code="auth-code", state=state)
+
+        assert exc_info.value.error_code == "not_allowed"
+        assert "Client not allowed" in str(exc_info.value)
+
+    def test_transport_error_error_code_none(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Transport failure (no HTTP response) yields error_code None."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Connection refused", request=request)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+
+            with pytest.raises(TokenExchangeError, match="Network error") as exc_info:
+                provider.exchange_code(code="auth-code", state=state)
+
+        assert exc_info.value.error_code is None
+
+    def test_provider_error_non_json_body_falls_back_unknown(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Provider error with an unreadable body falls back to error_code 'unknown'."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, text="<html>Bad Request</html>")
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+
+            with pytest.raises(TokenExchangeError) as exc_info:
+                provider.exchange_code(code="auth-code", state=state)
+
+        assert exc_info.value.error_code == "unknown"
+
+    def test_provider_4xx_sets_status_code_not_retryable(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Provider 400 sets status_code=400; a 4xx rejection is definitive (not retryable)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                400,
+                json={"error": "invalid_grant", "error_description": "Code expired"},
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+
+            with pytest.raises(TokenExchangeError) as exc_info:
+                provider.exchange_code(code="auth-code", state=state)
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.retryable is False
+
+    def test_provider_5xx_sets_status_code_retryable(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Provider 503 sets status_code=503; a 5xx answer is transient (retryable)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                503,
+                json={"error": "temporarily_unavailable", "error_description": "Try again later"},
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+
+            with pytest.raises(TokenExchangeError) as exc_info:
+                provider.exchange_code(code="auth-code", state=state)
+
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.retryable is True
+
+    def test_transport_error_status_code_none_retryable(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Transport failure keeps status_code None and is retryable."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Connection refused", request=request)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+
+            with pytest.raises(TokenExchangeError) as exc_info:
+                provider.exchange_code(code="auth-code", state=state)
+
+        assert exc_info.value.status_code is None
+        assert exc_info.value.retryable is True
+
+    def test_state_mismatch_guard_error_code(self, oauth2_provider: OAuth2Provider) -> None:
+        """Local CSRF guard rejects with error_code 'state_mismatch' before any request."""
+        oauth2_provider.get_authorization_url()
+
+        with pytest.raises(TokenExchangeError) as exc_info:
+            oauth2_provider.exchange_code(code="auth-code", state="wrong-state")
+
+        assert exc_info.value.error_code == "state_mismatch"
+
+    def test_state_mismatch_guard_status_code_none_not_retryable(self, oauth2_provider: OAuth2Provider) -> None:
+        """Local CSRF guard has status_code None (no provider contact) and is not retryable."""
+        oauth2_provider.get_authorization_url()
+
+        with pytest.raises(TokenExchangeError) as exc_info:
+            oauth2_provider.exchange_code(code="auth-code", state="wrong-state")
+
+        assert exc_info.value.status_code is None
+        assert exc_info.value.retryable is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test exchange_code_stateless (server-side profile)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestExchangeCodeStateless:
+    """Tests for the stateless exchange path and its stateful non-regression locks.
+
+    The stateless path is for server-side multi-user consumers: the caller
+    owns state (CSRF) and PKCE, so the method must touch no per-flow instance
+    state, emit no [SECURITY] warning, and never persist the token (storage
+    is keyed by provider name, not by end user).
+    """
+
+    def test_stateless_success_returns_token_without_saving(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Stateless exchange returns the token, persists nothing, warns nothing."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"access_token": "stateless-access-token", "token_type": "Bearer"},
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            with caplog.at_level("WARNING"):
+                token = provider.exchange_code_stateless(code="auth-code")
+
+        assert token.access_token == "stateless-access-token"
+        assert memory_storage.load("test") is None
+        security_records = [r for r in caplog.records if "[SECURITY]" in r.getMessage()]
+        assert not security_records, security_records
+
+    def test_stateless_sends_code_verifier(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Stateless exchange forwards the explicit code_verifier to the token endpoint."""
+        captured: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = request.content.decode()
+            return httpx.Response(200, json={"access_token": "at", "token_type": "Bearer"})
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            provider.exchange_code_stateless(code="auth-code", code_verifier="verifier-123")
+
+        assert "code_verifier=verifier-123" in captured["body"]
+
+    def test_stateless_provider_4xx_contract(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Stateless exchange carries the C3 contract on a provider 4xx answer."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                400,
+                json={"error": "invalid_grant", "error_description": "Code expired"},
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+
+            with pytest.raises(TokenExchangeError) as exc_info:
+                provider.exchange_code_stateless(code="auth-code")
+
+        assert exc_info.value.error_code == "invalid_grant"
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.retryable is False
+
+    def test_stateless_provider_5xx_retryable(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Stateless exchange marks a provider 5xx answer as retryable."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(503, json={"error": "temporarily_unavailable"})
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+
+            with pytest.raises(TokenExchangeError) as exc_info:
+                provider.exchange_code_stateless(code="auth-code")
+
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.retryable is True
+
+    def test_stateless_transport_error_contract(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Stateless exchange keeps the transport discriminant (both None, retryable)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Connection refused", request=request)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+
+            with pytest.raises(TokenExchangeError, match="Network error") as exc_info:
+                provider.exchange_code_stateless(code="auth-code")
+
+        assert exc_info.value.error_code is None
+        assert exc_info.value.status_code is None
+        assert exc_info.value.retryable is True
+
+    def test_stateless_does_not_touch_pending_state(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Stateless exchange leaves the per-flow instance state untouched."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"access_token": "at", "token_type": "Bearer"})
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+            provider.exchange_code_stateless(code="auth-code")
+
+        assert provider._pending_state == state
+
+    def test_stateful_exchange_sends_code_verifier(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """exchange_code forwards code_verifier to the token endpoint (lock, pre-existing behavior)."""
+        captured: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = request.content.decode()
+            return httpx.Response(200, json={"access_token": "at", "token_type": "Bearer"})
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            _, state = provider.get_authorization_url()
+            provider.exchange_code(code="auth-code", state=state, code_verifier="verifier-123")
+
+        assert "code_verifier=verifier-123" in captured["body"]
+
+    def test_stateful_no_pending_state_warns(
+        self,
+        minimal_oauth2_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """exchange_code without prior get_authorization_url still warns (lock, CLI behavior)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"access_token": "at", "token_type": "Bearer"})
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OAuth2Provider("test", minimal_oauth2_config, memory_storage, http_client=client)
+            with caplog.at_level("WARNING"):
+                provider.exchange_code(code="auth-code", state="some-state")
+
+        assert any("[SECURITY]" in r.getMessage() and "No pending state" in r.getMessage() for r in caplog.records), (
+            caplog.records
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

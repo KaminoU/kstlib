@@ -300,6 +300,36 @@ class TestGetTokenStorageFromConfig:
 class TestBuildProviderConfig:
     """Tests for build_provider_config()."""
 
+    def test_maps_server_side_from_config(self) -> None:
+        """server_side flows from the provider YAML dict to AuthProviderConfig."""
+        config = {
+            "providers": {
+                "svc": {
+                    "type": "oidc",
+                    "client_id": "svc-client",
+                    "issuer": "https://auth.example.com",
+                    "server_side": True,
+                    "redirect_uri": "https://svc.example.com/callback",
+                }
+            }
+        }
+        result = build_provider_config("svc", config=config)
+        assert result.server_side is True
+
+    def test_server_side_defaults_false_when_absent(self) -> None:
+        """server_side defaults to False when not in the provider config."""
+        config = {
+            "providers": {
+                "cli": {
+                    "type": "oidc",
+                    "client_id": "cli-client",
+                    "issuer": "https://auth.example.com",
+                }
+            }
+        }
+        result = build_provider_config("cli", config=config)
+        assert result.server_side is False
+
     def test_builds_oidc_config(self) -> None:
         """Test builds OIDC config from provider settings."""
         config = {

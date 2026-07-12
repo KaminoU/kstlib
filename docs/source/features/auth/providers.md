@@ -269,10 +269,69 @@ from kstlib.auth.errors import (
 try:
     token = provider.exchange_code(code=code, state=state)
 except TokenExchangeError as e:
-    print(f"Login failed: {e}")
+    if e.status_code is not None:
+        # The provider answered an HTTP error status (4xx/5xx)
+        print(f"Provider rejected the exchange: {e.error_code} (HTTP {e.status_code})")
+    elif e.error_code is not None:
+        # Local pre-network guard (state_mismatch, pkce_missing): restart the flow
+        print(f"Login flow error: {e.error_code}")
+    else:
+        # Transport failure: the provider could not be reached
+        print(f"Provider unreachable: {e}")
+    if e.retryable:
+        print("Transient failure, retrying may succeed")
 except AuthError as e:
     print(f"Auth error: {e}")
 ```
+
+See [Auth Exceptions](../../api/exceptions/auth.md) for the full contract
+behind `status_code`, `error_code` and `retryable`.
+
+## CLI vs Server-Side Consumption
+
+`kstlib.auth` is CLI-first: one user, one process, and the provider instance
+carries the per-flow state (CSRF `state`, PKCE verifier) between
+`get_authorization_url()` and `exchange_code()`. A server-side application
+(a multi-user web service) is different by construction: login and callback
+are separate concurrent HTTP requests, so per-flow state cannot live on the
+provider instance. Use the server-side profile in that case:
+
+| Concern | CLI flow (default) | Server-side flow |
+|---------|--------------------|------------------|
+| State / PKCE generation | provider instance | your application, per flow |
+| CSRF state validation | `exchange_code(code, state)` | your pending store, before calling kstlib |
+| Exchange call | `exchange_code(code, state)` | `exchange_code_stateless(code, code_verifier=...)` |
+| Token persistence | provider token storage | **yours, per user** (kstlib does not persist it) |
+| `redirect_uri` | loopback (`127.0.0.1`) | public HTTPS endpoint + `server_side: true` |
+
+```python
+# Server-side callback handler (state already validated by your app)
+flow = pending_flows.pop(state)        # your per-flow store
+token = provider.exchange_code_stateless(
+    code=code,
+    code_verifier=flow.code_verifier,  # your PKCE verifier for this flow
+)
+store_token_for_user(user, token)      # your per-user persistence
+```
+
+Key points:
+
+- `exchange_code_stateless()` raises the same structured `TokenExchangeError`
+  contract as `exchange_code()` (`status_code`, `error_code`, `retryable`),
+  including the `pkce_missing` local guard when PKCE is enabled and no
+  verifier is passed.
+- The returned token is **not** saved to the provider token storage: storage
+  is keyed by provider name, not by end user, so persisting there would let
+  concurrent users overwrite each other's tokens.
+- `server_side: true` in the provider config suppresses the
+  `[SECURITY] redirect_uri host ... is not localhost` warning: a public
+  callback endpoint is the nominal server configuration, not an anomaly.
+  CLI flows keep the warning (default `false`).
+- OIDC `nonce`: kstlib generates a nonce in its own authorization URL for
+  provider-side replay hardening, but does not verify the `nonce` claim in
+  the returned ID token. Server-side consumers build their own authorization
+  URL, so strict nonce verification (if required) is theirs, via the
+  `claims["nonce"]` of the ID token.
 
 ## Tested Providers
 

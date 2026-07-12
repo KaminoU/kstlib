@@ -39,7 +39,9 @@ class AuthProviderConfig:  # pylint: disable=too-many-instance-attributes
 
     Attributes:
         client_id: OAuth2 client identifier.
-        client_secret: Optional client secret (not needed for public clients with PKCE).
+        client_secret: Optional client secret (not needed for public clients
+            with PKCE). Excluded from ``repr()`` so the secret never leaks
+            through logs or dumps of the config object.
         authorize_url: Authorization endpoint URL.
         token_url: Token endpoint URL.
         revoke_url: Optional token revocation endpoint.
@@ -57,6 +59,11 @@ class AuthProviderConfig:  # pylint: disable=too-many-instance-attributes
         ssl_ca_bundle: Path to custom CA bundle file for corporate PKI.
             If provided, ssl_verify is implicitly True.
         extra: Additional provider-specific configuration.
+        server_side: Declares a server-side consumer profile (default False,
+            CLI-first). A server-side application uses a public
+            ``redirect_uri`` as its nominal configuration, so the
+            "redirect_uri host is not localhost" security warning is
+            suppressed. This flag has no other effect.
 
     Example:
         Auto discovery (Keycloak, Auth0, etc.)::
@@ -86,7 +93,7 @@ class AuthProviderConfig:  # pylint: disable=too-many-instance-attributes
     """
 
     client_id: str
-    client_secret: str | None = None
+    client_secret: str | None = field(default=None, repr=False)
     authorize_url: str | None = None
     token_url: str | None = None
     revoke_url: str | None = None
@@ -102,6 +109,7 @@ class AuthProviderConfig:  # pylint: disable=too-many-instance-attributes
     ssl_verify: bool = True
     ssl_ca_bundle: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    server_side: bool = False
 
     def __post_init__(self) -> None:
         """Validate configuration."""
@@ -114,7 +122,7 @@ class AuthProviderConfig:  # pylint: disable=too-many-instance-attributes
         if parsed_redirect.scheme not in ("http", "https"):
             msg = f"redirect_uri must use http or https scheme, got: {parsed_redirect.scheme!r}"
             raise ValueError(msg)
-        if parsed_redirect.hostname not in ("127.0.0.1", "localhost", "::1"):
+        if not self.server_side and parsed_redirect.hostname not in ("127.0.0.1", "localhost", "::1"):
             logger.warning(
                 "[SECURITY] redirect_uri host '%s' is not localhost - ensure this is intentional",
                 parsed_redirect.hostname,

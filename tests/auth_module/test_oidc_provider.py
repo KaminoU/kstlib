@@ -15,6 +15,7 @@ from kstlib.auth.errors import (
 )
 from kstlib.auth.models import AuthFlow, PreflightStatus
 from kstlib.auth.providers import AuthProviderConfig, OIDCProvider
+from kstlib.logging import TRACE_LEVEL
 
 if TYPE_CHECKING:
     from kstlib.auth.token import MemoryTokenStorage
@@ -677,6 +678,56 @@ class TestDiscovery:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Test discovery error contract (provider-responded vs transport)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestDiscoveryErrorContract:
+    """Locks the provider-responded vs transport discriminant on discover().
+
+    Contract: ``status_code`` is the HTTP status answered by the provider to
+    the discovery request, ``None`` when no HTTP response was received.
+    """
+
+    def test_discover_provider_error_sets_status_code(
+        self,
+        oidc_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Provider answering 500 to discovery sets status_code=500."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(500, text="Internal Server Error")
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OIDCProvider("test", oidc_config, memory_storage, http_client=client)
+
+            with pytest.raises(DiscoveryError) as exc_info:
+                provider.discover()
+
+        assert exc_info.value.status_code == 500
+        assert exc_info.value.reason == "HTTP 500"
+
+    def test_discover_transport_error_status_code_none(
+        self,
+        oidc_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Unreachable provider at discovery keeps status_code None."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Connection refused", request=request)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OIDCProvider("test", oidc_config, memory_storage, http_client=client)
+
+            with pytest.raises(DiscoveryError) as exc_info:
+                provider.discover()
+
+        assert exc_info.value.status_code is None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Test PKCE
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -767,6 +818,85 @@ class TestExchangeCodeOIDC:
 
         with pytest.raises(TokenExchangeError, match="PKCE is enabled but no code_verifier"):
             oidc_provider.exchange_code(code="auth-code", state="test-state")
+
+    def test_pkce_missing_guard_error_code(self, oidc_provider: OIDCProvider) -> None:
+        """Local PKCE guard rejects with error_code 'pkce_missing' before any request."""
+        from kstlib.auth.errors import TokenExchangeError
+
+        with pytest.raises(TokenExchangeError) as exc_info:
+            oidc_provider.exchange_code(code="auth-code", state="any-state")
+
+        assert exc_info.value.error_code == "pkce_missing"
+
+    def test_pkce_missing_guard_status_code_none_not_retryable(self, oidc_provider: OIDCProvider) -> None:
+        """Local PKCE guard has status_code None (no provider contact) and is not retryable."""
+        from kstlib.auth.errors import TokenExchangeError
+
+        with pytest.raises(TokenExchangeError) as exc_info:
+            oidc_provider.exchange_code(code="auth-code", state="any-state")
+
+        assert exc_info.value.status_code is None
+        assert exc_info.value.retryable is False
+
+    def test_stateless_pkce_missing_guard(self, oidc_provider: OIDCProvider) -> None:
+        """Stateless exchange enforces the PKCE guard on the explicit argument only."""
+        from kstlib.auth.errors import TokenExchangeError
+
+        with pytest.raises(TokenExchangeError) as exc_info:
+            oidc_provider.exchange_code_stateless(code="auth-code")
+
+        assert exc_info.value.error_code == "pkce_missing"
+        assert exc_info.value.status_code is None
+        assert exc_info.value.retryable is False
+
+    def test_stateless_success_with_discovery_routing(
+        self,
+        oidc_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+        mock_discovery_doc: dict,
+    ) -> None:
+        """Stateless exchange runs discovery, posts the verifier, returns the token unsaved."""
+        captured: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/.well-known/openid-configuration"):
+                return httpx.Response(200, json=mock_discovery_doc)
+            captured["body"] = request.content.decode()
+            return httpx.Response(
+                200,
+                json={"access_token": "stateless-at", "token_type": "Bearer"},
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OIDCProvider("test", oidc_config, memory_storage, http_client=client)
+            token = provider.exchange_code_stateless(code="auth-code", code_verifier="verifier-123")
+
+        assert token.access_token == "stateless-at"
+        assert "code_verifier=verifier-123" in captured["body"]
+        assert memory_storage.load("test") is None
+
+    def test_stateless_validates_id_token_when_present(
+        self,
+        oidc_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+        mock_discovery_doc: dict,
+    ) -> None:
+        """Stateless exchange still runs ID token validation when an id_token is returned."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/.well-known/openid-configuration"):
+                return httpx.Response(200, json=mock_discovery_doc)
+            return httpx.Response(
+                200,
+                json={"access_token": "at", "token_type": "Bearer", "id_token": "fake.id.token"},
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OIDCProvider("test", oidc_config, memory_storage, http_client=client)
+            with patch.object(provider, "_validate_id_token", return_value=None) as mock_validate:
+                provider.exchange_code_stateless(code="auth-code", code_verifier="v")
+
+        mock_validate.assert_called_once_with("fake.id.token")
 
     def test_exchange_code_id_token_validation_failure_raises(
         self,
@@ -1408,6 +1538,144 @@ class TestOIDCCoverage:
             del sys.modules["authlib"]
             del sys.modules["authlib.jose"]
             del sys.modules["authlib.jose.errors"]
+
+    def test_discover_trace_logging(
+        self,
+        oidc_provider: OIDCProvider,
+        mock_discovery_doc: dict,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """discover() at TRACE emits the fetch and response introspection lines."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_discovery_doc
+        mock_response.raise_for_status = MagicMock()
+
+        with (
+            patch.object(oidc_provider.http_client, "get", return_value=mock_response),
+            caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.providers.oidc"),
+        ):
+            oidc_provider.discover()
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("[OIDC] Fetching discovery document" in m for m in messages), messages
+        assert any("[OIDC] Discovery response" in m for m in messages), messages
+
+    def test_generate_pkce_trace_logging(
+        self,
+        oidc_provider: OIDCProvider,
+        mock_discovery_doc: dict,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """get_authorization_url at TRACE emits the PKCE generation line."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_discovery_doc
+        mock_response.raise_for_status = MagicMock()
+
+        with (
+            patch.object(oidc_provider.http_client, "get", return_value=mock_response),
+            caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.providers.oidc"),
+        ):
+            oidc_provider.get_authorization_url()
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("[PKCE] Generated code_verifier" in m for m in messages), messages
+
+    def test_get_jwks_trace_logging(
+        self,
+        manual_oidc_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+        mock_jwks: dict,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_get_jwks at TRACE emits the fetch and loaded-keys introspection lines."""
+        provider = OIDCProvider("test", manual_oidc_config, memory_storage)
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_jwks
+        mock_response.raise_for_status = MagicMock()
+
+        with (
+            patch.object(provider.http_client, "get", return_value=mock_response),
+            caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.providers.oidc"),
+        ):
+            jwks = provider._get_jwks()
+
+        assert jwks == mock_jwks
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("[JWKS] Fetching keys" in m for m in messages), messages
+        assert any("[JWKS] Loaded" in m for m in messages), messages
+
+    def test_get_jwks_http_status_error(
+        self,
+        manual_oidc_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """_get_jwks maps an HTTP error answer to TokenValidationError with the status."""
+        provider = OIDCProvider("test", manual_oidc_config, memory_storage)
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        error = httpx.HTTPStatusError("Server Error", request=MagicMock(), response=mock_response)
+
+        with (
+            patch.object(provider.http_client, "get", side_effect=error),
+            pytest.raises(TokenValidationError, match="HTTP 500"),
+        ):
+            provider._get_jwks()
+
+    def test_get_jwks_null_document_raises(
+        self,
+        manual_oidc_config: AuthProviderConfig,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """_get_jwks raises ConfigurationError when the endpoint returns a null body."""
+        provider = OIDCProvider("test", manual_oidc_config, memory_storage)
+        mock_response = MagicMock()
+        mock_response.json.return_value = None
+        mock_response.raise_for_status = MagicMock()
+
+        with (
+            patch.object(provider.http_client, "get", return_value=mock_response),
+            pytest.raises(ConfigurationError, match="empty document"),
+        ):
+            provider._get_jwks()
+
+    def test_validate_id_token_trace_logging(
+        self,
+        oidc_provider: OIDCProvider,
+        mock_jwks: dict,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_validate_id_token at TRACE emits the validating and validated lines."""
+        import sys
+
+        oidc_provider._jwks = mock_jwks
+
+        mock_claims = MagicMock()
+        mock_claims.validate = MagicMock()
+        mock_claims.__iter__ = lambda self: iter(["sub", "iss"])
+        mock_claims.keys = lambda: ["sub", "iss"]
+        mock_claims.__getitem__ = lambda self, key: {"sub": "user123", "iss": "https://auth.example.com"}[key]
+
+        mock_jwt = MagicMock()
+        mock_jwt.decode.return_value = mock_claims
+
+        mock_jose_errors = MagicMock()
+        mock_jose_errors.JoseError = Exception
+
+        sys.modules["authlib"] = MagicMock()
+        sys.modules["authlib.jose"] = MagicMock(jwt=mock_jwt)
+        sys.modules["authlib.jose.errors"] = mock_jose_errors
+
+        try:
+            with caplog.at_level(TRACE_LEVEL, logger="kstlib.auth.providers.oidc"):
+                oidc_provider._validate_id_token("dummy.jwt.token")
+        finally:
+            del sys.modules["authlib"]
+            del sys.modules["authlib.jose"]
+            del sys.modules["authlib.jose.errors"]
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("[ID_TOKEN] Validating token" in m for m in messages), messages
+        assert any("[ID_TOKEN] Validated" in m for m in messages), messages
 
     def test_validate_id_token_authlib_import_error_raises(
         self,

@@ -653,8 +653,7 @@ to an absolute path.
 ### Future direction
 
 Resolving relative paths against the YAML file that declared them is a
-candidate enhancement on the backlog (tracked as
-`feat-config-paths-relative-to-yaml`). Implementing it requires kstlib
-to track, for every configuration value, the file it originated from,
-which is a substantial refactor of the loader. For now, use absolute
-paths to avoid ambiguity across different execution contexts.
+candidate future enhancement. Implementing it requires kstlib to track,
+for every configuration value, the file it originated from, which is a
+substantial refactor of the loader. For now, use absolute paths to
+avoid ambiguity across different execution contexts.

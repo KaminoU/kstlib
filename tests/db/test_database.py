@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -300,3 +301,36 @@ class TestAsyncDatabaseFileBased:
             cursor = await conn.execute("SELECT 1")
             row = await cursor.fetchone()
             assert row == (1,)
+
+
+class TestDriverLoggingSilence:
+    """Tests for the driver logging guard (bound-parameter leak prevention)."""
+
+    SENTINEL = "super-secret-bound-value-42"
+
+    @pytest.mark.asyncio
+    async def test_bound_parameters_never_appear_in_logs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Bound parameters must not leak into any log record, driver included."""
+        with caplog.at_level(logging.DEBUG, logger="aiosqlite"):
+            async with AsyncDatabase(":memory:") as db:
+                await db.execute("CREATE TABLE vault (value TEXT)")
+                await db.execute("INSERT INTO vault (value) VALUES (?)", (self.SENTINEL,))
+        leaked = [record for record in caplog.records if self.SENTINEL in record.getMessage()]
+        assert leaked == []
+
+    @pytest.mark.asyncio
+    async def test_driver_debug_opt_out_keeps_driver_logging(self, caplog: pytest.LogCaptureFixture) -> None:
+        """driver_debug=True leaves aiosqlite DEBUG records flowing (opt-out)."""
+        with caplog.at_level(logging.DEBUG, logger="aiosqlite"):
+            async with AsyncDatabase(":memory:", driver_debug=True) as db:
+                await db.execute("CREATE TABLE vault (value TEXT)")
+        driver_records = [record for record in caplog.records if record.name == "aiosqlite"]
+        assert driver_records != []
+
+    @pytest.mark.asyncio
+    async def test_stricter_user_level_is_respected(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A user level at INFO or stricter on the driver logger is not lowered."""
+        with caplog.at_level(logging.WARNING, logger="aiosqlite"):
+            async with AsyncDatabase(":memory:") as db:
+                await db.execute("SELECT 1")
+            assert logging.getLogger("aiosqlite").level == logging.WARNING
