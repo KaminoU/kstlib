@@ -19,6 +19,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.6.0] - 2026-07-14
+
+### Added
+
+- `kstlib.utils.http_trace`: HTTP trace redaction is now config-extensible. A
+  new `extra_sensitive_keys` argument on `HTTPTraceLogger` and
+  `create_trace_event_hooks` adds keys on top of the built-in floor without
+  ever replacing it; entries containing `*` or `?` are matched as
+  case-insensitive `fnmatch` wildcard patterns. Config-driven consumers can set
+  `auth.trace.extra_sensitive_keys` in YAML (a list of key names or patterns);
+  an invalid type fails fast with `ConfigError`, and the built-in floor of
+  OAuth2/OIDC credentials can never be disabled through configuration.
+- `kstlib.auth`: `OAuth2Provider.revoke()` (inherited by `OIDCProvider`) accepts
+  a new keyword-only `kinds` argument to target a subset of tokens, for example
+  `kinds=("refresh_token",)` for a service that only holds the refresh token. It
+  defaults to revoking both tokens (unchanged behavior); an unknown kind raises
+  `ValueError`. Targeting a single kind keeps the boolean result meaningful for
+  that kind (RFC 7009 returns 200 even for an invalid token, so the aggregate
+  result alone is not proof of revocation).
+
+### Changed
+
+- `kstlib.utils.http_trace`: trace-redaction key matching is now
+  case-insensitive, so cased variants of a secret key (for example
+  `Access_Token`) are redacted as well.
+- `kstlib.utils.http_trace`: redaction now covers three surfaces (request and
+  response body, request headers, and URL query string) using the same key set,
+  so `extra_sensitive_keys` extends all three. The `Authorization` header is now
+  shown with a redacted value instead of being dropped.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- `kstlib.auth`: `OAuth2Provider.revoke()` no longer sends a revocation POST
+  with an empty `token` value when the access token is empty. The access token
+  is now falsy-guarded symmetrically with the refresh token, so a refresh-only
+  token set posts only the refresh token.
+
+### Security
+
+- `kstlib.utils.http_trace`: sensitive HTTP request headers are now redacted at
+  TRACE level. Previously only the `Authorization` header was withheld, leaking
+  `Cookie` (including session cookies re-emitted by the httpx cookie jar),
+  `X-Api-Key`, `Proxy-Authorization` and similar credential headers in clear. A
+  dedicated `HEADER_SENSITIVE_KEYS` floor now masks their value while keeping the
+  header name visible. URL credentials are likewise masked on both request and
+  response log lines: query-string parameters (for example `?access_token=...`)
+  and inline `user:pass@` userinfo.
+- `kstlib.utils.http_trace`: `DEFAULT_SENSITIVE_KEYS` now redacts OpenID Connect
+  and OAuth 2.0 bearer credentials that could previously appear in clear in HTTP
+  traces at TRACE level: `id_token`, `id_token_hint`, `assertion`,
+  `client_assertion`, `subject_token`, `actor_token`, `device_code`,
+  `registration_access_token`, and `initial_access_token`. Key matching stays
+  exact, so non-secret siblings (`token_type`, `client_assertion_type`,
+  `subject_token_type`) remain visible for debugging.
+
 ## [3.5.0] - 2026-07-12
 
 ### Added
@@ -398,12 +457,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **`fix-rapi-minify-requires-raw`** : the `--minify` CLI flag was
+- **RAPI `--minify` now enforced at command entry** : the `--minify` CLI flag was
   silently ineffective without `--raw` because Rich console rendering
   reformats output regardless of compact JSON flags. Add
   `_validate_output_flags()` rejection at command entry with an
   explicit hint instead of swallowing the user intent.
-- **`fix-rapi-auth-expired-error-detection`** : `RapiClient` no
+- **RAPI surfaces expired OAuth/OIDC tokens as `AuthExpiredError`** : `RapiClient` no
   longer swallows expired SAS Viya (or any OAuth/OIDC) tokens
   behind a generic `RapiResponse(ok=False)` exit. The detection
   helper `_check_auth_expired()` invoked inside both
@@ -1660,7 +1719,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.5.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.6.0...HEAD
+[3.6.0]: https://github.com/KaminoU/kstlib/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/KaminoU/kstlib/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/KaminoU/kstlib/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/KaminoU/kstlib/compare/v3.4.0...v3.4.1

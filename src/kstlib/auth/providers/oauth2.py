@@ -172,6 +172,7 @@ class OAuth2Provider(AbstractAuthProvider):
                 trace_level=TRACE_LEVEL,
                 pretty_print=pretty,
                 max_body_length=max_body,
+                extra_sensitive_keys=self._get_extra_sensitive_keys(),
             )
         return self._tracer
 
@@ -487,16 +488,41 @@ class OAuth2Provider(AbstractAuthProvider):
         logger.info("Token refresh successful for provider '%s'", self.name)
         return new_token
 
-    def revoke(self, token: Token | None = None) -> bool:
-        """Revoke a token.
+    def revoke(self, token: Token | None = None, *, kinds: tuple[str, ...] | None = None) -> bool:
+        """Revoke one or more tokens at the provider's revocation endpoint.
+
+        By default both the access token and the refresh token are revoked.
+        Pass ``kinds`` to target a subset, for example ``("refresh_token",)``
+        for a service that only holds the refresh token. Empty or absent token
+        values are skipped (a POST with an empty ``token`` is never sent).
+
+        Note:
+            Per RFC 7009 the endpoint returns ``200 OK`` even for an unknown or
+            already-invalid token, so a ``True`` result means the request was
+            accepted, not that the token was proven revoked. Targeting a single
+            kind via ``kinds`` keeps the boolean meaningful for that kind.
 
         Args:
-            token: Token to revoke. Uses stored token if not provided.
+            token: Token to revoke. Uses the stored token if not provided.
+            kinds: Token kinds to revoke, a subset of ``("access_token",
+                "refresh_token")``. Defaults to both.
 
         Returns:
-            True if revoked, False if revocation not supported.
+            True if at least one targeted token was accepted (200) by the
+            endpoint, False if revocation is not configured, there is no token,
+            or nothing was posted.
+
+        Raises:
+            ValueError: If ``kinds`` contains an unknown token kind.
 
         """
+        requested = kinds if kinds is not None else ("access_token", "refresh_token")
+        allowed = ("access_token", "refresh_token")
+        unknown = [kind for kind in requested if kind not in allowed]
+        if unknown:
+            msg = f"unknown revoke kind(s): {unknown}; allowed: {list(allowed)}"
+            raise ValueError(msg)
+
         if not self.config.revoke_url:
             logger.debug("Revocation not configured for provider '%s'", self.name)
             return False
@@ -507,12 +533,12 @@ class OAuth2Provider(AbstractAuthProvider):
         if token is None:
             return False
 
-        # Try revoking access_token first, then refresh_token
-        tokens_to_revoke = [
-            ("access_token", token.access_token),
-        ]
-        if token.refresh_token:
-            tokens_to_revoke.append(("refresh_token", token.refresh_token))
+        candidates: dict[str, str | None] = {
+            "access_token": token.access_token,
+            "refresh_token": token.refresh_token,
+        }
+        # Falsy guard: skip empty/absent token values so no empty POST is sent.
+        tokens_to_revoke = [(kind, candidates[kind]) for kind in requested if candidates[kind]]
 
         success = False
         for token_type_hint, token_value in tokens_to_revoke:
@@ -743,6 +769,42 @@ class OAuth2Provider(AbstractAuthProvider):
             return pretty, max_body
         except Exception:  # pylint: disable=broad-exception-caught
             return _TRACE_PRETTY_DEFAULT, _TRACE_MAX_BODY_DEFAULT
+
+    def _get_extra_sensitive_keys(self) -> frozenset[str]:
+        """Resolve additive trace-redaction keys from kstlib config.
+
+        Reads ``auth.trace.extra_sensitive_keys`` and unions it with the
+        immutable redaction floor at the tracer level. Config can only ADD
+        keys, never remove floor keys.
+
+        Returns:
+            Frozenset of extra key names or fnmatch patterns (empty when unset
+            or when config cannot be loaded).
+
+        Raises:
+            ConfigError: If the config value is present but is not a list of
+                strings.
+
+        """
+        from kstlib.config import ConfigError, load_config
+
+        try:
+            cfg = load_config()
+            trace = cfg.auth.trace
+        except Exception:  # pylint: disable=broad-exception-caught
+            return frozenset()
+        if not trace:
+            return frozenset()
+        raw = getattr(trace, "extra_sensitive_keys", None)
+        # Absent key, empty mapping, or empty string means "no extra keys".
+        if raw is None or raw in ({}, ""):
+            return frozenset()
+        if not isinstance(raw, (list, tuple)) or not all(isinstance(k, str) for k in raw):
+            msg = "auth.trace.extra_sensitive_keys must be a list of strings"
+            raise ConfigError(msg)
+        keys = frozenset(k for k in raw if isinstance(k, str))
+        logger.debug("resolved auth.trace.extra_sensitive_keys (%d): %r", len(keys), sorted(keys))
+        return keys
 
 
 __all__ = ["OAuth2Provider"]

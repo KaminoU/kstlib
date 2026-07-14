@@ -816,6 +816,82 @@ class TestRevoke:
         # Should return False since all revocation attempts failed
         assert result is False
 
+    @staticmethod
+    def _revoke_provider(storage: MemoryTokenStorage) -> OAuth2Provider:
+        """Build a provider with a revoke_url configured."""
+        config = AuthProviderConfig(
+            client_id="test",
+            client_secret="secret",
+            authorize_url="https://auth.example.com/authorize",
+            token_url="https://auth.example.com/token",
+            revoke_url="https://auth.example.com/revoke",
+            redirect_uri="http://localhost/callback",
+        )
+        return OAuth2Provider("test", config, storage)
+
+    @staticmethod
+    def _posted_hints(mock_post: MagicMock) -> list[str]:
+        """Return the token_type_hint of each revocation POST made."""
+        return [call.kwargs["data"]["token_type_hint"] for call in mock_post.call_args_list]
+
+    def test_revoke_kinds_refresh_only(self, memory_storage: MemoryTokenStorage, sample_token: Token) -> None:
+        """Verify kinds=('refresh_token',) posts only the refresh token."""
+        provider = self._revoke_provider(memory_storage)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        with patch.object(provider.http_client, "post", return_value=mock_response) as mock_post:
+            result = provider.revoke(sample_token, kinds=("refresh_token",))
+        assert result is True
+        assert self._posted_hints(mock_post) == ["refresh_token"]
+
+    def test_revoke_empty_access_no_empty_post(self, memory_storage: MemoryTokenStorage) -> None:
+        """Verify an empty access_token never triggers a POST with an empty token value."""
+        provider = self._revoke_provider(memory_storage)
+        token = Token(access_token="", refresh_token="rt_value")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        with patch.object(provider.http_client, "post", return_value=mock_response) as mock_post:
+            provider.revoke(token)
+        posted_tokens = [call.kwargs["data"]["token"] for call in mock_post.call_args_list]
+        assert "" not in posted_tokens
+        assert posted_tokens == ["rt_value"]
+
+    def test_revoke_bool_reflects_targeted_subset(self, memory_storage: MemoryTokenStorage) -> None:
+        """Verify the returned bool reflects only the targeted subset."""
+        provider = self._revoke_provider(memory_storage)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        token = Token(access_token="at", refresh_token="rt")
+        with patch.object(provider.http_client, "post", return_value=mock_response):
+            assert provider.revoke(token, kinds=("refresh_token",)) is True
+        token_no_refresh = Token(access_token="at", refresh_token=None)
+        with patch.object(provider.http_client, "post", return_value=mock_response) as mock_post:
+            assert provider.revoke(token_no_refresh, kinds=("refresh_token",)) is False
+        assert self._posted_hints(mock_post) == []
+
+    def test_revoke_unknown_kind_raises(self, memory_storage: MemoryTokenStorage, sample_token: Token) -> None:
+        """Verify an unknown kind fails fast with ValueError."""
+        provider = self._revoke_provider(memory_storage)
+        with pytest.raises(ValueError, match="unknown revoke kind"):
+            provider.revoke(sample_token, kinds=("bogus_kind",))
+
+    def test_revoke_empty_kinds_no_post(self, memory_storage: MemoryTokenStorage, sample_token: Token) -> None:
+        """Verify kinds=() posts nothing and returns False."""
+        provider = self._revoke_provider(memory_storage)
+        with patch.object(provider.http_client, "post") as mock_post:
+            result = provider.revoke(sample_token, kinds=())
+        assert result is False
+        mock_post.assert_not_called()
+
+    def test_revoke_default_kinds_posts_both(self, memory_storage: MemoryTokenStorage, sample_token: Token) -> None:
+        """Verify revoke without kinds posts both access and refresh (backward-compat)."""
+        provider = self._revoke_provider(memory_storage)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        with patch.object(provider.http_client, "post", return_value=mock_response) as mock_post:
+            provider.revoke(sample_token)
+        assert self._posted_hints(mock_post) == ["access_token", "refresh_token"]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Test get_userinfo
@@ -1498,3 +1574,142 @@ class TestGetTraceConfig:
 
         assert pretty == _TRACE_PRETTY_DEFAULT
         assert max_body == _TRACE_MAX_BODY_DEFAULT
+
+
+class TestGetExtraSensitiveKeys:
+    """Tests for _get_extra_sensitive_keys() config resolution."""
+
+    def test_absent_returns_empty(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test missing extra_sensitive_keys resolves to an empty set (floor only)."""
+        mock_config = MagicMock()
+        mock_config.auth.trace.extra_sensitive_keys = None
+
+        with patch("kstlib.config.load_config", return_value=mock_config):
+            keys = oauth2_provider._get_extra_sensitive_keys()
+
+        assert keys == frozenset()
+
+    def test_valid_list_returns_frozenset(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a valid list of strings resolves to a frozenset."""
+        mock_config = MagicMock()
+        mock_config.auth.trace.extra_sensitive_keys = ["x_custom", "y_custom", "*token*"]
+
+        with patch("kstlib.config.load_config", return_value=mock_config):
+            keys = oauth2_provider._get_extra_sensitive_keys()
+
+        assert keys == frozenset({"x_custom", "y_custom", "*token*"})
+
+    def test_invalid_type_raises_config_error(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a non-list value fails fast with ConfigError."""
+        from kstlib.config import ConfigError
+
+        mock_config = MagicMock()
+        mock_config.auth.trace.extra_sensitive_keys = "not_a_list"
+
+        with patch("kstlib.config.load_config", return_value=mock_config), pytest.raises(ConfigError):
+            oauth2_provider._get_extra_sensitive_keys()
+
+    def test_invalid_element_type_raises_config_error(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a list containing a non-string element fails fast with ConfigError."""
+        from kstlib.config import ConfigError
+
+        mock_config = MagicMock()
+        mock_config.auth.trace.extra_sensitive_keys = ["ok", 123]
+
+        with patch("kstlib.config.load_config", return_value=mock_config), pytest.raises(ConfigError):
+            oauth2_provider._get_extra_sensitive_keys()
+
+    def test_load_error_returns_empty(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a config load failure resolves to an empty set (fail-safe, floor holds)."""
+        with patch("kstlib.config.load_config", side_effect=Exception("Config error")):
+            keys = oauth2_provider._get_extra_sensitive_keys()
+
+        assert keys == frozenset()
+
+    def test_no_trace_section_returns_empty(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a missing trace section resolves to an empty set."""
+        mock_config = MagicMock()
+        mock_config.auth.trace = None
+
+        with patch("kstlib.config.load_config", return_value=mock_config):
+            keys = oauth2_provider._get_extra_sensitive_keys()
+
+        assert keys == frozenset()
+
+    def test_tracer_includes_config_extra_keys(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test the tracer property unions config extra keys with the immutable floor."""
+        from kstlib.utils.http_trace import DEFAULT_SENSITIVE_KEYS
+
+        mock_config = MagicMock()
+        mock_config.auth.trace.pretty = True
+        mock_config.auth.trace.max_body_length = 5000
+        mock_config.auth.trace.extra_sensitive_keys = ["x_custom_secret"]
+
+        with patch("kstlib.config.load_config", return_value=mock_config):
+            tracer = oauth2_provider.tracer
+
+        assert "x_custom_secret" in tracer.sensitive_keys
+        assert DEFAULT_SENSITIVE_KEYS.issubset(tracer.sensitive_keys)
+
+    def test_real_box_empty_list_returns_empty(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a real Box (BoxList) with an empty list resolves to an empty set."""
+        from box import Box
+
+        cfg = Box({"auth": {"trace": {"extra_sensitive_keys": []}}})
+
+        with patch("kstlib.config.load_config", return_value=cfg):
+            keys = oauth2_provider._get_extra_sensitive_keys()
+
+        assert keys == frozenset()
+
+    def test_real_box_valid_list_returns_frozenset(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a real Box (BoxList) with a valid list resolves to a frozenset."""
+        from box import Box
+
+        cfg = Box({"auth": {"trace": {"extra_sensitive_keys": ["x_custom", "*token*"]}}})
+
+        with patch("kstlib.config.load_config", return_value=cfg):
+            keys = oauth2_provider._get_extra_sensitive_keys()
+
+        assert keys == frozenset({"x_custom", "*token*"})
+
+    def test_real_box_mapping_raises_config_error(
+        self,
+        oauth2_provider: OAuth2Provider,
+    ) -> None:
+        """Test a real Box with a mapping value fails fast with ConfigError."""
+        from box import Box
+
+        from kstlib.config import ConfigError
+
+        cfg = Box({"auth": {"trace": {"extra_sensitive_keys": {"not": "a list"}}}})
+
+        with patch("kstlib.config.load_config", return_value=cfg), pytest.raises(ConfigError):
+            oauth2_provider._get_extra_sensitive_keys()

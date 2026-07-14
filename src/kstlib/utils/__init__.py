@@ -12,6 +12,7 @@ from kstlib.utils.formatting import (
 )
 from kstlib.utils.http_trace import (
     DEFAULT_SENSITIVE_KEYS,
+    HEADER_SENSITIVE_KEYS,
     HTTPTraceLogger,
     create_trace_event_hooks,
 )
@@ -27,6 +28,7 @@ from kstlib.utils.validators import (
 
 __all__ = [
     "DEFAULT_SENSITIVE_KEYS",
+    "HEADER_SENSITIVE_KEYS",
     "EmailAddress",
     "HTTPTraceLogger",
     "SecureDeleteMethod",

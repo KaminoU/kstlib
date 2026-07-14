@@ -205,6 +205,25 @@ with AuthSession(github) as gh_session:
     gh_response = gh_session.get("https://api.github.com/user")
 ```
 
+### Revoking tokens
+
+`provider.revoke()` posts to the provider's revocation endpoint. By default it
+revokes both the access and refresh tokens; pass `kinds` to target a subset.
+
+```python
+# CLI: revoke everything the provider stored
+provider.revoke()
+
+# Server-side, refresh-only: revoke just the refresh token you hold
+provider.revoke(token, kinds=("refresh_token",))
+```
+
+An empty or absent token value is skipped, so a refresh-only token set never
+sends an empty `token=` POST. Per RFC 7009 the endpoint answers `200 OK` even
+for an unknown or already-invalid token, so `revoke()` returning `True` means
+the request was accepted, not that the token is proven revoked. Targeting a
+single kind keeps the boolean meaningful for that kind.
+
 ## Troubleshooting
 
 ### "Not authenticated"

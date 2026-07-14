@@ -322,11 +322,18 @@ reach a log line, summarized below:
 
 `kstlib.utils.http_trace.HTTPTraceLogger` is the official infrastructure
 to add HTTP TRACE logging to an httpx-based client without leaking
-credentials. It hooks into httpx event hooks and applies redaction on
-request bodies (against `DEFAULT_SENSITIVE_KEYS` covering `client_secret`,
-`code`, `refresh_token`, `access_token`, `code_verifier`, `password`,
-`api_key`, `secret`, `token`) and on response bodies (truncated to a
-configurable max length).
+credentials. It hooks into httpx event hooks and redacts credentials across
+three surfaces of every logged request and response: the body, the request
+headers, and the URL (query parameters and inline `user:pass@` credentials;
+response bodies are also truncated to a configurable max length). Body and query redaction runs against
+`DEFAULT_SENSITIVE_KEYS`, an immutable floor of OAuth 2.0 / OpenID Connect
+credentials: client secrets, authorization codes and PKCE verifiers, access /
+refresh / ID tokens (including `id_token_hint`), assertions (`assertion`,
+`client_assertion`), token-exchange tokens (`subject_token`, `actor_token`),
+device codes, and dynamic client registration tokens. Header names are matched
+against a dedicated floor, `HEADER_SENSITIVE_KEYS` (`authorization`, `cookie`,
+`x-api-key`, ...); a sensitive header keeps its name, but its value becomes
+`***REDACTED***`.
 
 ```python
 import httpx
@@ -347,6 +354,59 @@ client = httpx.Client(
 Already adopted by `kstlib.auth.providers.oauth2`. Other modules
 (notably `kstlib.rapi.client`) are progressively switching to the same
 helper rather than rolling their own redaction.
+
+### Extending trace redaction
+
+The floor is deliberately immutable: it can be extended but never disabled
+through configuration, so a misconfigured or empty setting still redacts
+every built-in credential. Two additive paths sit on top of it:
+
+- `extra_sensitive_keys` on `HTTPTraceLogger` and `create_trace_event_hooks`
+  (in code), and
+- the `auth.trace.extra_sensitive_keys` YAML list, for config-driven
+  consumers that never build the tracer themselves.
+
+Both are unioned with the floor; neither replaces it. Entries containing
+`*`, `?` or `[seq]` are matched as case-insensitive
+[`fnmatch`](https://docs.python.org/3/library/fnmatch.html) patterns; every
+other entry matches a key name exactly (case-insensitively). Regular
+expressions are intentionally not supported, to keep the logging hot path
+free of catastrophic-backtracking risk.
+
+The same additive keys apply to all three surfaces: a key or pattern added
+via `extra_sensitive_keys` (or the YAML list) masks matching body keys, URL
+query parameters, and header names alike. For example, `*secret*` masks a
+`client_secret` body field, an `?app_secret=...` query parameter, and an
+`X-App-Secret` header in a single declaration.
+
+URL redaction masks query-parameter values and inline `user:pass@` userinfo
+credentials; a secret placed in a path segment or fragment is not redacted,
+because there is no parameter name to match against.
+
+```yaml
+# kstlib.conf.yml
+auth:
+  trace:
+    extra_sensitive_keys:
+      - x_api_signature            # an exact, deployment-specific key
+      - "*_secret"                 # any key ending in _secret
+      - client_notification_token  # a CIBA credential, not in the floor
+```
+
+An invalid value (anything other than a list of strings) fails fast with
+`ConfigError` rather than being silently ignored.
+
+:::{warning}
+Wildcards over-redact by design. A broad pattern such as `*token*` also
+masks non-secret debugging fields like `token_type` and
+`subject_token_type`. Prefer exact keys or narrow patterns unless you
+deliberately want the wider net.
+:::
+
+Niche-profile credentials that are not part of the built-in floor (for
+example CIBA `client_notification_token`, UMA `rpt` / `ticket`, OpenID for
+Verifiable Presentations `vp_token`, or ACE `cnf`) are best added here
+rather than requested as floor additions.
 
 ## See also
 

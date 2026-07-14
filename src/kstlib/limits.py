@@ -32,8 +32,6 @@ from typing import Literal as _Literal
 # therefore be defined before the cross-module import. If these constants
 # sat at their usual position (after imports), Python would raise
 # ImportError on the cycle re-entry into a still-initialising kstlib.limits.
-#
-# See: fix-circular-import-mail request (2026-04-24).
 # =============================================================================
 
 # Hard limits (deep defense - cannot be exceeded via config)

@@ -200,3 +200,24 @@ direct use in your applications.
    :show-inheritance:
    :noindex:
 ```
+
+### create_trace_event_hooks
+
+```{eval-rst}
+.. autofunction:: kstlib.utils.create_trace_event_hooks
+   :noindex:
+```
+
+### DEFAULT_SENSITIVE_KEYS
+
+```{eval-rst}
+.. autodata:: kstlib.utils.DEFAULT_SENSITIVE_KEYS
+   :noindex:
+```
+
+### HEADER_SENSITIVE_KEYS
+
+```{eval-rst}
+.. autodata:: kstlib.utils.HEADER_SENSITIVE_KEYS
+   :noindex:
+```

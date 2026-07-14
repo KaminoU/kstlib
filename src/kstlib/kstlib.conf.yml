@@ -582,6 +582,15 @@ auth:
     # TRACE = debug mode, show full body by default
     # Hard limit enforced in code: 10000 (10KB)
     max_body_length: 10000
+    # Additional body keys to redact in HTTP traces, added on top of the
+    # built-in floor of OAuth2/OIDC credentials (the floor can never be
+    # disabled here). Entries containing "*", "?" or "[seq]" are
+    # case-insensitive fnmatch patterns. Warning: a broad pattern like
+    # "*token*" also masks
+    # non-secret fields such as "token_type". Niche-profile credentials
+    # (CIBA, UMA, OpenID for Verifiable Presentations, ACE, ...) belong here
+    # rather than in the built-in floor.
+    extra_sensitive_keys: []
 
   # Local callback server for authorization code flow
   callback_server:
