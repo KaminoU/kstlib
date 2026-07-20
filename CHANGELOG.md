@@ -19,6 +19,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.6.1] - 2026-07-20
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- `kstlib.auth`: reusing one `AuthProviderConfig` object across `OIDCProvider`
+  constructions no longer freezes endpoints permanently. The constructor used
+  to write issuer-derived placeholder URLs (`{issuer}/authorize`,
+  `{issuer}/token`) into the caller's config; on a later construction those
+  placeholders, or previously discovered endpoints, were reclassified as
+  operator-explicit and discovery never updated them again, so a transient
+  IdP outage at first use left the provider emitting authorization URLs that
+  404 until process restart. The constructor no longer mutates the caller's
+  config, endpoints written by discovery stay refreshable on reconstruction
+  (in-memory provenance marker), and truly explicit operator endpoints still
+  win over discovery. `discovery_mode` now correctly reports `"auto"` instead
+  of a spurious `"hybrid"` for a reused auto-discovery config.
+- `kstlib.auth`: `OIDCProvider.get_authorization_url()` now raises
+  `ConfigurationError` instead of silently emitting an issuer-derived
+  authorization URL when no authorization endpoint is available after
+  discovery (document without `authorization_endpoint` and no explicit
+  `authorize_url` configured).
+
+### Security
+
 ## [3.6.0] - 2026-07-14
 
 ### Added
@@ -1719,7 +1751,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.6.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.6.1...HEAD
+[3.6.1]: https://github.com/KaminoU/kstlib/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/KaminoU/kstlib/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/KaminoU/kstlib/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/KaminoU/kstlib/compare/v3.4.1...v3.4.2

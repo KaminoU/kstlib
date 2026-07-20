@@ -271,8 +271,8 @@ class TestDiscoveryModes:
         """Test that auto discovery updates all endpoints from discovery doc."""
         provider = OIDCProvider("auto", oidc_config, memory_storage)
 
-        # Before discovery: placeholders
-        assert provider.config.token_url == "https://auth.example.com/token"
+        # Before discovery: endpoints are unresolved (no issuer-derived guess)
+        assert provider.config.token_url is None
 
         mock_response = MagicMock()
         mock_response.json.return_value = keycloak_discovery_doc
@@ -506,6 +506,157 @@ class TestDiscoveryModes:
         # Should use explicit token_url
         assert call_urls[0] == "https://legacy-idp.local/token"
         assert new_token.access_token == "new-token"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test config reuse across providers
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestConfigReuseAcrossProviders:
+    """Reusing one AuthProviderConfig object across successive providers.
+
+    Values kstlib itself writes into the caller's config (discovered
+    endpoints) must never be reclassified as operator-explicit endpoints
+    by a later construction: "explicit wins" only protects operator input.
+    """
+
+    def test_discovery_recovers_after_transient_failure_on_reused_config(
+        self,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """A failed first discovery must not freeze endpoints on config reuse."""
+        config = AuthProviderConfig(
+            client_id="reuse-client",
+            issuer="https://auth.example.com",
+            redirect_uri="http://127.0.0.1:8400/callback",
+        )
+        discovery_doc = {
+            "issuer": "https://auth.example.com",
+            "authorization_endpoint": "https://auth.example.com/protocol/openid-connect/auth",
+            "token_endpoint": "https://auth.example.com/protocol/openid-connect/token",
+            "jwks_uri": "https://auth.example.com/protocol/openid-connect/certs",
+        }
+        calls = {"discovery": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/.well-known/openid-configuration"):
+                calls["discovery"] += 1
+                if calls["discovery"] == 1:
+                    raise httpx.ConnectError("Connection refused", request=request)
+                return httpx.Response(200, json=discovery_doc)
+            return httpx.Response(404)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            p1 = OIDCProvider("reuse", config, memory_storage, http_client=client)
+            with pytest.raises(DiscoveryError):
+                p1.discover()
+
+            p2 = OIDCProvider("reuse", config, memory_storage, http_client=client)
+            p2.discover()
+
+            assert config.authorize_url == discovery_doc["authorization_endpoint"]
+            assert config.token_url == discovery_doc["token_endpoint"]
+
+            url, _state = p2.get_authorization_url()
+
+        assert url.startswith(discovery_doc["authorization_endpoint"] + "?")
+
+    def test_rotated_endpoint_wins_on_reused_config(
+        self,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """A previously discovered endpoint must not block a rotated one."""
+        config = AuthProviderConfig(
+            client_id="reuse-client",
+            issuer="https://auth.example.com",
+            redirect_uri="http://127.0.0.1:8400/callback",
+        )
+        doc_v1 = {
+            "issuer": "https://auth.example.com",
+            "authorization_endpoint": "https://auth.example.com/v1/authorize",
+            "token_endpoint": "https://auth.example.com/v1/token",
+        }
+        doc_v2 = {
+            "issuer": "https://auth.example.com",
+            "authorization_endpoint": "https://auth.example.com/v2/authorize",
+            "token_endpoint": "https://auth.example.com/v2/token",
+        }
+        docs = iter([doc_v1, doc_v2])
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=next(docs))
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            p1 = OIDCProvider("reuse", config, memory_storage, http_client=client)
+            p1.discover()
+            assert config.authorize_url == doc_v1["authorization_endpoint"]
+
+            p2 = OIDCProvider("reuse", config, memory_storage, http_client=client)
+            p2.discover()
+
+        assert config.authorize_url == doc_v2["authorization_endpoint"]
+        assert config.token_url == doc_v2["token_endpoint"]
+
+    def test_authorization_url_never_derived_from_issuer(
+        self,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Without a discovered or explicit endpoint, emission fails loudly.
+
+        A discovery document without authorization_endpoint must produce an
+        explicit error, never a well-formed but wrong issuer-derived URL.
+        """
+        config = AuthProviderConfig(
+            client_id="incomplete-client",
+            issuer="https://auth.example.com",
+            redirect_uri="http://127.0.0.1:8400/callback",
+        )
+        incomplete_doc = {
+            "issuer": "https://auth.example.com",
+            "token_endpoint": "https://auth.example.com/protocol/openid-connect/token",
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=incomplete_doc)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            provider = OIDCProvider("incomplete", config, memory_storage, http_client=client)
+
+            with pytest.raises(ConfigurationError, match="authorization endpoint"):
+                provider.get_authorization_url()
+
+    def test_operator_explicit_endpoint_still_wins_on_reused_config(
+        self,
+        memory_storage: MemoryTokenStorage,
+    ) -> None:
+        """Operator-explicit endpoints keep winning over discovery on reuse."""
+        explicit_authorize = "https://idp.corp.example/custom/authorize"
+        config = AuthProviderConfig(
+            client_id="hybrid-client",
+            issuer="https://auth.example.com",
+            authorize_url=explicit_authorize,
+            redirect_uri="http://127.0.0.1:8400/callback",
+        )
+        discovery_doc = {
+            "issuer": "https://auth.example.com",
+            "authorization_endpoint": "https://auth.example.com/protocol/openid-connect/auth",
+            "token_endpoint": "https://auth.example.com/protocol/openid-connect/token",
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=discovery_doc)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            p1 = OIDCProvider("hybrid", config, memory_storage, http_client=client)
+            p1.discover()
+            assert config.authorize_url == explicit_authorize
+
+            p2 = OIDCProvider("hybrid", config, memory_storage, http_client=client)
+            p2.discover()
+
+            assert config.authorize_url == explicit_authorize
+            assert p2.discovery_mode == "hybrid"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -782,10 +933,11 @@ class TestExchangeCodeOIDC:
         mock_discovery_doc: dict,
     ) -> None:
         """Test that exchange_code includes PKCE verifier."""
-        # Setup
+        # Setup: discovery already done (doc stored, endpoints applied)
         oidc_provider._pending_state = "test-state"
         oidc_provider._code_verifier = "test-verifier-12345"
         oidc_provider._discovery_doc = mock_discovery_doc
+        oidc_provider._update_endpoints_from_discovery()
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -904,9 +1056,11 @@ class TestExchangeCodeOIDC:
         mock_discovery_doc: dict,
     ) -> None:
         """Test that ID token validation failure raises (mandatory for OIDC)."""
+        # Discovery already done (doc stored, endpoints applied)
         oidc_provider._pending_state = "test-state"
         oidc_provider._code_verifier = "test-verifier"
         oidc_provider._discovery_doc = mock_discovery_doc
+        oidc_provider._update_endpoints_from_discovery()
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -1302,8 +1456,8 @@ class TestOIDCRefresh:
         )
         oidc_provider.save_token(token)
 
-        # Verify initial fallback URL is wrong (without /protocol/openid-connect/)
-        assert oidc_provider.config.token_url == "https://auth.example.com/token"
+        # Before discovery: no static token endpoint (discovery resolves it)
+        assert oidc_provider.config.token_url is None
 
         # Discovery document with CORRECT endpoint (like Keycloak uses)
         keycloak_discovery = {
@@ -1346,15 +1500,15 @@ class TestOIDCRefresh:
         # Verify config was updated
         assert oidc_provider.config.token_url == "https://auth.example.com/protocol/openid-connect/token"
 
-    def test_refresh_without_discovery_would_fail(
+    def test_no_issuer_derived_fallback_before_discovery(
         self,
         memory_storage: MemoryTokenStorage,
     ) -> None:
-        """Demonstrate the bug: without discovery, fallback URL is wrong.
+        """No issuer-derived token_url guess exists; discovery sets the real one.
 
-        This test documents the issue that was fixed. The fallback URL
-        {issuer}/token doesn't match Keycloak's actual endpoint
-        {issuer}/protocol/openid-connect/token.
+        Keycloak-style IDPs nest endpoints under /protocol/openid-connect/,
+        so any {issuer}/token guess would 404. The config stays unresolved
+        until discovery provides the actual endpoint.
         """
         config = AuthProviderConfig(
             client_id="test-client",
@@ -1364,11 +1518,10 @@ class TestOIDCRefresh:
         )
         provider = OIDCProvider("keycloak", config, memory_storage)
 
-        # The fallback URL is WRONG for Keycloak
-        assert provider.config.token_url == "http://localhost:8080/realms/test/token"
-        # Should be: http://localhost:8080/realms/test/protocol/openid-connect/token
+        # No fallback guess: unresolved until discovery
+        assert provider.config.token_url is None
 
-        # After discovery, it would be corrected
+        # After discovery, the real endpoint is set
         keycloak_discovery = {
             "issuer": "http://localhost:8080/realms/test",
             "token_endpoint": "http://localhost:8080/realms/test/protocol/openid-connect/token",

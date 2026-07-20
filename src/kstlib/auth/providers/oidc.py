@@ -35,6 +35,22 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class _DiscoveredEndpoint(str):
+    """URL written into the caller's config by OIDC discovery.
+
+    Marks values kstlib derived itself, so a later provider built on the
+    same ``AuthProviderConfig`` object never reclassifies them as
+    operator-explicit endpoints: "explicit wins" only ever protects
+    operator input. The marker is in-memory only: a config that
+    round-trips through serialization (``dataclasses.asdict``, YAML, ...)
+    loses the provenance, and previously discovered endpoints are then
+    treated as explicit by the next provider built on the deserialized
+    object. ``copy.copy`` and ``dataclasses.replace`` preserve it.
+    """
+
+    __slots__ = ()
+
+
 class OIDCProvider(OAuth2Provider):
     """OpenID Connect provider with PKCE and automatic discovery.
 
@@ -152,7 +168,9 @@ class OIDCProvider(OAuth2Provider):
             ConfigurationError: If configuration is invalid.
 
         """
-        # Track which endpoints were explicitly configured (before any modification)
+        # Track which endpoints the operator configured explicitly. Values
+        # written by a previous provider's discovery carry the
+        # _DiscoveredEndpoint marker and stay refreshable.
         endpoint_map = [
             ("authorize_url", "authorization_endpoint"),
             ("token_url", "token_endpoint"),
@@ -162,22 +180,13 @@ class OIDCProvider(OAuth2Provider):
             ("revoke_url", "revocation_endpoint"),
         ]
         self._explicit_endpoints: dict[str, str] = {
-            discovery_key: getattr(config, attr) for attr, discovery_key in endpoint_map if getattr(config, attr)
+            discovery_key: value
+            for attr, discovery_key in endpoint_map
+            if (value := getattr(config, attr)) and not isinstance(value, _DiscoveredEndpoint)
         }
 
         # Determine discovery mode
         self._discovery_enabled = config.issuer is not None
-
-        # For auto-discovery mode, set temporary placeholders ONLY if no explicit endpoints
-        # These will be replaced by discovery
-        if self._discovery_enabled:
-            issuer = config.issuer
-            if issuer is None:
-                raise ConfigurationError("issuer is required when OIDC discovery is enabled")
-            if not config.authorize_url:
-                config.authorize_url = f"{issuer.rstrip('/')}/authorize"  # Placeholder
-            if not config.token_url:
-                config.token_url = f"{issuer.rstrip('/')}/token"  # Placeholder
 
         super().__init__(name, config, token_storage, http_client=http_client)
 
@@ -211,6 +220,15 @@ class OIDCProvider(OAuth2Provider):
                 "Provider '%s': jwks_uri not configured. ID token signature verification may fail.",
                 self.name,
             )
+
+    def _requires_static_endpoints(self) -> bool:
+        """Whether endpoints must be statically configured (manual mode only).
+
+        In auto/hybrid discovery mode the authorization and token endpoints
+        are resolved from the issuer's discovery document, so they are not
+        required at construction time nor by the preflight config check.
+        """
+        return not self._discovery_enabled
 
     @property
     def flow(self) -> AuthFlow:
@@ -334,6 +352,9 @@ class OIDCProvider(OAuth2Provider):
 
         In hybrid mode, explicit endpoints take precedence over discovered ones.
         Only endpoints not explicitly configured are updated from discovery.
+        Written values carry the ``_DiscoveredEndpoint`` marker so a later
+        provider construction on the same config object can tell them apart
+        from operator-explicit endpoints.
         """
         if not self._discovery_doc:
             return
@@ -360,7 +381,7 @@ class OIDCProvider(OAuth2Provider):
 
             # Update from discovery if available
             if discovery_key in self._discovery_doc:
-                setattr(self.config, config_attr, self._discovery_doc[discovery_key])
+                setattr(self.config, config_attr, _DiscoveredEndpoint(self._discovery_doc[discovery_key]))
                 logger.debug(
                     "Provider '%s': set %s from discovery",
                     self.name,
@@ -409,6 +430,14 @@ class OIDCProvider(OAuth2Provider):
         Returns:
             Tuple of (authorization_url, state).
 
+        Raises:
+            ConfigurationError: If no authorization endpoint is available
+                after discovery (document without ``authorization_endpoint``
+                and no explicit ``authorize_url`` configured). An
+                issuer-derived guess is never emitted.
+            DiscoveryError: If the discovery document cannot be fetched
+                (auto/hybrid mode).
+
         Note:
             A random ``nonce`` is added to the URL, which hardens the
             provider side against replay. kstlib does not verify the
@@ -419,6 +448,14 @@ class OIDCProvider(OAuth2Provider):
         """
         # Ensure discovery is done first
         self.discover()
+
+        if not self.config.authorize_url:
+            msg = (
+                f"Provider '{self.name}': no authorization endpoint available. "
+                "Discovery did not provide 'authorization_endpoint' and no "
+                "explicit 'authorize_url' is configured."
+            )
+            raise ConfigurationError(msg)
 
         if state is None:
             state = secrets.token_urlsafe(32)
@@ -693,10 +730,10 @@ class OIDCProvider(OAuth2Provider):
     def refresh(self, token: Token | None = None) -> Token:
         """Refresh an access token, ensuring OIDC discovery is done first.
 
-        For OIDC providers, we must perform discovery before refreshing
-        to ensure we have the correct token_endpoint URL. This is necessary
-        because the endpoint URLs set during __init__ are temporary fallbacks
-        that may not match the actual IDP endpoints.
+        For OIDC providers, discovery runs before refreshing so the request
+        targets the token endpoint resolved from the issuer's discovery
+        document (in auto mode the config carries no token endpoint until
+        discovery resolves it).
 
         Args:
             token: Token to refresh. Uses stored token if not provided.

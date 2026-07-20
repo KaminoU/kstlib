@@ -153,9 +153,19 @@ class OAuth2Provider(AbstractAuthProvider):
         self._tracer: HTTPTraceLogger | None = None
 
         # Validate required OAuth2 config
-        if not config.authorize_url or not config.token_url:
+        if self._requires_static_endpoints() and (not config.authorize_url or not config.token_url):
             msg = "OAuth2Provider requires 'authorize_url' and 'token_url' in config"
             raise ConfigurationError(msg)
+
+    def _requires_static_endpoints(self) -> bool:
+        """Whether authorize_url and token_url must be statically configured.
+
+        Plain OAuth2 has no endpoint discovery, so both endpoints are
+        required at construction time and by the preflight config check.
+        Subclasses with a discovery mechanism override this to defer
+        endpoint resolution to discovery.
+        """
+        return True
 
     @property
     def flow(self) -> AuthFlow:
@@ -659,12 +669,13 @@ class OAuth2Provider(AbstractAuthProvider):
         """Validate provider configuration."""
         start = time.time()
         issues: list[str] = []
+        require_endpoints = self._requires_static_endpoints()
 
         if not self.config.client_id:
             issues.append("client_id is required")
-        if not self.config.authorize_url:
+        if require_endpoints and not self.config.authorize_url:
             issues.append("authorize_url is required")
-        if not self.config.token_url:
+        if require_endpoints and not self.config.token_url:
             issues.append("token_url is required")
         if not self.config.redirect_uri:
             issues.append("redirect_uri is required")
