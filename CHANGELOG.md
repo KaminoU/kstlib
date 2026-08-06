@@ -19,6 +19,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.6.2] - 2026-08-06
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+- Raised the `cryptography` lower bound from 46.0.7 to 50.0.0 (direct
+  dependency, lockfile pin moved from 49.0.0 to 50.0.0), covering
+  GHSA-g6cj-pr64-35w5 / CVE-2026-69247 (high): PKCS#7 `EnvelopedData`
+  decryption reported failures in distinguishable ways, and with
+  distinguishable timing, handing an attacker a Bleichenbacher oracle against
+  the content-encryption key. Affected versions are >= 44.0.0 and < 50.0.0.
+  kstlib never calls the PKCS#7 decryption helpers itself, so the bound is
+  raised for the benefit of applications that resolve `cryptography` through
+  this package.
+- Bumped `setuptools` from 80.0.0 to 83.0.0 in the build requirements, and its
+  lockfile pin from 80.10.2 to 83.0.0 (build backend, plus a documentation
+  extra transitive via `sphinx-togglebutton`), covering GHSA-h35f-9h28-mq5c /
+  CVE-2026-59890 (medium): `MANIFEST.in` exclusion rules were matched against
+  file names byte for byte with no Unicode normalization, so on
+  normalization-preserving filesystems a file the maintainer meant to exclude
+  could still be packed into a source distribution. Affected versions
+  are < 83.0.0.
+
 ## [3.6.1] - 2026-07-20
 
 ### Added
@@ -1751,7 +1783,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.6.1...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.6.2...HEAD
+[3.6.2]: https://github.com/KaminoU/kstlib/compare/v3.6.1...v3.6.2
 [3.6.1]: https://github.com/KaminoU/kstlib/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/KaminoU/kstlib/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/KaminoU/kstlib/compare/v3.4.2...v3.5.0
