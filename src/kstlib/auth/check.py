@@ -18,7 +18,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -26,7 +25,9 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from kstlib.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Clock skew tolerance for claim validation (seconds)
 CLOCK_SKEW_SECONDS = 300
@@ -542,6 +543,10 @@ def _jwk_to_pem(jwk_data: dict[str, Any]) -> tuple[str, str, int | None]:
 def _parse_x509_info(cert_b64: str) -> dict[str, Any]:
     """Parse X.509 certificate info from base64-encoded DER (x5c field).
 
+    Adapts the hardened parsing primitive to the shape this report publishes:
+    five string fields, and an empty dict when the certificate cannot be read,
+    so a diagnostic report is still produced for the rest of the token.
+
     Args:
         cert_b64: Base64-encoded DER certificate from x5c array.
 
@@ -550,38 +555,45 @@ def _parse_x509_info(cert_b64: str) -> dict[str, Any]:
         Empty dict if parsing fails.
 
     """
+    # Imported here, not at module scope: pulling the security helpers costs
+    # roughly half a second of import time (they carry the password hashing
+    # backend), for a function that only runs when a JWKS entry ships an x5c.
+    from kstlib.secure import MAX_CERTIFICATE_SIZE, parse_certificate
+
+    # The payload is base64, which inflates by 4/3, so the character bound is
+    # not the byte bound. Bounding here is what actually protects the decode:
+    # the primitive can only bound what it already received. The bound is
+    # deliberately a hair loose, since it caps the decoding work while the
+    # primitive stays authoritative on the exact byte limit. Tightening it to
+    # match the byte bound exactly would reject certificates of a legal size
+    # because of padding.
+    max_b64_length = (MAX_CERTIFICATE_SIZE + 2) // 3 * 4
+    if len(cert_b64) > max_b64_length:
+        logger.warning(
+            "[SECURITY] x5c entry rejected before decoding: %d characters exceeds the %d character limit",
+            len(cert_b64),
+            max_b64_length,
+        )
+        return {}
+
     try:
-        from cryptography import x509
-
-        cert_der = base64.b64decode(cert_b64)
-        cert = x509.load_der_x509_certificate(cert_der)
-
-        subject_cn = ""
-        try:
-            cn_attrs = cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
-            if cn_attrs:
-                subject_cn = str(cn_attrs[0].value)
-        except Exception:
-            subject_cn = cert.subject.rfc4514_string()
-
-        issuer_cn = ""
-        try:
-            cn_attrs = cert.issuer.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
-            if cn_attrs:
-                issuer_cn = str(cn_attrs[0].value)
-        except Exception:
-            issuer_cn = cert.issuer.rfc4514_string()
-
-        return {
-            "subject_cn": subject_cn,
-            "issuer_cn": issuer_cn,
-            "serial_number": format(cert.serial_number, "x"),
-            "not_before": cert.not_valid_before_utc.isoformat(),
-            "not_after": cert.not_valid_after_utc.isoformat(),
-        }
-    except Exception:
+        info = parse_certificate(base64.b64decode(cert_b64))
+    except (ValueError, TypeError):
+        # An x5c was present and could not be read. That is a different
+        # diagnostic from having no x5c at all, and both render as a missing
+        # panel, so the distinction has to reach the operator without a rerun
+        # in verbose mode. The cause stays in the debug record.
+        logger.warning("[SECURITY] x5c certificate present but unreadable, certificate details omitted")
         logger.debug("Failed to parse x5c certificate", exc_info=True)
         return {}
+
+    return {
+        "subject_cn": info.subject_cn or "",
+        "issuer_cn": info.issuer_cn or "",
+        "serial_number": info.serial_number,
+        "not_before": info.not_before.isoformat(),
+        "not_after": info.not_after.isoformat(),
+    }
 
 
 def _check_issuer(

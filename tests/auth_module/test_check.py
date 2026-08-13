@@ -726,6 +726,152 @@ class TestTokenCheckerExtractPublicKey:
         assert report.x509_info == {}
 
 
+class TestX509InfoContract:
+    """The published shape of ``x509_info``, which the CLI panel reads key by key."""
+
+    @staticmethod
+    def _jwk_with_x5c(rsa_keypair: Any, cert_b64: str | None) -> dict[str, Any]:
+        """Build a JWK, optionally carrying a base64 certificate in its x5c array."""
+        from authlib.jose import JsonWebKey
+
+        jwk = JsonWebKey.import_key(_key_to_pem(rsa_keypair), {"kid": "test-key-1", "use": "sig"})
+        jwk_data: dict[str, Any] = jwk.as_dict(is_private=False)
+        if cert_b64 is not None:
+            jwk_data["x5c"] = [cert_b64]
+        return jwk_data
+
+    @staticmethod
+    def _certificate_b64(rsa_keypair: Any, *, serial: int = 0x123, common_name: str | None = "idp.test") -> str:
+        """Build a self-signed certificate and return its base64 DER encoding."""
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.x509.oid import NameOID
+
+        attributes = [] if common_name is None else [x509.NameAttribute(NameOID.COMMON_NAME, common_name)]
+        name = x509.Name(attributes)
+        certificate = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(rsa_keypair.public_key())
+            .serial_number(serial)
+            .not_valid_before(datetime(2025, 1, 1, tzinfo=timezone.utc))
+            .not_valid_after(datetime(2030, 12, 31, tzinfo=timezone.utc))
+            .sign(rsa_keypair, hashes.SHA256())
+        )
+        return base64.b64encode(certificate.public_bytes(serialization.Encoding.DER)).decode("utf-8")
+
+    def _report(
+        self,
+        rsa_keypair: Any,
+        valid_claims: dict[str, Any],
+        discovery_response: dict[str, Any],
+        cert_b64: str | None,
+    ) -> TokenCheckReport:
+        """Run the full public check() chain over a JWKS whose key carries *cert_b64*.
+
+        Driving the public entry point rather than the extraction step keeps this
+        class free of private-member access, and has the side benefit of proving
+        that a certificate problem never prevents the token report from being
+        produced.
+        """
+        jwk_data = self._jwk_with_x5c(rsa_keypair, cert_b64)
+        client = MagicMock(spec=httpx.Client)
+
+        def mock_get(url: str, **kwargs: Any) -> Any:
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            # Route on "openid-configuration", not on ".well-known": the JWKS
+            # URI of this discovery document also lives under .well-known, so a
+            # looser test would swallow the JWKS request and never exercise the
+            # nominal path.
+            is_discovery = "openid-configuration" in url
+            resp.json.return_value = discovery_response if is_discovery else {"keys": [jwk_data]}
+            return resp
+
+        client.get = MagicMock(side_effect=mock_get)
+        checker = TokenChecker(
+            client,
+            expected_issuer="https://idp.example.com",
+            expected_audience="test-client",
+        )
+        return checker.check(_make_signed_jwt(rsa_keypair, valid_claims))
+
+    def test_every_value_is_a_string(self, rsa_keypair, valid_claims, discovery_response) -> None:
+        """All five fields are strings: the CLI passes them straight to a table row."""
+        cert = self._certificate_b64(rsa_keypair)
+        info = self._report(rsa_keypair, valid_claims, discovery_response, cert).x509_info
+        assert set(info) == {"subject_cn", "issuer_cn", "serial_number", "not_before", "not_after"}
+        assert all(isinstance(value, str) for value in info.values())
+
+    def test_dates_are_isoformat_strings(self, rsa_keypair, valid_claims, discovery_response) -> None:
+        """Validity bounds serialize as isoformat text, never as datetime objects."""
+        cert = self._certificate_b64(rsa_keypair)
+        info = self._report(rsa_keypair, valid_claims, discovery_response, cert).x509_info
+        assert datetime.fromisoformat(info["not_before"]) == datetime(2025, 1, 1, tzinfo=timezone.utc)
+        assert datetime.fromisoformat(info["not_after"]) == datetime(2030, 12, 31, tzinfo=timezone.utc)
+
+    def test_to_dict_keeps_the_serialized_shape(self, rsa_keypair, valid_claims, discovery_response) -> None:
+        """The JSON output carries the same five string fields."""
+        cert = self._certificate_b64(rsa_keypair)
+        serialized = self._report(rsa_keypair, valid_claims, discovery_response, cert).to_dict()["x509_info"]
+        assert isinstance(serialized, dict)
+        assert all(isinstance(value, str) for value in serialized.values())
+
+    def test_to_dict_reports_none_when_no_certificate(self, rsa_keypair, valid_claims, discovery_response) -> None:
+        """With no x5c, the serialized field is null rather than an empty object."""
+        report = self._report(rsa_keypair, valid_claims, discovery_response, None)
+        assert report.valid is True
+        assert report.to_dict()["x509_info"] is None
+
+    def test_serial_is_even_length_lowercase_hex(self, rsa_keypair, valid_claims, discovery_response) -> None:
+        """A serial with an odd hex length is padded, so consumers cannot diverge."""
+        cert = self._certificate_b64(rsa_keypair, serial=0x123)
+        info = self._report(rsa_keypair, valid_claims, discovery_response, cert).x509_info
+        assert info["serial_number"] == "0123"
+
+    def test_missing_common_name_stays_an_empty_string(self, rsa_keypair, valid_claims, discovery_response) -> None:
+        """An absent common name keeps its published empty-string form, not null."""
+        cert = self._certificate_b64(rsa_keypair, common_name=None)
+        info = self._report(rsa_keypair, valid_claims, discovery_response, cert).x509_info
+        assert info["subject_cn"] == ""
+        assert info["issuer_cn"] == ""
+
+    def test_unreadable_certificate_is_soft_failure(
+        self, rsa_keypair, valid_claims, discovery_response, caplog
+    ) -> None:
+        """An unreadable x5c empties the field, warns, and still yields a valid report."""
+        cert = base64.b64encode(b"this is not a certificate").decode("utf-8")
+        with caplog.at_level("WARNING"):
+            report = self._report(rsa_keypair, valid_claims, discovery_response, cert)
+        assert report.x509_info == {}
+        assert report.valid is True
+        assert report.public_key_pem is not None
+        assert "unreadable" in caplog.text
+
+    def test_oversized_entry_is_rejected_before_decoding(
+        self, rsa_keypair, valid_claims, discovery_response, monkeypatch, caplog
+    ) -> None:
+        """A huge x5c string is refused without ever being decoded."""
+        # The decoder is observed rather than disabled: key import and JWT
+        # decoding legitimately use it, and what matters here is only that the
+        # oversized payload never reaches it.
+        decoded: list[int] = []
+        real_b64decode = base64.b64decode
+
+        def _spy(data: Any, *args: Any, **kwargs: Any) -> bytes:
+            decoded.append(len(data))
+            return real_b64decode(data, *args, **kwargs)
+
+        monkeypatch.setattr("kstlib.auth.check.base64.b64decode", _spy)
+        with caplog.at_level("WARNING"):
+            report = self._report(rsa_keypair, valid_claims, discovery_response, "A" * 200_000)
+        assert report.valid is True
+        assert report.x509_info == {}
+        assert "before decoding" in caplog.text
+        assert max(decoded, default=0) < 200_000
+
+
 def _simulate_import_error(report: TokenCheckReport) -> bool:
     """Helper to simulate ImportError in extract_public_key."""
     step = ValidationStep(

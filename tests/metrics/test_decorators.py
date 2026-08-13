@@ -369,6 +369,22 @@ class TestStopwatch:
         assert laps[1][0] == "Second"
         assert laps[1][1] == 0.25
 
+    def test_lap_measured_when_clock_starts_at_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The first lap is measured even when the clock reads exactly 0.0 at start."""
+        clock = itertools.count(0.0, 0.25)
+        monkeypatch.setattr(
+            "kstlib.metrics.decorators.time_module.perf_counter",
+            lambda: next(clock),
+        )
+        sw = Stopwatch("Test")
+        sw.start()
+        sw.lap("First", print_result=False)
+        sw.lap("Second", print_result=False)
+
+        laps = sw.laps
+        assert laps[0][1] == 0.25
+        assert laps[1][1] == 0.25
+
     def test_total_elapsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """total_elapsed returns the clock delta since start (clock mocked)."""
         clock = itertools.count(1.0, 0.25)

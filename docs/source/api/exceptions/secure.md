@@ -1,16 +1,19 @@
 # Secure Exceptions
 
-`PathGuardrails` and higher-level wrappers (mail guardrails, future storage helpers) raise
-`PathSecurityError` whenever filesystem access breaches the configured policies. Keep this exception handy when
-integrating guardrails so you can differentiate between OS-level errors and policy violations.
+Each helper in `kstlib.secure` raises its own family of exceptions, all descending from `KstlibError`. A single
+clause therefore catches everything the module can produce, while each family base lets you narrow down to one
+concern when that is what you need. The hierarchy and the overview below list them.
 
 ## Exception Hierarchy
 
 ```
 KstlibError
 ├── PathSecurityError              # filesystem guardrails (also inherits RuntimeError)
-└── PasswordError                  # password hashing (also inherits RuntimeError)
-    └── InvalidPasswordHashError   # stored hash is corrupt or not a valid Argon2 hash
+├── PasswordError                  # password hashing (also inherits RuntimeError)
+│   └── InvalidPasswordHashError   # stored hash is corrupt or not a valid Argon2 hash
+└── CertificateError               # certificate parsing (also inherits ValueError)
+    ├── CertificateTooLargeError   # payload over the accepted size bound
+    └── InvalidCertificateError    # not a usable DER-encoded certificate
 ```
 
 ```{note}
@@ -28,6 +31,15 @@ permission checks, traversal detection), but you still need to provision secure 
 - `InvalidPasswordHashError` (under `PasswordError`) is raised when a stored value is not a valid Argon2
   hash. Note that `verify_password` returns `False` on a wrong password and raises
   `InvalidPasswordHashError` only when the stored hash itself is corrupt or malformed.
+- `CertificateError` (under `KstlibError`, also a `ValueError`) is the base for every payload problem
+  raised by `parse_certificate`. Catching it covers both failure modes at once, while a wrong call
+  contract raises a builtin instead: `TypeError` for a payload that is not bytes-like, `ValueError` for a
+  non-positive `max_size`. So the exception type already says whether the caller or the data is at fault.
+- `CertificateTooLargeError` (under `CertificateError`) signals a payload above the accepted bound,
+  `MAX_CERTIFICATE_SIZE` by default and overridable per call. The check runs before any parsing.
+- `InvalidCertificateError` (under `CertificateError`) signals a payload that is not a usable
+  DER-encoded certificate: malformed or truncated encoding, trailing bytes, an extension that cannot be
+  read, or a serial number that is not positive.
 
 ## Usage patterns
 
@@ -74,6 +86,23 @@ if not ok:
     reject()
 ```
 
+### Telling a rejected certificate apart from a broken call
+
+```python
+from kstlib.secure import CertificateTooLargeError, InvalidCertificateError, parse_certificate
+
+try:
+    info = parse_certificate(der_bytes)
+except CertificateTooLargeError:
+    # The entry is over the bound: report it and move on, the rest of the
+    # inventory is still worth producing.
+    skip("certificate too large")
+except InvalidCertificateError:
+    skip("certificate unreadable")
+# TypeError and a bare ValueError are deliberately not caught here: they mean
+# the call itself is wrong, and that is a bug to fix, not data to skip.
+```
+
 ## Exception reference
 
 ```{eval-rst}
@@ -86,6 +115,18 @@ if not ok:
     :show-inheritance:
 
 .. autoexception:: kstlib.secure.passwords.InvalidPasswordHashError
+    :members:
+    :show-inheritance:
+
+.. autoexception:: kstlib.secure.certificates.CertificateError
+    :members:
+    :show-inheritance:
+
+.. autoexception:: kstlib.secure.certificates.CertificateTooLargeError
+    :members:
+    :show-inheritance:
+
+.. autoexception:: kstlib.secure.certificates.InvalidCertificateError
     :members:
     :show-inheritance:
 ```

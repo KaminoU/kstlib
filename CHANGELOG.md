@@ -19,6 +19,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.7.0] - 2026-08-13
+
+### Added
+
+- `kstlib.secure.parse_certificate()` turns DER-encoded X.509 bytes into a
+  frozen `CertificateInfo`: validity window as timezone-aware UTC datetimes,
+  signature algorithm and hash, public key type and size, serial and SHA-256
+  fingerprint as lowercase hexadecimal, and the BasicConstraints CA flag. The
+  input is treated as untrusted: it is size-bounded by `MAX_CERTIFICATE_SIZE`
+  (64 KiB, overridable per call) before parsing, and every failure surfaces as
+  `CertificateTooLargeError` or `InvalidCertificateError`, both catchable as
+  `KstlibError` or as `ValueError`. The function performs no network access, no
+  chain building and no revocation check, and reaches no verdict: expiry and
+  weak-crypto thresholds stay with the caller. An algorithm that the installed
+  `cryptography` does not recognize is legitimate data rather than corruption,
+  so such a certificate still parses: the algorithm is reported as its dotted
+  OID, the field derived from it (`signature_hash`, `public_key_size`) is
+  `None`, and the remaining metadata is unaffected. A non-positive `max_size`
+  is a wiring mistake rather than a verdict on the data, so it raises
+  `ValueError` at the call site instead of rejecting every certificate as
+  oversized.
+
+### Changed
+
+- `kstlib auth check` now reads the `x5c` certificate of a JWKS entry through
+  the hardened parsing primitive, which changes what the certificate panel and
+  the `x509_info` field of the JSON report show in three cases. The serial is
+  now lowercase hexadecimal padded to an even number of digits, so a serial
+  previously shown as `123` reads as `0123`. A certificate the primitive
+  refuses, one whose serial is not positive, one larger than 64 KiB, or one
+  carrying an unreadable extension, now yields no certificate details at all
+  instead of partial ones. And an `x5c` entry is size-checked before being
+  decoded, rather than decoded first. In every rejection case the rest of the
+  token report is still produced, and a warning now states that a certificate
+  was present but could not be read, so that case is no longer reported the
+  same way as a JWKS entry that simply carries no certificate.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- `Stopwatch.lap()` reported a first lap of zero, instead of the elapsed
+  interval, whenever the performance counter read exactly `0.0` when the
+  stopwatch was started. Only the first lap was affected, and only for callers
+  that substitute the clock (deterministic tests, simulated time): the system
+  performance counter does not return `0.0`, so timings measured against the
+  real clock were already correct.
+- `kstlib.ops` was usable at run time but invisible to type checkers and
+  editors. A consumer running `mypy --strict` over any use of the module got
+  `Module "kstlib" has no attribute "ops"` and had to silence it with a
+  `type: ignore`, and editors offered no completion for it. Every other
+  subpackage reachable through the top-level package was already visible, so
+  `ops` alone behaved this way.
+
+### Security
+
 ## [3.6.2] - 2026-08-06
 
 ### Added
@@ -1783,7 +1841,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.6.2...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.7.0...HEAD
+[3.7.0]: https://github.com/KaminoU/kstlib/compare/v3.6.2...v3.7.0
 [3.6.2]: https://github.com/KaminoU/kstlib/compare/v3.6.1...v3.6.2
 [3.6.1]: https://github.com/KaminoU/kstlib/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/KaminoU/kstlib/compare/v3.5.0...v3.6.0

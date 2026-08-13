@@ -1,11 +1,13 @@
 # Secure
 
 Public helpers in `kstlib.secure`: **filesystem guardrails** (`GuardPolicy` presets and the `PathGuardrails`
-utility so mail templates, attachments, and other file-based assets stay confined to trusted directories) and
-**password hashing** (`hash_password`, `verify_password`, `needs_rehash`) backed by Argon2id.
+utility so mail templates, attachments, and other file-based assets stay confined to trusted directories),
+**password hashing** (`hash_password`, `verify_password`, `needs_rehash`) backed by Argon2id, and
+**certificate metadata extraction** (`parse_certificate`, returning a frozen `CertificateInfo`).
 
 ```{tip}
-See {doc}`../features/secure/index` for the feature guide (filesystem guardrails and password hashing).
+See {doc}`../features/secure/index` for the feature guide (filesystem guardrails, password hashing, and
+certificate metadata).
 ```
 
 ## Quick overview
@@ -19,6 +21,9 @@ See {doc}`../features/secure/index` for the feature guide (filesystem guardrails
   (Windows).
 - `relax()` clones an existing guardrail with a modified `allow_external` flag, which helps when you need to
   temporarily opt into external paths for migrations.
+- `parse_certificate()` reads DER-encoded X.509 bytes into a frozen `CertificateInfo`, bounding the payload
+  at `MAX_CERTIFICATE_SIZE` before parsing. It verifies no signature and performs no network access, so its
+  output describes a certificate without authenticating it.
 
 ## Configuration snippet
 

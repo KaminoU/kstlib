@@ -809,7 +809,7 @@ class Stopwatch:
             if self._lap_start is None:
                 self.start()
             now = time_module.perf_counter()
-            elapsed = now - (self._lap_start or now)
+            elapsed = now - (self._lap_start if self._lap_start is not None else now)
 
             peak = None
             if track_memory and tracemalloc.is_tracing():

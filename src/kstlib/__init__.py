@@ -216,6 +216,7 @@ if TYPE_CHECKING:
     from kstlib import mail as mail
     from kstlib import metrics as metrics
     from kstlib import monitoring as monitoring
+    from kstlib import ops as ops
     from kstlib import pipeline as pipeline
     from kstlib import rapi as rapi
     from kstlib import resilience as resilience
