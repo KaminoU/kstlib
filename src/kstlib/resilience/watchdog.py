@@ -37,9 +37,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Any
 
 from kstlib.limits import (
     DEFAULT_WATCHDOG_TIMEOUT,
@@ -49,6 +47,9 @@ from kstlib.limits import (
     get_resilience_limits,
 )
 from kstlib.resilience.exceptions import WatchdogTimeoutError
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 log = logging.getLogger(__name__)
 

@@ -15,8 +15,6 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
-from typing_extensions import Self
-
 from kstlib._shared.logging_helpers import log_trace
 from kstlib.db.exceptions import TransactionError
 from kstlib.db.pool import ConnectionPool, PoolStats
@@ -26,6 +24,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     import aiosqlite
+    from typing_extensions import Self
 
 log = logging.getLogger(__name__)
 

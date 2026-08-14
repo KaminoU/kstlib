@@ -35,12 +35,12 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ParamSpec, TypeVar, overload
 
-from typing_extensions import Self
-
 from kstlib.resilience.exceptions import RateLimitExceededError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from typing_extensions import Self
 
 P = ParamSpec("P")
 R = TypeVar("R")

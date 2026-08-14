@@ -15,8 +15,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from typing_extensions import Self
-
 from kstlib.limits import (
     HARD_MAX_HEARTBEAT_INTERVAL,
     HARD_MIN_HEARTBEAT_INTERVAL,
@@ -29,6 +27,8 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import types
+
+    from typing_extensions import Self
 
 # Type aliases for callbacks
 OnAlertCallback = Callable[[str, str, Mapping[str, Any]], Awaitable[None] | None]

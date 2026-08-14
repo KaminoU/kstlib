@@ -84,7 +84,7 @@ class TestRenderHtml:
         assert result == "None"
 
     def test_returns_markup(self) -> None:
-        """Return type is always jinja2.Markup."""
+        """Return type is always markupsafe.Markup."""
         assert isinstance(render_html("hello"), Markup)
         assert isinstance(render_html(_FakeRenderable("x")), Markup)
 

@@ -50,6 +50,7 @@ dependencies = [
     "aiosqlite>=0.21,<1",   # Async SQLite wrapper
     "websockets>=15.0,<16", # WebSocket server/client
     "jinja2>=3.1.5,<4",     # Template engine (used for mails, configs, etc.)
+    "markupsafe>=2.0,<4",   # Markup type returned by the monitoring renderer (jinja2 provides it, but caps nothing)
 
     # --- Formatting & Display ---
     "humanize>=4.11,<5", # Human-friendly formatting (file sizes, time deltas, etc.)
@@ -296,6 +297,16 @@ ignore = [
     "N802",    # Function name should be lowercase (needed for do_GET)
     "N999",    # Invalid module name
 ]
+
+[tool.ruff.lint.flake8-type-checking]
+# Ruff exempts both "typing" and "typing_extensions" from the TC rules by
+# default. That default made the linter structurally unable to flag a
+# module-level import of typing_extensions, which is NOT a declared dependency
+# of this package: the import is invisible to the linter and, in a development
+# environment, invisible at runtime too because the tooling installs the package
+# as a side effect. Only "typing" stays exempt, since it is standard library and
+# always importable. Any other typing-only import must sit under TYPE_CHECKING.
+exempt-modules = ["typing"]
 
 [tool.ruff.lint.per-file-ignores]
 # PLR0913: Too many arguments - acceptable for CLI commands with many options

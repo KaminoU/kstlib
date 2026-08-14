@@ -13,8 +13,6 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from typing_extensions import Self
-
 from kstlib.limits import (
     HARD_MAX_SHUTDOWN_TIMEOUT,
     HARD_MIN_SHUTDOWN_TIMEOUT,
@@ -24,6 +22,8 @@ from kstlib.resilience.exceptions import ShutdownError
 
 if TYPE_CHECKING:
     import types
+
+    from typing_extensions import Self
 
 log = logging.getLogger(__name__)
 

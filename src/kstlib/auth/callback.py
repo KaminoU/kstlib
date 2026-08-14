@@ -13,13 +13,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlparse
 
-from typing_extensions import Self
-
 from kstlib.auth.errors import AuthorizationError, CallbackServerError
 from kstlib.logging import TRACE_LEVEL, get_logger
 
 if TYPE_CHECKING:
     import types
+
+    from typing_extensions import Self
 
 logger = get_logger(__name__)
 

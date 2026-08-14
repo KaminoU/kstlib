@@ -43,10 +43,10 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-from typing_extensions import Self
-
 if TYPE_CHECKING:
     import types
+
+    from typing_extensions import Self
 
 from kstlib._shared.redaction import mask_url
 from kstlib.limits import get_websocket_limits

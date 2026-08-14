@@ -8,13 +8,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from typing_extensions import Self
-
 from kstlib.logging import TRACE_LEVEL, get_logger
 from kstlib.ssl import validate_ca_bundle_path, validate_ssl_verify
 
 if TYPE_CHECKING:
     import types
+
+    from typing_extensions import Self
 
     from kstlib.auth.models import AuthFlow, PreflightReport, Token
     from kstlib.auth.token import AbstractTokenStorage

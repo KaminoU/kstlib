@@ -45,8 +45,11 @@ def render_html(value: Any, inline_css: bool = False) -> Markup:
         inline_css: Forwarded to ``Renderable.render(inline_css=...)``.
 
     Returns:
-        A :class:`jinja2.Markup` instance (marked safe to prevent
-        double-escaping by Jinja2 autoescape).
+        A :class:`markupsafe.Markup` instance (marked safe to prevent
+        double-escaping by Jinja2 autoescape). The class belongs to
+        ``markupsafe``, a declared dependency of this package. Older Jinja2
+        versions re-exported it as ``jinja2.Markup``; current ones do not,
+        so it is imported from ``markupsafe`` directly.
 
     Examples:
         >>> from kstlib.monitoring.renderer import render_html

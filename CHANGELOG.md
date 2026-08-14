@@ -19,6 +19,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.7.1] - 2026-08-14
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- The package could not be imported from a clean install on Python 3.13 and
+  above. Eleven modules imported `typing_extensions` at module level while it
+  has never been a declared dependency, so the import only ever succeeded
+  because some other installed package happened to provide it. That stopped
+  being true at 3.13: the declared dependencies pull `typing_extensions` only
+  through version markers that end there, and from that interpreter on,
+  `kstlib.alerts`, `kstlib.auth`, `kstlib.cli`, `kstlib.db`, `kstlib.helpers`,
+  `kstlib.mail`, `kstlib.rapi`, `kstlib.resilience`, `kstlib.ui` and
+  `kstlib.websocket.manager` all raised `ModuleNotFoundError: No module named
+  'typing_extensions'` on import. Those imports now sit under `TYPE_CHECKING`,
+  as `kstlib.alerts.manager` already did: they serve only the `Self` return
+  annotation of context managers and factories, which is never evaluated at run
+  time, so no dependency is added and nothing changes for callers. This is not
+  a regression of 3.7.0: the module-level import has been present in every
+  published release since 1.0.0, and only became reachable once dependency sets
+  stopped providing `typing_extensions` incidentally on newer interpreters. An
+  installation gate now builds the wheel, installs it with its declared
+  dependencies alone and imports every public module, on every supported Python
+  version and in CI as well as locally, so the package is verified the way it is
+  consumed rather than only the way it is developed.
+
+- `markupsafe` is now a declared dependency. `kstlib.monitoring` imports
+  `Markup` from it at module level and returns that type from `render_html()`,
+  so it is part of the public surface, yet the package was only ever present
+  because `jinja2` happens to install it. That is a weaker guarantee than it
+  looks: `jinja2` requires `MarkupSafe>=2.0` with no upper bound, so a future
+  breaking release would have been accepted, installed and left to fail inside
+  kstlib, with no version constraint we could state because the package was not
+  ours to constrain. It is now declared as `>=2.0,<4`: the lower bound is the
+  one `jinja2` already imposes, so no existing installation is disturbed, and
+  the upper bound is the protection that was missing. Nothing changes for
+  callers, and no new package is pulled in. Unlike the case above, this one
+  could not have been caught by the installation gate at all: no interpreter
+  version removes the package that supplies it, so a clean install succeeds on
+  every supported Python while the dependency stays unstated.
+
+### Security
+
 ## [3.7.0] - 2026-08-13
 
 ### Added
@@ -1841,7 +1891,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.7.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.7.1...HEAD
+[3.7.1]: https://github.com/KaminoU/kstlib/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/KaminoU/kstlib/compare/v3.6.2...v3.7.0
 [3.6.2]: https://github.com/KaminoU/kstlib/compare/v3.6.1...v3.6.2
 [3.6.1]: https://github.com/KaminoU/kstlib/compare/v3.6.0...v3.6.1

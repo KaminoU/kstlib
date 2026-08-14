@@ -14,9 +14,10 @@ from typing import IO, TYPE_CHECKING, Any, ParamSpec, TypeVar
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from typing_extensions import Self
+
 from rich.console import Console
 from rich.text import Text
-from typing_extensions import Self
 
 from kstlib.config import ConfigNotLoadedError, get_config
 from kstlib.ui.exceptions import SpinnerError

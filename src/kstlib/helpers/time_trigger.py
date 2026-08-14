@@ -36,12 +36,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pendulum
-from typing_extensions import Self
 
 from kstlib.helpers.exceptions import InvalidModuloError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+    from typing_extensions import Self
 
 __all__ = ["TimeTrigger", "TimeTriggerStats"]
 

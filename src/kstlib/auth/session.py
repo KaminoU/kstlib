@@ -7,7 +7,6 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from typing_extensions import Self
 
 from kstlib.auth.errors import AuthError, TokenExpiredError
 from kstlib.logging import TRACE_LEVEL, get_logger
@@ -15,6 +14,8 @@ from kstlib.ssl import build_ssl_context
 
 if TYPE_CHECKING:
     import types
+
+    from typing_extensions import Self
 
     from kstlib.auth.providers.base import AbstractAuthProvider
 
