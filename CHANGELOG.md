@@ -19,6 +19,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.8.0] - 2026-09-06
+
+### Added
+
+- `ConfigLoader.loaded_paths`, the files the last load actually read, as
+  absolute resolved paths in read order and without duplicates. A
+  configuration is assembled from a cascade of files and their includes, and
+  until now only the resulting values were visible, never their sources, so
+  no policy could be applied to the files themselves: refusing to start when
+  an include holding secrets is readable by others, or failing when a file
+  that was meant to contribute never did. A load replaces the value, a load
+  merging into the cache extends it, and a load that raises leaves it
+  untouched. The configuration file shipped inside the package is not
+  listed: it belongs to the library, not to the caller, so a policy written
+  for the caller's own files does not have to make an exception for it.
+
+- `create_on_get` on the configuration entry points (`load_config`,
+  `load_from_file`, `load_from_env`, `ConfigLoader` and its three factory
+  methods). Reading a key that does not exist writes that key into the
+  configuration object, so inspecting a configuration modifies it: a
+  membership test, a fallback lookup, or a misspelled name leaves behind a
+  key no file ever declared, and a later test for that section then answers
+  True. Passing `create_on_get=False` returns the same default without
+  storing anything, nested sections included. The default is unchanged, so
+  existing callers see no difference.
+
+### Changed
+
+- TOML configuration is now read with `tomllib` from the standard library on
+  Python 3.11 and later, and the `tomli` package is only declared for Python
+  3.10. The two provide the same reading API, so installing `tomli` on 3.11+
+  added a dependency the interpreter already carries. Behaviour is unchanged
+  on every supported version, including the graceful failure on 3.10 without
+  the package: reading TOML raises, importing the library does not.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- The clean-install import gate could pass on an environment that was no
+  longer clean. Its environments were reused between runs, and the installer
+  that populates them never removes anything, so a dependency dropped from the
+  project would survive from an earlier run and keep the gate green on the
+  very operation it exists to prove. These environments are now rebuilt from
+  scratch on every run.
+- `load_config` documented the opposite of what it does: it promised that a
+  missing key returns an empty container, when it returns `None` and chained
+  access through a missing section raises `AttributeError`. The documented
+  contract now matches the behaviour, which is unchanged. The function was
+  also missing from the API reference, where it now appears.
+- The root `--help` of the CLI described the callback implementation instead
+  of the tool. Typer promotes the docstring of the root callback to the
+  application description when no help text is declared, so the first line
+  every user read was "Initialize the root Typer app and handle --version
+  eagerly.", a sentence written for a maintainer of the file. The root
+  application now declares its own help text, as every subcommand group
+  already did, and the callback keeps its docstring for whoever opens the
+  source.
+- The tests that exercise the command-line interface ran only on demand.
+  They carry a marker that both the local matrix and continuous integration
+  excluded, and no environment selected them back, so a regression in the
+  `kstlib` console script could have reached a release without any gate
+  seeing it. They now run in both, and on every supported Python version in
+  continuous integration. Tests that require real infrastructure stay
+  excluded, as before.
+- A release could be published while the examples or the documentation build
+  were failing. Neither job was a prerequisite of the publication step, so a
+  tag published with both of them red. Publication now waits for the two of
+  them. The documentation is gated on the errors Sphinx reports, never on its
+  warnings, which only the stricter local build refuses. That verdict could
+  not see the build itself fail either: the exit code of the command was
+  discarded by the pipe carrying its output, leaving a search through that
+  output as the only judge. The pipe now reports the failure.
+- The overview that opens the configuration API reference quoted three signatures
+  that did not match the functions they described. A reader comparing the summary
+  with the generated reference just below it found two different answers, and the
+  summary was the wrong one. The six entry points listed there now carry the
+  signature the code declares.
+- Three command-line tests for `secrets doctor` read the real `.sops.yaml` of
+  whoever ran them, so they could only pass on a machine that has one and failed
+  everywhere else. They now stub the SOPS configuration lookup.
+
+### Security
+
 ## [3.7.1] - 2026-08-14
 
 ### Added
@@ -1891,7 +1977,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.7.1...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.8.0...HEAD
+[3.8.0]: https://github.com/KaminoU/kstlib/compare/v3.7.1...v3.8.0
 [3.7.1]: https://github.com/KaminoU/kstlib/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/KaminoU/kstlib/compare/v3.6.2...v3.7.0
 [3.6.2]: https://github.com/KaminoU/kstlib/compare/v3.6.1...v3.6.2

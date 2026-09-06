@@ -50,6 +50,9 @@ env/
 # --- Testing ---
 .pytest_cache/
 .coverage
+# Parallel run data files (.coverage.<host>.<pid>.<random>): the root dotfile
+# rule above only covers them at the repository root, not in subdirectories.
+.coverage.*
 htmlcov/
 .tox/
 .nox/

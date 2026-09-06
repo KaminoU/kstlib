@@ -9,6 +9,7 @@ functional API, including file loading, includes, merging, and caching.
 
 import os
 import pathlib
+import sys
 import time
 from typing import Any
 
@@ -345,11 +346,15 @@ def test_load_from_env_empty_string(monkeypatch: Any) -> None:
         load_from_env("EMPTY_CONFIG")
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 11),
+    reason="From 3.11 on the parser comes from the standard library, so it can never be missing.",
+)
 def test_tomli_import_error(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) -> None:
     """Test that TOML loading fails gracefully without tomli."""
-    # Mock tomli as None
-    original_tomli = cfg_loader.tomli
-    monkeypatch.setattr(cfg_loader, "tomli", None)
+    # Mock the parser as absent
+    original_toml = cfg_loader._toml
+    monkeypatch.setattr(cfg_loader, "_toml", None)
 
     toml_file = tmp_path / "test.toml"
     toml_file.write_text('foo = "bar"\n', encoding="utf-8")
@@ -358,8 +363,8 @@ def test_tomli_import_error(tmp_path: Any, monkeypatch: Any, cfg_loader: Any) ->
         with pytest.raises(ConfigFormatError, match="TOML support requires"):
             cfg_loader._load_toml_file(toml_file)
     finally:
-        # Restore original tomli
-        monkeypatch.setattr(cfg_loader, "tomli", original_tomli)
+        # Restore the original parser
+        monkeypatch.setattr(cfg_loader, "_toml", original_toml)
 
 
 def test_json_file_not_found(tmp_path: Any, cfg_loader: Any) -> None:
@@ -1118,3 +1123,200 @@ def test_reload_config_exported_top_level(tmp_path: Any, monkeypatch: Any, cfg_l
     cfg_loader.clear_config()
     config = kstlib.reload_config()
     assert config.app.name == "top_level"
+
+
+def test_load_config_missing_key_contract(tmp_path: Any) -> None:
+    """Fixes the real contract: a missing key is None and chaining raises."""
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("present:\n  leaf: 42\n", encoding="utf-8")
+
+    cfg = load_config(path=conf_file)
+
+    assert cfg.present.leaf == 42
+    with pytest.raises(AttributeError):
+        _ = cfg.missing.leaf
+    assert cfg.missing is None
+
+
+def test_create_on_get_false_keeps_missing_key_out(tmp_path: Any) -> None:
+    """With create_on_get disabled, reading a missing key leaves the object untouched."""
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("present:\n  leaf: 42\n", encoding="utf-8")
+
+    config = load_config(path=conf_file, create_on_get=False)
+
+    assert config.present.leaf == 42
+    assert config.missing is None
+    assert "missing" not in config
+
+
+def test_create_on_get_false_applies_to_nested_sections(tmp_path: Any) -> None:
+    """The flag reaches nested sections, not just the root object."""
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("present:\n  leaf: 42\n", encoding="utf-8")
+
+    config = load_config(path=conf_file, create_on_get=False)
+
+    assert config.present.nope is None
+    assert list(config.present.keys()) == ["leaf"]
+
+
+def test_create_on_get_false_survives_cache_merge(tmp_path: Any) -> None:
+    """The merged object rebuilt by a non-purging load keeps the flag."""
+    import kstlib.config as cfg
+
+    first_file = tmp_path / "first.yml"
+    first_file.write_text("present:\n  leaf: 42\n", encoding="utf-8")
+    second_file = tmp_path / "second.yml"
+    second_file.write_text("other:\n  leaf2: 7\n", encoding="utf-8")
+
+    loader = cfg.ConfigLoader(create_on_get=False, auto_discovery=False)
+    loader.load_from_file(first_file)
+    merged = loader.load_from_file(second_file, purge_cache=False)
+
+    assert merged.other.leaf2 == 7
+    assert merged.present.nope is None
+    assert list(merged.present.keys()) == ["leaf"]
+
+
+def test_create_on_get_false_on_every_entry_point(tmp_path: Any, monkeypatch: Any) -> None:
+    """Every documented entry point forwards the flag to the loader it builds."""
+    import kstlib.config as cfg
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("present:\n  leaf: 42\n", encoding="utf-8")
+    monkeypatch.setenv("CONFIG_PATH", str(conf_file))
+
+    from_function = load_from_file(conf_file, create_on_get=False)
+    assert from_function.missing is None
+    assert "missing" not in from_function
+
+    from_env_var = load_from_env("CONFIG_PATH", create_on_get=False)
+    assert from_env_var.missing is None
+    assert "missing" not in from_env_var
+
+    from_factory = cfg.ConfigLoader.from_file(conf_file, create_on_get=False)
+    assert from_factory.missing is None
+    assert "missing" not in from_factory
+
+
+def test_create_on_get_defaults_to_creating_the_key(tmp_path: Any) -> None:
+    """Without the flag the historical behaviour is unchanged: reading writes the key."""
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("present:\n  leaf: 42\n", encoding="utf-8")
+
+    config = load_config(path=conf_file)
+
+    assert config.missing is None
+    assert "missing" in config
+
+
+def test_loaded_paths_is_empty_before_any_load() -> None:
+    """A loader that has not loaded anything reports no file."""
+    import kstlib.config as cfg
+
+    loader = cfg.ConfigLoader(auto_discovery=False)
+
+    assert loader.loaded_paths == ()
+
+
+def test_loaded_paths_reports_a_single_file(tmp_path: Any) -> None:
+    """A file without includes is the only entry, resolved."""
+    import kstlib.config as cfg
+
+    conf_file = tmp_path / "kstlib.conf.yml"
+    conf_file.write_text("app:\n  name: solo\n", encoding="utf-8")
+
+    loader = cfg.ConfigLoader(auto_discovery=False)
+    loader.load_from_file(conf_file)
+
+    assert loader.loaded_paths == (conf_file.resolve(),)
+
+
+def test_loaded_paths_keeps_include_read_order(tmp_path: Any) -> None:
+    """Includes follow their parent, in the order the loader reads them."""
+    import kstlib.config as cfg
+
+    inc_a = tmp_path / "inc_a.yml"
+    inc_a.write_text("a: 1\n", encoding="utf-8")
+    inc_b = tmp_path / "inc_b.yml"
+    inc_b.write_text("b: 2\n", encoding="utf-8")
+    main = tmp_path / "kstlib.conf.yml"
+    main.write_text("include:\n  - inc_a.yml\n  - inc_b.yml\nmain: 3\n", encoding="utf-8")
+
+    loader = cfg.ConfigLoader(auto_discovery=False)
+    loader.load_from_file(main)
+
+    assert loader.loaded_paths == (main.resolve(), inc_a.resolve(), inc_b.resolve())
+
+
+def test_loaded_paths_follows_the_cascade_and_skips_the_packaged_default(tmp_path: Any, monkeypatch: Any) -> None:
+    """Cascade layers appear in cascade order and the packaged default never does."""
+    import kstlib.config as cfg
+    from kstlib.config import loader as cfg_loader
+
+    system_dir = tmp_path / "system"
+    system_dir.mkdir()
+    system_file = system_dir / "kstlib.conf.yml"
+    system_file.write_text("layer: system\n", encoding="utf-8")
+
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+
+    cwd_dir = tmp_path / "cwd"
+    cwd_dir.mkdir()
+    cwd_file = cwd_dir / "kstlib.conf.yml"
+    cwd_file.write_text("layer: cwd\n", encoding="utf-8")
+
+    monkeypatch.setattr(cfg_loader, "site_config_dir", lambda *_a, **_kw: str(system_dir))
+    monkeypatch.setattr(pathlib.Path, "home", lambda: home_dir)
+    monkeypatch.chdir(cwd_dir)
+
+    loader = cfg.ConfigLoader(auto_discovery=False)
+    loader.load()
+
+    packaged_default = pathlib.Path(cfg_loader.__file__).resolve().parent.parent / "kstlib.conf.yml"
+    assert loader.loaded_paths == (system_file.resolve(), cwd_file.resolve())
+    assert packaged_default not in loader.loaded_paths
+
+
+def test_loaded_paths_extends_on_merge_and_resets_on_purge(tmp_path: Any) -> None:
+    """A merging load extends the list, a purging load replaces it."""
+    import kstlib.config as cfg
+
+    first = tmp_path / "first.yml"
+    first.write_text("a: 1\n", encoding="utf-8")
+    second = tmp_path / "second.yml"
+    second.write_text("b: 2\n", encoding="utf-8")
+    third = tmp_path / "third.yml"
+    third.write_text("c: 3\n", encoding="utf-8")
+
+    loader = cfg.ConfigLoader(auto_discovery=False)
+    loader.load_from_file(first)
+    assert loader.loaded_paths == (first.resolve(),)
+
+    loader.load_from_file(second, purge_cache=False)
+    assert loader.loaded_paths == (first.resolve(), second.resolve())
+
+    loader.load_from_file(third)
+    assert loader.loaded_paths == (third.resolve(),)
+
+
+def test_loaded_paths_unchanged_when_a_load_raises(tmp_path: Any) -> None:
+    """A load that raises publishes nothing and leaves the previous value in place."""
+    import kstlib.config as cfg
+
+    good = tmp_path / "good.yml"
+    good.write_text("a: 1\n", encoding="utf-8")
+    circular_one = tmp_path / "circular_one.yml"
+    circular_one.write_text("include: circular_two.yml\none: 1\n", encoding="utf-8")
+    circular_two = tmp_path / "circular_two.yml"
+    circular_two.write_text("include: circular_one.yml\ntwo: 2\n", encoding="utf-8")
+
+    loader = cfg.ConfigLoader(auto_discovery=False)
+    loader.load_from_file(good)
+
+    with pytest.raises(ConfigCircularIncludeError):
+        loader.load_from_file(circular_one)
+
+    assert loader.loaded_paths == (good.resolve(),)

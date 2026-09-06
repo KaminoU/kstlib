@@ -57,6 +57,108 @@ print(config.app.name)       # "My Application"
 print(config.database.port)  # 5432
 ```
 
+## Reading Without Creating
+
+By default, reading a key that does not exist writes it into the configuration
+object. The read returns `None`, and it leaves the key behind:
+
+```python
+config = load_from_file("kstlib.conf.yml")
+
+config.databse        # misspelled section: returns None
+"databse" in config   # True: the misspelling is now a key of the config
+```
+
+This matters because a configuration object is usually inspected before it is
+used: a membership test, a fallback lookup, a lookup whose key comes from user
+input or from an environment variable. Every one of those reads can add a key
+that no file ever declared. A later `if "auth" in config` then answers True for
+a section that exists only because something looked for it, and the code takes
+the branch meant for a value the user never configured.
+
+Pass `create_on_get=False` to read without writing:
+
+```python
+from kstlib.config import ConfigLoader, load_config, load_from_file
+
+config = load_from_file("kstlib.conf.yml", create_on_get=False)
+
+config.databse        # still None
+"databse" in config   # False: the object is untouched
+
+# Same flag on the other entry points
+config = load_config(path="kstlib.conf.yml", create_on_get=False)
+config = ConfigLoader.from_file("kstlib.conf.yml", create_on_get=False)
+
+# Or on a loader you keep around
+loader = ConfigLoader(create_on_get=False, auto_discovery=False)
+config = loader.load_from_file("kstlib.conf.yml")
+```
+
+The flag reaches nested sections as well: with it, `config.database.hostt`
+returns `None` and `config.database` still holds only the keys the file
+declared.
+
+`get_config()`, `reload_config()` and `require_config()` do not take the flag.
+They share a single loader built when the module is imported, so a value passed
+to them would be ignored from the second call on. To read without writing,
+build your own `ConfigLoader(create_on_get=False)` or go through
+`load_config(create_on_get=False)`.
+
+The default is `True`, so code that does not pass the flag behaves exactly as
+it did before.
+
+## Knowing Which Files Were Loaded
+
+A configuration is assembled from several files: a cascade of layers, and the
+includes each layer pulls in. Once it is loaded, the values are visible but the
+files they came from are not, and some decisions need the files rather than the
+values. Refusing to start when an include holding secrets is world readable is
+one. Failing loudly when a file that was supposed to contribute did not, because
+it sat in the wrong directory, is another.
+
+`ConfigLoader.loaded_paths` reports the files the last load actually read:
+
+```python
+import stat
+from kstlib.config import ConfigLoader
+
+loader = ConfigLoader(auto_discovery=False)
+config = loader.load_from_file("app.yml")   # app.yml includes secrets.yml
+
+loader.loaded_paths
+# (PosixPath('/opt/app.yml'), PosixPath('/opt/secrets.yml'))
+
+# Your policy, your rules: kstlib reports the files, it does not judge them
+for path in loader.loaded_paths:
+    if path.name.startswith("secrets") and stat.S_IMODE(path.stat().st_mode) & 0o077:
+        raise SystemExit(f"{path} is readable by others")
+```
+
+Paths are absolute and resolved. They come in the order the loader read them,
+a file first and then its includes, depth first, and for a cascade the layers
+in cascade order. Nothing is sorted, and each file appears once.
+
+The tuple is empty until something is loaded. A load replaces it, unless it
+merges into the cache, in which case it extends it:
+
+```python
+loader.load_from_file("app.yml")                      # ('app.yml',)
+loader.load_from_file("extra.yml", purge_cache=False)  # ('app.yml', 'extra.yml')
+loader.load_from_file("other.yml")                     # ('other.yml',)
+```
+
+A load that raises publishes nothing, so the property still describes the last
+load that succeeded.
+
+The configuration file shipped inside kstlib is never listed. It belongs to the
+library rather than to you, and a policy written for your own files, such as the
+permission check above, should not have to make an exception for it.
+
+The module level functions (`load_config`, `load_from_file`, `load_from_env`)
+return a `Box` and have nowhere to report this, so they do not expose it. Use a
+`ConfigLoader` when you need it.
+
 ## How It Works
 
 ### Loading Strategies

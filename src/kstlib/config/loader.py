@@ -30,19 +30,29 @@ import json
 import math
 import os
 import pathlib
+import sys
 import time
 from configparser import ConfigParser
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, BinaryIO, Literal, Protocol, cast
 
 import yaml
 from box import Box
 from platformdirs import site_config_dir
 
-try:
-    import tomli
-except ImportError:
-    tomli = None  # type: ignore[assignment]
+# TOML reading moved into the standard library in 3.11, as tomllib, with the same
+# reading API as tomli. Only 3.10 still needs the third party package, which is why
+# it is declared for that version alone: on 3.11 and later, installing it would add
+# a dependency the interpreter already carries. When 3.10 leaves the supported
+# range, the right move is to drop tomli entirely, not to collapse this back into a
+# plain import of it.
+if sys.version_info >= (3, 11):
+    import tomllib as _toml
+else:
+    try:
+        import tomli as _toml
+    except ImportError:
+        _toml = None  # type: ignore[assignment]
 
 from kstlib.config.exceptions import (
     ConfigCircularIncludeError,
@@ -88,6 +98,36 @@ def _load_yaml_file(path: pathlib.Path, encoding: str = DEFAULT_ENCODING) -> dic
         return yaml.safe_load(f) or {}
 
 
+class _TomlParser(Protocol):
+    """The reading API shared by ``tomllib`` (3.11+) and ``tomli`` (3.10)."""
+
+    def load(self, fp: BinaryIO, /) -> dict[str, Any]:
+        """Parse TOML from a binary file object."""
+        ...
+
+    def loads(self, s: str, /) -> dict[str, Any]:
+        """Parse TOML from a string."""
+        ...
+
+
+def _require_toml_parser() -> _TomlParser:
+    """Return the TOML parser, failing when none is available.
+
+    The guard can only fire on Python 3.10 with ``tomli`` missing: from 3.11 on
+    the parser comes from the standard library, so it is always there.
+
+    Returns:
+        The module used to read TOML.
+
+    Raises:
+        ConfigFormatError: If no TOML parser is available.
+
+    """
+    if _toml is None:
+        raise ConfigFormatError("TOML support requires the 'tomli' package. Install it with: pip install tomli")
+    return _toml
+
+
 def _load_toml_file(path: pathlib.Path) -> dict[str, Any]:
     """
     Load a TOML configuration file and return its contents as a dictionary.
@@ -100,15 +140,13 @@ def _load_toml_file(path: pathlib.Path) -> dict[str, Any]:
 
     Raises:
         ConfigFileNotFoundError: If the file does not exist.
-        ConfigFormatError: If tomli package is not installed.
+        ConfigFormatError: If no TOML parser is available (Python 3.10 without ``tomli``).
 
     """
     if not path.is_file():
         raise ConfigFileNotFoundError(f"Config file not found: {path}")
-    if tomli is None:
-        raise ConfigFormatError("TOML support requires the 'tomli' package. Install it with: pip install tomli")
     with path.open("rb") as f:
-        return tomli.load(f)
+        return _require_toml_parser().load(f)
 
 
 def _load_json_file(path: pathlib.Path, encoding: str = DEFAULT_ENCODING) -> dict[str, Any]:
@@ -193,9 +231,7 @@ def _parse_content_by_format(
     if ext in (".yml", ".yaml"):
         return yaml.safe_load(content) or {}
     if ext == ".toml":
-        if tomli is None:
-            raise ConfigFormatError("TOML support requires the 'tomli' package. Install it with: pip install tomli")
-        return tomli.loads(content)
+        return _require_toml_parser().loads(content)
     if ext == ".json":
         parsed = json.loads(content)
         return parsed if isinstance(parsed, dict) else {}
@@ -398,7 +434,7 @@ def _normalize_includes(raw: Any, source_path: pathlib.Path) -> list[str]:
 
 def _load_with_includes(
     path: pathlib.Path,
-    loaded_paths: set[pathlib.Path] | None = None,
+    loaded_paths: dict[pathlib.Path, None] | None = None,
     strict_format: bool = False,
     encoding: str = DEFAULT_ENCODING,
     *,
@@ -410,7 +446,9 @@ def _load_with_includes(
 
     Args:
         path: Path to the main config file.
-        loaded_paths: Set of already loaded paths to prevent cycles.
+        loaded_paths: Already loaded paths, used both to break cycles and to record
+            the order files are read in. A dict with ``None`` values acts as an
+            ordered set: membership works as with a set, and insertion order is kept.
         strict_format: If True, included files must have the same format as parent file.
         encoding: File encoding.
         sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
@@ -436,11 +474,11 @@ def _load_with_includes(
         )
 
     if loaded_paths is None:
-        loaded_paths = set()
+        loaded_paths = {}
     path = path.resolve()
     if path in loaded_paths:
         raise ConfigCircularIncludeError(f"Circular include detected for {path}")
-    loaded_paths.add(path)
+    loaded_paths[path] = None
 
     data = _load_any_config_file(path, encoding, sops_decrypt=sops_decrypt)
     includes = _normalize_includes(data.pop("include", []), path)
@@ -557,6 +595,8 @@ class ConfigLoader:
         strict_format: If True, included files must match parent format.
         encoding: File encoding for text-based formats.
         sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+        create_on_get: If False, reading a key that does not exist returns the default
+            without storing that key on the configuration object.
         auto_discovery: Whether the constructor should immediately hydrate the config.
         auto_source: Source used for auto-discovery (cascading/env/file).
         auto_filename: Filename searched when auto-discovery cascades.
@@ -596,6 +636,7 @@ class ConfigLoader:
         encoding: str = DEFAULT_ENCODING,
         sops_decrypt: bool = True,
         *,
+        create_on_get: bool = True,
         auto: AutoDiscoveryConfig | None = None,
         **auto_kwargs: Any,
     ) -> None:
@@ -605,6 +646,8 @@ class ConfigLoader:
             strict_format: If True, included files must match parent file format.
             encoding: File encoding for text-based configuration formats.
             sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+            create_on_get: If False, reading a key that does not exist returns the
+                default instead of creating it on the configuration object.
             auto: Pre-built auto-discovery options. When omitted, keyword arguments
                 such as ``auto_source`` or ``auto_filename`` are honoured.
             auto_kwargs: Legacy keyword arguments controlling auto-discovery:
@@ -615,7 +658,9 @@ class ConfigLoader:
         self.strict_format = strict_format
         self.encoding = encoding
         self.sops_decrypt = sops_decrypt
+        self.create_on_get = create_on_get
         self._cache: Box | None = None
+        self._loaded_paths: tuple[pathlib.Path, ...] = ()
         self._cache_timestamp: float | None = None
         self.auto = self._build_auto_config(auto, auto_kwargs)
 
@@ -675,6 +720,42 @@ class ConfigLoader:
         return self._cache_timestamp
 
     @property
+    def loaded_paths(self) -> tuple[pathlib.Path, ...]:
+        """Return the files the last load actually read, in read order.
+
+        Paths are absolute and resolved. The order is the order the loader reads
+        files in, a file first and then its includes, depth first; it is not
+        sorted. Each file appears once, and a file read by two layers appears
+        once, at its first position.
+
+        The tuple is empty until something is loaded. A load with
+        ``purge_cache=True`` replaces it, a load with ``purge_cache=False``
+        extends it, and a load that raises publishes nothing, so the previous
+        value stays in place.
+
+        The configuration file shipped inside the package is never listed. It
+        belongs to the library rather than to the caller, so a policy applied to
+        the caller's own files, on permissions for instance, does not trip over
+        it.
+
+        Returns:
+            Absolute resolved paths of the files read by the last load.
+
+        Examples:
+            >>> loader = ConfigLoader(auto_discovery=False)  # doctest: +SKIP
+            >>> _ = loader.load_from_file("app.yml")  # doctest: +SKIP
+            >>> loader.loaded_paths  # doctest: +SKIP
+            (PosixPath('/opt/app.yml'), PosixPath('/opt/included.yml'))
+
+        """
+        return self._loaded_paths
+
+    def _publish_loaded_paths(self, read_paths: dict[pathlib.Path, None], purge_cache: bool) -> None:
+        """Record the files a successful load read, following the cache policy."""
+        previous = () if purge_cache else self._loaded_paths
+        self._loaded_paths = tuple(dict.fromkeys((*previous, *read_paths)))
+
+    @property
     def config(self) -> Box:
         """Return the currently loaded configuration or raise if missing."""
         if self._cache is None:
@@ -710,6 +791,15 @@ class ConfigLoader:
             return
         raise ConfigFormatError(f"Unsupported auto_discovery source: {self.auto.source}")
 
+    def _make_box(self, data: dict[str, Any]) -> Box:
+        """Build a configuration Box carrying this loader's Box options."""
+        return Box(
+            data,
+            default_box=True,
+            default_box_attr=None,
+            default_box_create_on_get=self.create_on_get,
+        )
+
     def _merge_into_cache(self, conf: Box, purge_cache: bool) -> Box:
         if purge_cache or self._cache is None:
             self.cache = conf
@@ -717,7 +807,7 @@ class ConfigLoader:
 
         existing = self._cache.to_dict()
         merged = deep_merge(existing, conf.to_dict())
-        new_box = Box(merged, default_box=True, default_box_attr=None)
+        new_box = self._make_box(merged)
         self.cache = new_box
         return new_box
 
@@ -746,14 +836,18 @@ class ConfigLoader:
         path = pathlib.Path(path).resolve()
         if not path.is_file():
             raise ConfigFileNotFoundError(f"Config file not found: {path}")
+        read_paths: dict[pathlib.Path, None] = {}
         conf = _load_with_includes(
             path,
+            read_paths,
             strict_format=self.strict_format,
             encoding=self.encoding,
             sops_decrypt=self.sops_decrypt,
         )
-        box_conf = Box(conf, default_box=True, default_box_attr=None)
-        return self._merge_into_cache(box_conf, purge_cache)
+        box_conf = self._make_box(conf)
+        merged = self._merge_into_cache(box_conf, purge_cache)
+        self._publish_loaded_paths(read_paths, purge_cache)
+        return merged
 
     def load_from_env(self, env_var: str = "CONFIG_PATH", *, purge_cache: bool = True) -> Box:
         """
@@ -830,14 +924,20 @@ class ConfigLoader:
         # final synthesis line can name them. ``path.name`` only (no directory
         # path) so the INFO record never leaks user FS structure.
         layers_used: list[str] = []
+        read_paths: dict[pathlib.Path, None] = {}
         for search_path in search_paths:
             if search_path.is_file():
+                # A fresh guard per layer: sharing one across layers would turn a
+                # file two layers legitimately read into a false circular include.
+                layer_paths: dict[pathlib.Path, None] = {}
                 conf = _load_with_includes(
                     search_path,
+                    layer_paths,
                     strict_format=self.strict_format,
                     encoding=self.encoding,
                     sops_decrypt=self.sops_decrypt,
                 )
+                read_paths.update(layer_paths)
                 _config = deep_merge(_config, conf)
                 layers_used.append(search_path.name)
 
@@ -846,7 +946,7 @@ class ConfigLoader:
                 f"No configuration file found in working directory, home, {USER_CONFIG_DIR}, "
                 f"or package data (searched for '{filename}')."
             )
-        box_conf = Box(_config, default_box=True, default_box_attr=None)
+        box_conf = self._make_box(_config)
 
         # Synthesis: single user-facing line that recaps the cascade outcome.
         # Replaces the old "no log at all on cascade" gap. Layer count includes
@@ -857,7 +957,9 @@ class ConfigLoader:
             ["<package-default>", *layers_used],
         )
 
-        return self._merge_into_cache(box_conf, purge_cache)
+        result = self._merge_into_cache(box_conf, purge_cache)
+        self._publish_loaded_paths(read_paths, purge_cache)
+        return result
 
     # Factory methods for one-liner convenience
 
@@ -868,6 +970,7 @@ class ConfigLoader:
         strict_format: bool = False,
         encoding: str = DEFAULT_ENCODING,
         sops_decrypt: bool = True,
+        create_on_get: bool = True,
     ) -> Box:
         """
         Create loader and load file in one call (factory method).
@@ -877,6 +980,8 @@ class ConfigLoader:
             strict_format: If True, included files must match parent format.
             encoding: File encoding.
             sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+            create_on_get: If False, reading a key that does not exist returns the
+                default instead of creating it on the configuration object.
 
         Returns:
             Configuration object with dot notation support.
@@ -886,7 +991,13 @@ class ConfigLoader:
             >>> config = ConfigLoader.from_file("config.yml", strict_format=True)  # doctest: +SKIP
 
         """
-        return cls(strict_format=strict_format, encoding=encoding, sops_decrypt=sops_decrypt).load_from_file(path)
+        loader = cls(
+            strict_format=strict_format,
+            encoding=encoding,
+            sops_decrypt=sops_decrypt,
+            create_on_get=create_on_get,
+        )
+        return loader.load_from_file(path)
 
     @classmethod
     def from_env(
@@ -895,6 +1006,7 @@ class ConfigLoader:
         strict_format: bool = False,
         encoding: str = DEFAULT_ENCODING,
         sops_decrypt: bool = True,
+        create_on_get: bool = True,
     ) -> Box:
         """
         Create loader and load from environment variable in one call (factory method).
@@ -904,6 +1016,8 @@ class ConfigLoader:
             strict_format: If True, included files must match parent format.
             encoding: File encoding.
             sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+            create_on_get: If False, reading a key that does not exist returns the
+                default instead of creating it on the configuration object.
 
         Returns:
             Configuration object with dot notation support.
@@ -913,7 +1027,13 @@ class ConfigLoader:
             >>> config = ConfigLoader.from_env("MYAPP_CONFIG", strict_format=True)  # doctest: +SKIP
 
         """
-        return cls(strict_format=strict_format, encoding=encoding, sops_decrypt=sops_decrypt).load_from_env(env_var)
+        loader = cls(
+            strict_format=strict_format,
+            encoding=encoding,
+            sops_decrypt=sops_decrypt,
+            create_on_get=create_on_get,
+        )
+        return loader.load_from_env(env_var)
 
     @classmethod
     def from_cascading(
@@ -922,6 +1042,7 @@ class ConfigLoader:
         strict_format: bool = False,
         encoding: str = DEFAULT_ENCODING,
         sops_decrypt: bool = True,
+        create_on_get: bool = True,
     ) -> Box:
         """
         Create loader and perform cascading search in one call (factory method).
@@ -931,6 +1052,8 @@ class ConfigLoader:
             strict_format: If True, included files must match parent format.
             encoding: File encoding.
             sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+            create_on_get: If False, reading a key that does not exist returns the
+                default instead of creating it on the configuration object.
 
         Returns:
             Configuration object with dot notation support.
@@ -940,7 +1063,13 @@ class ConfigLoader:
             >>> config = ConfigLoader.from_cascading(strict_format=True)  # doctest: +SKIP
 
         """
-        return cls(strict_format=strict_format, encoding=encoding, sops_decrypt=sops_decrypt).load(filename)
+        loader = cls(
+            strict_format=strict_format,
+            encoding=encoding,
+            sops_decrypt=sops_decrypt,
+            create_on_get=create_on_get,
+        )
+        return loader.load(filename)
 
 
 # ============================================================================
@@ -956,6 +1085,7 @@ def load_config(
     path: pathlib.Path | None = None,
     strict_format: bool = False,
     sops_decrypt: bool = True,
+    create_on_get: bool = True,
 ) -> Box:
     """
     Load configuration either from cascading search or from an explicit file path.
@@ -983,10 +1113,16 @@ def load_config(
         path: Explicit path to config file (direct mode). If set, cascading is disabled.
         strict_format: If True, included files must match parent file format.
         sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+        create_on_get: If False, reading a key that does not exist returns the default
+            instead of creating it on the returned object.
 
     Returns:
         Configuration object with dot notation support (Box object).
-        Missing keys return empty Box() instead of raising AttributeError.
+        A missing key returns ``None``, not an empty Box: chained access
+        through a missing section, such as ``config.absent.leaf``, raises
+        ``AttributeError``. Reading a missing key also stores it on the object,
+        so a plain read is a write; pass ``create_on_get=False`` to read without
+        modifying the configuration.
 
     Raises:
         ConfigFileNotFoundError: If no config file is found or specified path doesn't exist.
@@ -1007,7 +1143,7 @@ def load_config(
             >>> config = load_config(path="/etc/app.yml", strict_format=True)  # doctest: +SKIP
 
     """
-    loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt)
+    loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get)
     if path is not None:
         return loader.load_from_file(path)
     return loader.load(filename)
@@ -1077,6 +1213,7 @@ def load_from_file(
     path: str | pathlib.Path,
     strict_format: bool = False,
     sops_decrypt: bool = True,
+    create_on_get: bool = True,
 ) -> Box:
     """
     Load configuration from a specific file path.
@@ -1089,6 +1226,8 @@ def load_from_file(
         path: Path to configuration file (str or Path object).
         strict_format: If True, included files must match parent file format.
         sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+        create_on_get: If False, reading a key that does not exist returns the default
+            instead of creating it on the returned object.
 
     Returns:
         Configuration object with dot notation support.
@@ -1103,13 +1242,15 @@ def load_from_file(
         >>> config = load_from_file("/etc/app.yml", strict_format=True)  # doctest: +SKIP
 
     """
-    return ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt).load_from_file(path)
+    loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get)
+    return loader.load_from_file(path)
 
 
 def load_from_env(
     env_var: str = "CONFIG_PATH",
     strict_format: bool = False,
     sops_decrypt: bool = True,
+    create_on_get: bool = True,
 ) -> Box:
     """
     Load configuration from path specified in an environment variable.
@@ -1120,6 +1261,8 @@ def load_from_env(
         env_var: Name of environment variable containing config file path.
         strict_format: If True, included files must match parent file format.
         sops_decrypt: If True, auto-decrypt .sops.* files via SOPS binary.
+        create_on_get: If False, reading a key that does not exist returns the default
+            instead of creating it on the returned object.
 
     Returns:
         Configuration object with dot notation support.
@@ -1142,7 +1285,8 @@ def load_from_env(
             >>> config = load_from_env("CONFIG_PATH", strict_format=True)  # doctest: +SKIP
 
     """
-    return ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt).load_from_env(env_var)
+    loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get)
+    return loader.load_from_env(env_var)
 
 
 def clear_config() -> None:

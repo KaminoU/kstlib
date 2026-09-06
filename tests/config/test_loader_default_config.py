@@ -35,6 +35,10 @@ def test_load_default_config_reads_packaged_file() -> None:
         importlib.reload(loader_module)
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 11),
+    reason="From 3.11 on the parser comes from the standard library, so it can never be missing.",
+)
 def test_load_toml_file_raises_without_tomli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """If ``tomli`` is missing, the TOML loader must raise ``ConfigFormatError``."""
     original_import = builtins.__import__

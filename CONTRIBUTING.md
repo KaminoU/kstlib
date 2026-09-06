@@ -80,7 +80,7 @@ uv sync --all-extras
 uv run pre-commit install
 ```
 
-Note: `UV_PROJECT_ENVIRONMENT` is set per-session for explicit isolation (not persisted to `setx`, not in a `.env` file, not in `$PROFILE`). Define it explicitly each time you open a new terminal for kstlib work. This is intentional: zero global pollution, no versioned secret leak, and the absence triggers an explicit error rather than a silent fallback to the OneDrive-synced location.
+Note: `UV_PROJECT_ENVIRONMENT` is set per-session for explicit isolation (not persisted to `setx`, not in a `.env` file, not in `$PROFILE`). Define it explicitly each time you open a new terminal for kstlib work. This keeps the setting out of your global environment, with nothing to leak into a versioned file. Be aware that nothing enforces it: when the variable is unset, uv falls back to `.venv` in the current directory and creates it there, which is the synced folder this section exists to avoid. Step 3 above is the only check, and it is manual, so run it whenever you are unsure which interpreter uv is using.
 
 Symlink-based approaches are NOT recommended: OneDrive (and most folder-sync tools) traverse symbolic links and sync the target content anyway, defeating the purpose. The session-isolated environment variable approach is the only reliable workaround.
 

@@ -111,7 +111,17 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run tests with coverage
-        run: uv run pytest tests/ -m "not cli and not integration" -v --cov=src --cov-report=xml --cov-report=term
+        run: uv run pytest tests/ -m "not cli and not integration" -v --cov=src --cov-report=xml --cov-report=term --strict-markers
+
+      # The CLI suite carries its own marker and was excluded from the line
+      # above, so it ran only when someone asked for it by hand. It runs
+      # here, in the same job, because that job already gates build and
+      # publish: a separate job would need that wiring added by hand, and
+      # forgetting it would leave a red signal that blocks nothing.
+      # --no-cov keeps this step from touching the coverage.xml the step
+      # above produced for the upload below.
+      - name: Run CLI tests
+        run: uv run pytest tests/ -m cli -v --no-cov --strict-markers
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
@@ -220,12 +230,17 @@ jobs:
       - name: Install documentation dependencies
         run: uv sync --extra docs
 
+      # Informative step: continue-on-error keeps its warnings from failing the
+      # job. The verdict comes from the next step, which rebuilds and fails on a
+      # Sphinx error, never on a warning. The CI installs the docs extra alone,
+      # so an optional dependency can warn here without warning locally.
       - name: Build Sphinx documentation
         run: uv run sphinx-build -b html docs/source docs/build/html -W --keep-going
         continue-on-error: true
 
       - name: Check for critical errors
         run: |
+          set -o pipefail
           # Build again without -W to get full output, check exit code
           uv run sphinx-build -b html docs/source docs/build/html -n 2>&1 | tee sphinx-output.txt
           if grep -q "CRITICAL\|ERROR" sphinx-output.txt; then
@@ -301,7 +316,7 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, cleaninstall, build, version-check]
+    needs: [lint, typecheck, test, test-examples, cleaninstall, docs, build, version-check]
     if: startsWith(github.ref, 'refs/tags/v')
     environment:
       name: pypi

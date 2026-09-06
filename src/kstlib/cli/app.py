@@ -27,7 +27,11 @@ from kstlib.cli.commands.secrets import shred as secrets_shred
 from kstlib.cli.common import console, err_console
 from kstlib.logging import LogManager, get_logger, init_logging
 
-app = typer.Typer(add_completion=False, name=meta.__app_name__)
+app = typer.Typer(
+    add_completion=False,
+    name=meta.__app_name__,
+    help="Config-driven Python toolkit for resilient applications.",
+)
 
 # Global logger instance (initialized in main callback)
 _cli_logger: LogManager | None = None

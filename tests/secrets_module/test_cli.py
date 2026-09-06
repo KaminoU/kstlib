@@ -265,6 +265,15 @@ def test_doctor_warns_when_config_missing(monkeypatch: pytest.MonkeyPatch, runne
         lambda: {"component": "aws_credentials", "status": "available", "details": "env vars"},
     )
 
+    # Do not read the developer's own .sops.yaml: stub the check itself
+    monkeypatch.delenv("SOPS_CONFIG", raising=False)
+    monkeypatch.setattr(
+        doctor_mod,
+        "_check_sops_config",
+        lambda: {"component": "sops_config", "status": "available", "details": "stubbed"},
+    )
+    monkeypatch.setattr(doctor_mod, "_find_sops_config_path", lambda: None)
+
     result = runner.invoke(secrets_app, ["doctor"])
 
     assert result.exit_code == 0
@@ -286,8 +295,9 @@ def test_doctor_shows_available_backends_without_config(
     monkeypatch.setitem(sys.modules, "keyring", dummy_keyring)
 
     monkeypatch.setattr(doctor_mod, "get_config", lambda: (_ for _ in ()).throw(ConfigNotLoadedError()))
-    # No .sops.yaml -> backends = []
-    monkeypatch.setattr(doctor_mod, "_find_sops_config_path", lambda: None)
+    # No .sops.yaml anywhere: stub the lookup both callers share
+    monkeypatch.delenv("SOPS_CONFIG", raising=False)
+    monkeypatch.setattr(doctor_mod, "_find_effective_sops_config", lambda: (None, "none"))
     # System has gpg and age available
     monkeypatch.setattr(doctor_mod, "_scan_available_backends", lambda: ["age", "gpg"])
     # Mock lightweight checks for unconfigured backends
@@ -304,8 +314,9 @@ def test_doctor_shows_available_backends_without_config(
 
     result = runner.invoke(secrets_app, ["doctor"])
 
-    # sops_config is missing so there should be issues
-    assert "Available on system: age, gpg" in result.stdout
+    # No .sops.yaml is a critical error, so the result is rendered on stderr
+    assert result.exit_code == 1
+    assert "Available on system: age, gpg" in result.stderr
 
 
 def test_encrypt_refuses_to_overwrite_without_force(
@@ -682,6 +693,14 @@ def test_doctor_reports_missing_keyring_as_warning(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(doctor_mod.importlib, "import_module", fake_import)
     fake_config = SimpleNamespace(secrets=None)
     monkeypatch.setattr(doctor_mod, "get_config", lambda: fake_config)
+    # Do not read the developer's own .sops.yaml: stub the check itself
+    monkeypatch.delenv("SOPS_CONFIG", raising=False)
+    monkeypatch.setattr(
+        doctor_mod,
+        "_check_sops_config",
+        lambda: {"component": "sops_config", "status": "available", "details": "stubbed"},
+    )
+    monkeypatch.setattr(doctor_mod, "_find_sops_config_path", lambda: None)
 
     result = runner.invoke(secrets_app, ["doctor"])
 

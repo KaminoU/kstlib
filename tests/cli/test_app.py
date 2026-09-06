@@ -27,6 +27,13 @@ def test_app_help() -> None:
     assert "shred" in result.stdout
 
 
+def test_app_help_describes_the_tool() -> None:
+    """Test that root --help describes the tool, not its implementation."""
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "Initialize the root Typer app" not in result.stdout
+
+
 def test_app_version() -> None:
     """Test that --version displays version (no short alias)."""
     result = runner.invoke(app, ["--version"])

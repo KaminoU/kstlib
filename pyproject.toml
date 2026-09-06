@@ -33,7 +33,7 @@ dynamic = ["version"]
 dependencies = [
     # --- Configuration & Serialization ---
     "pyyaml>=6.0,<7",        # YAML config parsing
-    "tomli>=2.3,<3",         # Read-only TOML parser (for pyproject & configs)
+    "tomli>=2.3,<3; python_version < '3.11'",  # Read-only TOML parser; stdlib tomllib from 3.11
     "tomli-w>=1.0,<2",       # TOML writer for config exports
     "python-box>=7.3,<8",    # Dot-access dicts (Box, BoxList, ConfigBox)
     "platformdirs>=4.0,<5",  # Cross-platform system config dirs (XDG on Linux, native on Mac/Windows)
@@ -106,6 +106,11 @@ dev = [
     "mypy>=1.18,<2",            # Static type checker (validates type hints)
     "types-PyYAML>=6.0,<7",     # Type stubs for PyYAML (used by mypy)
     "types-defusedxml>=0.7,<1", # Type stubs for defusedxml (used by mypy)
+    # Verification dependency, not a runtime one, hence no marker: mypy targets
+    # python_version 3.10, whose branch imports tomli. Without it installed, the
+    # type checker cannot resolve that branch on a newer interpreter, and the
+    # environment it runs in is not pinned to a version.
+    "tomli>=2.3,<3",
 
     # Git hooks
     "pre-commit>=4.0,<5", # Git pre-commit hooks for local CI checks
