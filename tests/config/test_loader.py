@@ -7,6 +7,7 @@ functional API, including file loading, includes, merging, and caching.
 # pylint: disable=protected-access,missing-function-docstring,import-outside-toplevel,unused-argument,line-too-long
 # Reason: Tests exercise internals, rely on pytest fixtures, and inline imports for targeted behaviour.
 
+import logging
 import os
 import pathlib
 import sys
@@ -17,6 +18,7 @@ import pytest
 from box import Box
 
 from kstlib.config import (
+    ConfigLoader,
     get_config,
     load_config,
     load_from_env,
@@ -25,6 +27,7 @@ from kstlib.config import (
 )
 from kstlib.config.exceptions import (
     ConfigCircularIncludeError,
+    ConfigError,
     ConfigFileNotFoundError,
     ConfigFormatError,
     ConfigNotLoadedError,
@@ -1320,3 +1323,304 @@ def test_loaded_paths_unchanged_when_a_load_raises(tmp_path: Any) -> None:
         loader.load_from_file(circular_one)
 
     assert loader.loaded_paths == (good.resolve(),)
+
+
+# ---------------------------------------------------------------------------
+# Malformed configuration files must raise the library's own error family
+# ---------------------------------------------------------------------------
+
+MALFORMED_SAMPLES = [
+    ("broken.yml", "a: [1, 2\nb: :\n"),
+    ("broken.json", '{"a": 1,,}'),
+    ("broken.toml", "a = = 1\n"),
+    ("broken.ini", "no section header\nkey = value\n"),
+]
+
+WELL_FORMED_SAMPLES = [
+    ("ok.yml", "marker: sentinel\n"),
+    ("ok.json", '{"marker": "sentinel"}'),
+    ("ok.toml", 'marker = "sentinel"\n'),
+    ("ok.ini", "[section]\nmarker = sentinel\n"),
+]
+
+
+def _skip_without_toml_parser(name: str) -> None:
+    """Skip a TOML case when 3.10 runs without the third party parser."""
+    if name.endswith(".toml") and sys.version_info < (3, 11):
+        pytest.importorskip("tomli")
+
+
+@pytest.mark.parametrize(("name", "payload"), WELL_FORMED_SAMPLES)
+def test_well_formed_config_file_loads(tmp_path: pathlib.Path, name: str, payload: str) -> None:
+    """Witness: a well formed file of each format loads through the public entry point."""
+    _skip_without_toml_parser(name)
+    target = tmp_path / name
+    target.write_text(payload, encoding="utf-8")
+    config = load_from_file(target)
+    loaded = config.to_dict()
+    found = loaded.get("marker") if "marker" in loaded else loaded["section"]["marker"]
+    assert found == "sentinel"
+
+
+@pytest.mark.parametrize(("name", "payload"), MALFORMED_SAMPLES)
+def test_malformed_config_file_raises_config_format_error(tmp_path: pathlib.Path, name: str, payload: str) -> None:
+    """A malformed file raises the library error family, not the parser's own error."""
+    _skip_without_toml_parser(name)
+    target = tmp_path / name
+    target.write_text(payload, encoding="utf-8")
+    with pytest.raises(ConfigFormatError) as excinfo:
+        load_from_file(target)
+    assert isinstance(excinfo.value, ConfigError)
+
+
+def test_malformed_config_error_names_the_offending_file(tmp_path: pathlib.Path) -> None:
+    """The raised error names the file at fault, so the caller knows where to look."""
+    target = tmp_path / "culprit.yml"
+    target.write_text("a: [1, 2\nb: :\n", encoding="utf-8")
+    with pytest.raises(ConfigFormatError, match="culprit.yml"):
+        load_from_file(target)
+
+
+def test_malformed_config_error_preserves_the_parser_cause(tmp_path: pathlib.Path) -> None:
+    """The original parser failure is kept as the cause, never swallowed."""
+    import yaml
+
+    target = tmp_path / "broken.yml"
+    target.write_text("a: [1, 2\nb: :\n", encoding="utf-8")
+    with pytest.raises(ConfigFormatError) as excinfo:
+        load_from_file(target)
+    assert isinstance(excinfo.value.__cause__, yaml.YAMLError)
+
+
+def test_undecodable_config_file_raises_config_format_error(tmp_path: pathlib.Path) -> None:
+    """Bytes that do not match the declared encoding are a format defect, not a read defect.
+
+    The discriminant is whether the bytes were obtained. Here they were: they simply
+    do not conform to the encoding the configuration itself declares.
+    """
+    target = tmp_path / "undecodable.yml"
+    target.write_bytes(b"marker: \xff\xfe not utf-8\n")
+    with pytest.raises(ConfigFormatError) as excinfo:
+        load_from_file(target)
+    assert isinstance(excinfo.value, ConfigError)
+
+
+def test_read_failure_is_never_reported_as_a_format_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read failure stays a read failure: turning it into a format error would misdiagnose.
+
+    Auto discovery is switched off on purpose: with it on, the cascade reads the
+    packaged default first and the denial would fire there instead of on the file
+    under test, which would make this test pass for the wrong reason.
+    """
+    from kstlib.config.loader import ConfigLoader
+
+    target = tmp_path / "readable.yml"
+    target.write_text("marker: sentinel\n", encoding="utf-8")
+
+    def deny(*_: Any, **__: Any) -> Any:
+        raise PermissionError(13, "Permission denied")
+
+    loader = ConfigLoader(auto_discovery=False)
+    monkeypatch.setattr(pathlib.Path, "open", deny)
+    with pytest.raises(PermissionError):
+        loader.load_from_file(target)
+
+
+def test_malformed_config_error_keeps_file_content_out_of_its_message(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The message names the file and the failure, never the bytes that failed.
+
+    Two of the four parsers quote the offending line, and the SOPS branch feeds a
+    decrypted string to one of them, so a secret could travel in ``str(exc)``. The
+    detail stays available on the cause for anyone debugging.
+    """
+    import configparser
+
+    secret = "SYNTHETIC-NOT-A-CREDENTIAL-0123456789-abcdefghij"
+    target = tmp_path / "leaky.ini"
+    target.write_text(f"api_key = {secret}\n", encoding="utf-8")
+    with pytest.raises(ConfigFormatError) as excinfo:
+        load_from_file(target)
+    assert secret not in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, configparser.Error)
+    assert secret in str(excinfo.value.__cause__)
+
+
+def test_malformed_packaged_default_raises_config_format_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first cascade layer is guarded like the others.
+
+    The packaged default is the one file a caller neither controls nor ever named,
+    so letting it escape the family would ship the guard together with its own
+    counter example. Only the packaged file is made to fail, so the result does not
+    depend on what else happens to sit in the search path.
+    """
+    import kstlib
+    import yaml
+
+    packaged = pathlib.Path(kstlib.__file__).resolve().parent / "kstlib.conf.yml"
+    real_safe_load = yaml.safe_load
+
+    def selective(stream: Any, *args: Any, **kwargs: Any) -> Any:
+        name = getattr(stream, "name", None)
+        if name is not None and pathlib.Path(str(name)).resolve() == packaged:
+            raise yaml.YAMLError("simulated corrupted packaged default")
+        return real_safe_load(stream, *args, **kwargs)
+
+    monkeypatch.setattr(yaml, "safe_load", selective)
+    with pytest.raises(ConfigFormatError) as excinfo:
+        load_config()
+    assert isinstance(excinfo.value, ConfigError)
+    assert isinstance(excinfo.value.__cause__, yaml.YAMLError)
+
+
+def test_malformed_decrypted_payload_raises_without_leaking_it(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The decrypted branch is guarded, and its content never reaches the message.
+
+    This is the branch that carries plaintext: the parser receives a string, and the
+    YAML parser quotes a buffer snippet when it fails on one. The message must name
+    the file and the failure class only, with the detail left on the cause.
+    """
+    import yaml
+
+    from kstlib.config import SopsDecryptor
+
+    secret = "SYNTHETIC-SECRET-4242"
+    target = tmp_path / "secrets.sops.yml"
+    target.write_text("api_key: ENC[AES256_GCM,data:xxx]\n", encoding="utf-8")
+
+    def fake_decrypt(_self: Any, _path: Any) -> str:
+        return f"""broken: [1, 2
+api_key: {secret}
+x: :
+"""
+
+    monkeypatch.setattr(SopsDecryptor, "decrypt_file", fake_decrypt)
+    with pytest.raises(ConfigFormatError) as excinfo:
+        load_from_file(target)
+    assert isinstance(excinfo.value.__cause__, yaml.YAMLError)
+    assert secret not in str(excinfo.value)
+    assert secret in str(excinfo.value.__cause__)
+
+
+# ---------------------------------------------------------------------------
+# Naming a file must not read the files the caller did not name
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def isolated_cwd(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
+    """Give the test an empty working directory and a home holding no configuration.
+
+    The cascade reads both, so a real configuration file sitting on the machine
+    would take part in the measurement and make the test pass or fail for reasons
+    that have nothing to do with the code under test.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(pathlib.Path, "home", lambda: home)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+DIRECT_ENTRY_POINTS = [
+    ("load_from_file", lambda target, var: load_from_file(target)),
+    ("load_config_with_path", lambda target, var: load_config(path=target)),
+    ("load_from_env", lambda target, var: load_from_env(var)),
+    ("ConfigLoader.from_file", lambda target, var: ConfigLoader.from_file(target)),
+    ("ConfigLoader.from_env", lambda target, var: ConfigLoader.from_env(var)),
+]
+DIRECT_IDS = [entry[0] for entry in DIRECT_ENTRY_POINTS]
+
+NAMED_CONTENT = "named:\n  marker: NAMED\n"
+MALFORMED_CASCADE = "broken: [1, 2\nx: :\n"
+
+
+def _prepare(directory: pathlib.Path, cascade: str) -> pathlib.Path:
+    """Write the file the caller names, plus a cascade file it never mentions."""
+    target = directory / "named.yml"
+    target.write_text(NAMED_CONTENT, encoding="utf-8")
+    (directory / "kstlib.conf.yml").write_text(cascade, encoding="utf-8")
+    return target
+
+
+@pytest.mark.parametrize(("label", "call"), DIRECT_ENTRY_POINTS, ids=DIRECT_IDS)
+def test_direct_mode_does_not_run_the_cascade(
+    isolated_cwd: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    label: str,
+    call: Any,
+) -> None:
+    """An explicit path must not trigger the search across the other locations.
+
+    Asserting on the absence of the cascade record rather than on the returned
+    data is deliberate: the returned configuration is replaced by the explicit
+    load either way, so only the record tells a read that happened from one that
+    did not.
+    """
+    target = _prepare(isolated_cwd, "cascade:\n  marker: CASCADE\n")
+    monkeypatch.setenv("KSTLIB_TEST_CONFIG_PATH", str(target))
+    with caplog.at_level(logging.INFO, logger="kstlib.config.loader"):
+        config = call(target, "KSTLIB_TEST_CONFIG_PATH")
+    assert config.named.marker == "NAMED"
+    assert [record for record in caplog.records if "Config loaded from" in record.getMessage()] == []
+
+
+@pytest.mark.parametrize(("label", "call"), DIRECT_ENTRY_POINTS, ids=DIRECT_IDS)
+def test_malformed_cascade_file_does_not_break_direct_mode(
+    isolated_cwd: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    label: str,
+    call: Any,
+) -> None:
+    """A file the caller never named must not be able to fail the call."""
+    target = _prepare(isolated_cwd, MALFORMED_CASCADE)
+    monkeypatch.setenv("KSTLIB_TEST_CONFIG_PATH", str(target))
+    config = call(target, "KSTLIB_TEST_CONFIG_PATH")
+    assert config.named.marker == "NAMED"
+
+
+def test_malformed_cascade_file_still_breaks_the_cascade_factory(isolated_cwd: pathlib.Path) -> None:
+    """Contrast for the test above: asking FOR the cascade must still fail on it.
+
+    Without this, the direct mode test would pass just as well if the cascade had
+    been broken rather than switched off where it does not belong. A test that
+    cannot say no proves nothing.
+    """
+    (isolated_cwd / "kstlib.conf.yml").write_text(MALFORMED_CASCADE, encoding="utf-8")
+    with pytest.raises(ConfigFormatError):
+        ConfigLoader.from_cascading()
+
+
+def test_cascade_factory_reads_the_name_it_was_given(isolated_cwd: pathlib.Path) -> None:
+    """The factory returns the file it was asked for, not the default named one.
+
+    The constructor used to run a search under the default name before the method
+    ran its own under the requested one. This pins the outcome so the finding does
+    not have to be measured again.
+    """
+    (isolated_cwd / "other.yml").write_text("picked:\n  marker: OTHER\n", encoding="utf-8")
+    (isolated_cwd / "kstlib.conf.yml").write_text("picked:\n  marker: DEFAULT\n", encoding="utf-8")
+    config = ConfigLoader.from_cascading("other.yml")
+    assert config.picked.marker == "OTHER"
+
+
+def test_bare_loader_still_discovers_configuration(isolated_cwd: pathlib.Path) -> None:
+    """Guard against over correcting: a bare constructor still runs the discovery.
+
+    Discovery is switched off in the entry points that were handed an explicit
+    path, never in the constructor, whose documented behaviour is to discover.
+    This test exists so that switching it off there too becomes a decision rather
+    than something one slips into while finishing the job.
+    """
+    cascade = isolated_cwd / "kstlib.conf.yml"
+    cascade.write_text("cascade:\n  marker: CASCADE\n", encoding="utf-8")
+    loader = ConfigLoader()
+    assert loader.loaded_paths == (cascade.resolve(),)

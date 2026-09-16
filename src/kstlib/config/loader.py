@@ -33,6 +33,7 @@ import pathlib
 import sys
 import time
 from configparser import ConfigParser
+from configparser import Error as ConfigParserError
 from dataclasses import dataclass
 from typing import Any, BinaryIO, Literal, Protocol, cast
 
@@ -71,10 +72,50 @@ DEFAULT_ENCODING = "utf-8"
 # Deep defense: Maximum include depth to prevent resource exhaustion
 MAX_INCLUDE_DEPTH = 10
 
+# The parse failures the four supported formats can raise. Capture is by TYPE and
+# never by position: the leaf loaders open the file themselves, so a positional
+# guard would also swallow an OSError and report a permission denial or a failing
+# disk as a malformed file. That is a wrong diagnosis on the very path being
+# repaired, and it points the caller at a file that has nothing wrong with it.
+#
+# UnicodeDecodeError is in the list on purpose. The discriminant is whether the
+# bytes were obtained: an OSError means they were not and stays a read failure,
+# while a decoding failure means they were, and that they do not match the
+# encoding the configuration itself declares. That is a property of the content,
+# like a syntax error, not a property of the filesystem.
+_PARSE_ERROR_TYPES: tuple[type[Exception], ...] = (
+    yaml.YAMLError,
+    json.JSONDecodeError,
+    ConfigParserError,
+    UnicodeDecodeError,
+    *(() if _toml is None else (_toml.TOMLDecodeError,)),
+)
+
 
 # ============================================================================
 # Internal loader functions (format-specific)
 # ============================================================================
+
+
+def _as_format_error(path: pathlib.Path, exc: Exception) -> ConfigFormatError:
+    """Turn a parser failure into the library own format error.
+
+    The parser message is deliberately left out. The INI parser quotes the offending
+    line verbatim, and the YAML parser quotes a buffer snippet when it parses a
+    string, which is exactly what the SOPS branch feeds it, so that line can carry a
+    decrypted secret. Requalifying an exception widens its audience: this family is
+    documented as catchable, so its message lands in a caller own log. The detail
+    stays on the chained cause, where only someone debugging goes looking.
+
+    Args:
+        path: The configuration file that failed to parse.
+        exc: The parser failure, kept as the cause by the caller.
+
+    Returns:
+        The library format error, naming the file and the failure class only.
+
+    """
+    return ConfigFormatError(f"Malformed config file: {path} ({type(exc).__name__})")
 
 
 def _load_yaml_file(path: pathlib.Path, encoding: str = DEFAULT_ENCODING) -> dict[str, Any]:
@@ -326,7 +367,8 @@ def _load_any_config_file(
         dict: Parsed content of the file.
 
     Raises:
-        ConfigFormatError: If the file extension is not supported.
+        ConfigFormatError: If the file extension is not supported, or if the
+            file content cannot be parsed or decoded.
 
     """
     from kstlib.config.sops import get_real_extension, is_sops_file
@@ -349,11 +391,17 @@ def _load_any_config_file(
     # Get real extension for parsing (strips .sops prefix)
     ext = get_real_extension(path) if is_sops else path.suffix.lower()
 
-    # Parse content or load file
-    if content is not None:
-        data = _parse_content_by_format(content, ext, path, encoding)
-    else:
-        data = _load_file_by_format(path, ext, encoding)
+    # Parse content or load file. Only the parse call is guarded, so that a read
+    # failure keeps its own type instead of being reported as a format defect.
+    try:
+        if content is not None:
+            data = _parse_content_by_format(content, ext, path, encoding)
+        else:
+            data = _load_file_by_format(path, ext, encoding)
+    except _PARSE_ERROR_TYPES as exc:
+        raise _as_format_error(path, exc) from exc
+
+    if content is None:
         _warn_encrypted_values(data, path)
 
     # Security: reject NaN/Inf values that can cause subtle bugs
@@ -533,7 +581,13 @@ def _load_default_config(encoding: str = DEFAULT_ENCODING) -> dict[str, Any]:
     config_path = pathlib.Path(__file__).resolve().parent.parent / CONFIG_FILENAME
     if not config_path.is_file():
         return {}
-    return _load_yaml_file(config_path, encoding)
+    # Guarded like every other layer: this is the one file the caller neither
+    # controls nor ever named, so it is the least excusable place to let a raw
+    # parser error escape the family.
+    try:
+        return _load_yaml_file(config_path, encoding)
+    except _PARSE_ERROR_TYPES as exc:
+        raise _as_format_error(config_path, exc) from exc
 
 
 def _get_system_config_paths(filename: str) -> list[pathlib.Path]:
@@ -738,6 +792,10 @@ class ConfigLoader:
         the caller's own files, on permissions for instance, does not trip over
         it.
 
+        Reaching this property means holding a loader. The module level
+        functions return a ``Box`` and not the loader that produced it, so
+        build a ``ConfigLoader`` when the paths are what you need.
+
         Returns:
             Absolute resolved paths of the files read by the last load.
 
@@ -824,7 +882,8 @@ class ConfigLoader:
 
         Raises:
             ConfigFileNotFoundError: If the specified file doesn't exist.
-            ConfigFormatError: On unsupported format or format mismatch.
+            ConfigFormatError: On unsupported format, format mismatch, or content
+                that cannot be parsed or decoded.
             ConfigCircularIncludeError: On circular includes.
 
         Examples:
@@ -898,6 +957,8 @@ class ConfigLoader:
 
         Raises:
             ConfigFileNotFoundError: If no config file is found in any location.
+            ConfigFormatError: On unsupported format, or content that cannot be
+                parsed or decoded, in a config file found by the search.
 
         Examples:
             >>> loader = ConfigLoader()  # doctest: +SKIP
@@ -996,6 +1057,7 @@ class ConfigLoader:
             encoding=encoding,
             sops_decrypt=sops_decrypt,
             create_on_get=create_on_get,
+            auto_discovery=False,
         )
         return loader.load_from_file(path)
 
@@ -1032,6 +1094,7 @@ class ConfigLoader:
             encoding=encoding,
             sops_decrypt=sops_decrypt,
             create_on_get=create_on_get,
+            auto_discovery=False,
         )
         return loader.load_from_env(env_var)
 
@@ -1068,6 +1131,7 @@ class ConfigLoader:
             encoding=encoding,
             sops_decrypt=sops_decrypt,
             create_on_get=create_on_get,
+            auto_discovery=False,
         )
         return loader.load(filename)
 
@@ -1126,7 +1190,8 @@ def load_config(
 
     Raises:
         ConfigFileNotFoundError: If no config file is found or specified path doesn't exist.
-        ConfigFormatError: On unsupported format or format mismatch.
+        ConfigFormatError: On unsupported format, format mismatch, or content that
+            cannot be parsed or decoded.
         ConfigCircularIncludeError: On circular includes.
 
     Examples:
@@ -1143,7 +1208,9 @@ def load_config(
             >>> config = load_config(path="/etc/app.yml", strict_format=True)  # doctest: +SKIP
 
     """
-    loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get)
+    loader = ConfigLoader(
+        strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get, auto_discovery=False
+    )
     if path is not None:
         return loader.load_from_file(path)
     return loader.load(filename)
@@ -1234,7 +1301,8 @@ def load_from_file(
 
     Raises:
         ConfigFileNotFoundError: If the specified file doesn't exist.
-        ConfigFormatError: On unsupported format or format mismatch.
+        ConfigFormatError: On unsupported format, format mismatch, or content that
+            cannot be parsed or decoded.
         ConfigCircularIncludeError: On circular includes.
 
     Examples:
@@ -1242,7 +1310,9 @@ def load_from_file(
         >>> config = load_from_file("/etc/app.yml", strict_format=True)  # doctest: +SKIP
 
     """
-    loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get)
+    loader = ConfigLoader(
+        strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get, auto_discovery=False
+    )
     return loader.load_from_file(path)
 
 
@@ -1285,7 +1355,9 @@ def load_from_env(
             >>> config = load_from_env("CONFIG_PATH", strict_format=True)  # doctest: +SKIP
 
     """
-    loader = ConfigLoader(strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get)
+    loader = ConfigLoader(
+        strict_format=strict_format, sops_decrypt=sops_decrypt, create_on_get=create_on_get, auto_discovery=False
+    )
     return loader.load_from_env(env_var)
 
 

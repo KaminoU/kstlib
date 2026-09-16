@@ -19,6 +19,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.8.1] - 2026-09-16
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- Entry points handed an explicit path no longer trigger the cascading search.
+  Naming a file used to read the files the caller had not named, and a malformed
+  one among those could fail the call outright, so a file the caller neither
+  controlled nor mentioned could break a load that had nothing to do with it.
+  This covers `load_config(path=...)`, `load_from_file`, `load_from_env`,
+  `ConfigLoader.from_file` and `ConfigLoader.from_env`. `ConfigLoader.from_cascading`
+  no longer runs a first search under the default name before the one it was given,
+  which leaves its result unchanged. A bare `ConfigLoader()` still discovers, as
+  documented.
+
+- A malformed configuration file now raises `ConfigFormatError` instead of the
+  parser's own error. YAML, JSON, TOML and INI are all covered, on the plain read
+  path and on the SOPS decrypted one, in every layer of the search including the
+  default shipped with the package, and a file whose bytes do not match the
+  declared encoding is handled the same way. The original parser failure is kept
+  as the exception cause, and the message names the file at fault. Note that the
+  raised type changes: code catching `yaml.YAMLError`, `json.JSONDecodeError`,
+  `tomli.TOMLDecodeError` or `configparser.Error` from a configuration load no
+  longer catches it. `ConfigFormatError` derives from `ValueError`, so a broad
+  `except ValueError` keeps working. A read failure, such as a permission denial,
+  is deliberately left untouched and still raises its own `OSError`.
+
+- The docstring of `ConfigLoader.loaded_paths` now says that reaching the
+  property means holding a loader: the module level functions return a `Box`
+  and not the loader that produced it. Behaviour is unchanged. The narrative
+  documentation already carried the point, the API reference did not.
+
+### Security
+
 ## [3.8.0] - 2026-09-06
 
 ### Added
@@ -1977,7 +2018,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.8.0...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.8.1...HEAD
+[3.8.1]: https://github.com/KaminoU/kstlib/compare/v3.8.0...v3.8.1
 [3.8.0]: https://github.com/KaminoU/kstlib/compare/v3.7.1...v3.8.0
 [3.7.1]: https://github.com/KaminoU/kstlib/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/KaminoU/kstlib/compare/v3.6.2...v3.7.0
