@@ -19,6 +19,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [3.8.2] - 2026-09-21
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+- Declared the lower bound `anyio>=4.14.2` in the package dependencies
+  (transitive dependency via `httpx`; lockfile pin moved from 4.12.1 to
+  4.15.1), covering GHSA-82r6-8w77-94w6 / CVE-2026-63374 (critical): TLS
+  connections made through `connect_tcp()` or `TLSStream.wrap()` encoded
+  internationalized host names with IDNA 2003 rules, so on a connection already
+  redirected by other means, a certificate issued for that encoding could
+  validate for the intended host; and GHSA-5p39-cfhj-2xmp / CVE-2026-64847
+  (medium): process-pool workers never drained their stderr pipe, so worker
+  code writing enough to stderr could wedge the awaiting call. Affected
+  versions are < 4.14.2. That `anyio` release requires
+  `typing-extensions>=4.16.0` on Python < 3.15, so its lockfile pin moved from
+  4.15.0 to 4.16.0.
+- Declared the lower bound `soupsieve>=2.9.0` in the `docs` and `all` extras
+  (transitive dependency, documentation theme only via `furo` ->
+  `beautifulsoup4`; lockfile pin moved from 2.8.4 to 2.9.2), covering
+  GHSA-j934-xhv5-fg8f / CVE-2026-85999 (medium) and GHSA-gjv8-xp57-g29c /
+  CVE-2026-86000 (medium): quadratic-time ReDoS in the CSS selector parser, in
+  the trailing whitespace and comment trimming pattern and in the identifier
+  and value sub-patterns. Only a user-controlled selector reaches them.
+  Affected versions are < 2.9.0.
+- Nothing changes for a nominal install: `soupsieve` is not part of the base
+  package, and a fresh resolution already selects patched releases of both
+  packages. The bounds make that explicit, so a resolver can no longer keep or
+  pick a vulnerable release through kstlib.
+
 ## [3.8.1] - 2026-09-16
 
 ### Added
@@ -2018,7 +2057,8 @@ resilient applications.
 - Sensitive value redaction in logs and errors
 - Filesystem guardrails for attachments
 
-[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.8.1...HEAD
+[Unreleased]: https://github.com/KaminoU/kstlib/compare/v3.8.2...HEAD
+[3.8.2]: https://github.com/KaminoU/kstlib/compare/v3.8.1...v3.8.2
 [3.8.1]: https://github.com/KaminoU/kstlib/compare/v3.8.0...v3.8.1
 [3.8.0]: https://github.com/KaminoU/kstlib/compare/v3.7.1...v3.8.0
 [3.7.1]: https://github.com/KaminoU/kstlib/compare/v3.7.0...v3.7.1

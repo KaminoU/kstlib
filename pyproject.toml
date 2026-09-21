@@ -63,6 +63,7 @@ dependencies = [
     "pendulum>=3.0,<4", # Modern datetime library with timezone support
 
     # --- Security: transitive dep lower bounds (CVE) ---
+    "anyio>=4.14.2",         # CVE-2026-63374 + CVE-2026-64847 (TLS cert spoofing from IDNA 2003 host name encoding, process-pool stderr hang; via httpx)
     "cryptography>=50.0.0",  # CVE-2026-26007 + CVE-2026-34073 + CVE-2026-39892 + CVE-2026-69247
     "idna>=3.15",            # CVE-2026-45409 (DoS quadratic-time, bypass of CVE-2024-3651 mitigation; via httpx)
     "requests>=2.33.0",      # CVE-2024-47081 + CVE-2026-25645 (via httpx)
@@ -146,6 +147,7 @@ docs = [
     "sphinx-design>=0.6,<0.7",
     # Security: transitive dep lower bounds (CVE)
     "Pygments>=2.20.0",  # CVE-2026-4539 ReDoS (via sphinx)
+    "soupsieve>=2.9.0",  # CVE-2026-85999 + CVE-2026-86000 ReDoS (via furo/beautifulsoup4)
     # myst-parser 4.0.1 (latest) requires markdown-it-py~=3.0; rich>=14.2
     # tolerates 4.x and pip would otherwise pick the 4.0.0 latest, breaking
     # the Sphinx build. Pin to <4 until myst-parser releases a version that
@@ -197,6 +199,7 @@ all = [
     "jaraco-context>=6.1.0",
     "virtualenv>=20.36.1",
     "Pygments>=2.20.0",  # CVE-2026-4539 ReDoS (via sphinx)
+    "soupsieve>=2.9.0",  # CVE-2026-85999 + CVE-2026-86000 ReDoS (via furo/beautifulsoup4)
     # myst-parser 4.0.1 requires markdown-it-py~=3.0; pin <4 until a newer
     # myst-parser releases support for 4.x. See docs extra above.
     "markdown-it-py>=3,<4",
